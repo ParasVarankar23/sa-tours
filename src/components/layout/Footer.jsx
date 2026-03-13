@@ -33,6 +33,8 @@ export default function Footer() {
                             <Link href="/schedule">Schedule</Link>
                             <Link href="/routes">Routes</Link>
                             <Link href="/contact">Contact</Link>
+                            <Link href="/terms">Terms & Conditions</Link>
+                            <Link href="/privacy">Privacy Policy</Link>
                         </div>
                     </div>
 
@@ -84,7 +86,7 @@ export default function Footer() {
                 </div>
 
                 <div className="mt-10 border-t border-slate-200 pt-6 text-center text-sm text-slate-500">
-                    © 2026 SA Tours & Travels. All rights reserved.
+                    © 2026 SA Tours & Travels. All rights reserved. Payments are processed securely via Razorpay.
                 </div>
             </div>
         </footer>
