@@ -1,6 +1,7 @@
 "use client";
-import Navbar from "@/components/layout/Navbar";
+import CookieConsent from "@/components/common/CookieConsent";
 import Footer from "@/components/layout/Footer";
+import Navbar from "@/components/layout/Navbar";
 
 export default function ClientLayout({ children }) {
     return (
@@ -17,6 +18,8 @@ export default function ClientLayout({ children }) {
                 {/* Global Footer */}
                 <Footer />
             </div>
+
+            <CookieConsent />
         </div>
     );
 }

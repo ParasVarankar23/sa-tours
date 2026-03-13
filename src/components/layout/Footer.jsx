@@ -27,14 +27,14 @@ export default function Footer() {
                     <div>
                         <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-900">Quick Links</h4>
                         <div className="mt-4 flex flex-col gap-3 text-sm text-slate-600">
-                            <Link href="/">Home</Link>
-                            <Link href="/about">About</Link>
-                            <Link href="/services">Services</Link>
-                            <Link href="/schedule">Schedule</Link>
-                            <Link href="/routes">Routes</Link>
-                            <Link href="/contact">Contact</Link>
-                            <Link href="/terms">Terms & Conditions</Link>
-                            <Link href="/privacy">Privacy Policy</Link>
+                            <Link href="/" className="transition hover:text-orange-500 active:text-orange-600">Home</Link>
+                            <Link href="/about" className="transition hover:text-orange-500 active:text-orange-600">About</Link>
+                            <Link href="/services" className="transition hover:text-orange-500 active:text-orange-600">Services</Link>
+                            <Link href="/schedule" className="transition hover:text-orange-500 active:text-orange-600">Schedule</Link>
+                            <Link href="/routes" className="transition hover:text-orange-500 active:text-orange-600">Routes</Link>
+                            <Link href="/contact" className="transition hover:text-orange-500 active:text-orange-600">Contact</Link>
+                            <Link href="/terms" className="transition hover:text-orange-500 active:text-orange-600">Terms & Conditions</Link>
+                            <Link href="/privacy" className="transition hover:text-orange-500 active:text-orange-600">Privacy Policy</Link>
                         </div>
                     </div>
 
@@ -46,6 +46,8 @@ export default function Footer() {
                             <span>Private Bus Hire</span>
                             <span>Pilgrimage Tours</span>
                             <span>Group Travel</span>
+                            <Link href="/staff" className="transition hover:text-orange-500 active:text-orange-600">Staff</Link>
+                            <Link href="/owner" className="transition hover:text-orange-500 active:text-orange-600">Owner</Link>
                         </div>
                     </div>
 

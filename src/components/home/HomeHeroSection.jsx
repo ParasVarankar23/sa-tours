@@ -33,7 +33,7 @@ const stagger = {
 
 export default function HomeHeroSection() {
     return (
-        <section className="relative overflow-hidden bg-[#f8fafc] pt-4 pb-8 lg:pt-5 lg:pb-8">
+        <section className="relative overflow-hidden bg-[#f8fafc] pt-5 pb-8 lg:pt-6 lg:pb-8">
             <div className="pointer-events-none absolute inset-0 overflow-hidden">
                 <div className="absolute -top-24 -left-20 h-64 w-64 rounded-full bg-orange-100/40 blur-3xl" />
                 <div className="absolute top-10 right-0 h-72 w-72 rounded-full bg-slate-100 blur-3xl" />
@@ -59,7 +59,7 @@ export default function HomeHeroSection() {
                             variants={fadeUp}
                             className="mt-4 text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[42px] lg:leading-[1.08]"
                         >
-                            Travel Daily from <br />
+                            Travel Daily from{" "}
                             <span className="text-orange-500">Borli</span> to{" "}
                             <span className="text-orange-500">Mumbai</span>
                         </motion.h1>
