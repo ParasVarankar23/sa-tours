@@ -21,14 +21,14 @@ export default function CTASection() {
 
                         <div className="flex flex-col gap-4 sm:flex-row lg:justify-end">
                             <a
-                                href="tel:+919999999999"
+                                href="tel:++91 88302 106909"
                                 className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-orange-600"
                             >
                                 <Phone size={18} />
                                 Call Now
                             </a>
                             <a
-                                href="https://wa.me/919999999999"
+                                href="https://wa.me/+91 88302 106909"
                                 target="_blank"
                                 className="inline-flex items-center justify-center gap-2 rounded-full border border-white/30 bg-white/10 px-6 py-3.5 text-sm font-semibold text-white backdrop-blur"
                             >

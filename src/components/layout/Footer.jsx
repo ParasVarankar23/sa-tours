@@ -1,5 +1,5 @@
+import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import Link from "next/link";
-import { MapPin, Phone, Mail, MessageCircle } from "lucide-react";
 
 export default function Footer() {
     return (
@@ -18,7 +18,7 @@ export default function Footer() {
                         </div>
 
                         <p className="mt-4 text-sm leading-7 text-slate-600">
-                            Providing reliable daily bus service from Borli, Shrivardhan, Dighi,
+                            Providing reliable daily bus service from Borli, Dighi,
                             Mahasala and Mangaon to Panvel, Vashi and Mumbai, along with private
                             bus booking for weddings, events and group travel.
                         </p>
@@ -64,7 +64,7 @@ export default function Footer() {
                             </p>
                             <p className="flex items-center gap-2">
                                 <Phone size={16} className="text-orange-500" />
-                                +91 99999 99999
+                                +91 88302 10690
                             </p>
                             <p className="flex items-center gap-2">
                                 <Mail size={16} className="text-orange-500" />
@@ -73,7 +73,7 @@ export default function Footer() {
                         </div>
 
                         <a
-                            href="https://wa.me/919999999999"
+                            href="https://wa.me/+91 88302 106909"
                             target="_blank"
                             className="mt-5 inline-flex items-center gap-2 rounded-full bg-green-500 px-5 py-3 text-sm font-semibold text-white"
                         >
