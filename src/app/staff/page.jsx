@@ -3,12 +3,12 @@
 import PageHero from "@/components/PageHero";
 import { motion } from "framer-motion";
 import {
-    Users,
-    UserRoundCheck,
-    ShieldCheck,
     BadgeCheck,
-    Phone,
     MessageCircle,
+    Phone,
+    ShieldCheck,
+    UserRoundCheck,
+    Users,
 } from "lucide-react";
 
 const staffMembers = [
@@ -58,39 +58,18 @@ export default function StaffPage() {
             <PageHero
                 title="Our Staff"
                 subtitle="Meet the professional and supportive team behind SA Tours & Travels who help deliver reliable and comfortable service every day."
+                compact
             />
 
-            <section className="bg-white py-8 lg:py-10">
+            <section className="bg-white py-5 lg:py-6">
                 <div className="mx-auto max-w-[1450px] px-4 sm:px-6 lg:px-8">
-                    {/* INTRO */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 24 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true, amount: 0.15 }}
-                        transition={{ duration: 0.6, ease: "easeOut" }}
-                        className="mx-auto max-w-4xl text-center"
-                    >
-                        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-orange-500">
-                            Team Members
-                        </p>
-
-                        <h2 className="mt-3 text-3xl font-bold leading-tight text-slate-900 sm:text-4xl lg:text-[42px] lg:leading-[1.08]">
-                            Dedicated staff for smooth and reliable travel service
-                        </h2>
-
-                        <p className="mt-4 text-[15px] leading-8 text-slate-600 sm:text-base">
-                            Our team is focused on customer support, daily route management,
-                            safe operations and quality service for every passenger.
-                        </p>
-                    </motion.div>
-
                     {/* STAFF GRID */}
                     <motion.div
                         variants={stagger}
                         initial="hidden"
                         whileInView="show"
                         viewport={{ once: true, amount: 0.15 }}
-                        className="mt-6 grid gap-4 md:grid-cols-2"
+                        className="mt-2 grid gap-4 md:grid-cols-2"
                     >
                         {staffMembers.map((member, index) => (
                             <motion.div

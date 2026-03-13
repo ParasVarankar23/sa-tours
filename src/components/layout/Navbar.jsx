@@ -89,7 +89,7 @@ export default function Navbar() {
                     <div className="lg:hidden pb-5">
                         <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl">
                             <div className="flex flex-col gap-2">
-                                {[...mainNavLinks, ...moreNavLinks].map((item) => (
+                                {[...mainNavLinks].map((item) => (
                                     <Link
                                         key={item.name}
                                         href={item.href}

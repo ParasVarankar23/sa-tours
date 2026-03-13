@@ -3,13 +3,14 @@
 import PageHero from "@/components/PageHero";
 import { motion } from "framer-motion";
 import {
-    BriefcaseBusiness,
-    Phone,
-    UserCircle2,
     BadgeCheck,
-    ShieldCheck,
+    BriefcaseBusiness,
     MessageCircle,
+    Phone,
+    ShieldCheck,
+    UserCircle2,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 const fadeUp = {
     hidden: { opacity: 0, y: 28 },
@@ -29,17 +30,73 @@ const stagger = {
     },
 };
 
+function CountUpStat({ end = 0, duration = 1200, suffix = "", label = "" }) {
+    const [count, setCount] = useState(0);
+    const [hasStarted, setHasStarted] = useState(false);
+    const ref = useRef(null);
+
+    useEffect(() => {
+        const node = ref.current;
+        if (!node) return;
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting && !hasStarted) {
+                    setHasStarted(true);
+                }
+            },
+            { threshold: 0.5 }
+        );
+
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, [hasStarted]);
+
+    useEffect(() => {
+        if (!hasStarted) return;
+
+        let startTime = null;
+        let frameId;
+
+        const animate = (timestamp) => {
+            if (!startTime) startTime = timestamp;
+            const progress = Math.min((timestamp - startTime) / duration, 1);
+            setCount(Math.floor(progress * end));
+
+            if (progress < 1) {
+                frameId = requestAnimationFrame(animate);
+            } else {
+                setCount(end);
+            }
+        };
+
+        frameId = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(frameId);
+    }, [hasStarted, end, duration]);
+
+    return (
+        <div ref={ref} className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-center">
+            <p className="text-lg font-bold text-slate-900">
+                {count}
+                {suffix}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">{label}</p>
+        </div>
+    );
+}
+
 export default function OwnerPage() {
     return (
         <>
             <PageHero
                 title="Owner Information"
                 subtitle="Meet the leadership behind SA Tours & Travels, committed to reliable service, customer trust and quality travel support."
+                compact
             />
 
-            <section className="bg-[#f8fafc] py-8 lg:py-10">
+            <section className="bg-[#f8fafc] py-5 lg:py-6">
                 <div className="mx-auto max-w-[1450px] px-4 sm:px-6 lg:px-8">
-                    <div className="grid items-center gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:gap-8">
+                    <div className="grid items-start gap-4 lg:grid-cols-[0.95fr_1.05fr] lg:gap-6">
                         {/* LEFT OWNER PROFILE CARD */}
                         <motion.div
                             variants={stagger}
@@ -65,20 +122,14 @@ export default function OwnerPage() {
                                 variants={fadeUp}
                                 className="mt-4 grid gap-3 sm:grid-cols-3"
                             >
-                                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-center">
-                                    <p className="text-lg font-bold text-slate-900">4+</p>
-                                    <p className="mt-1 text-xs text-slate-500">Owned Buses</p>
-                                </div>
+                                <CountUpStat end={4} suffix="+" label="Owned Buses" />
 
                                 <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-center">
                                     <p className="text-lg font-bold text-slate-900">Daily</p>
                                     <p className="mt-1 text-xs text-slate-500">Service Operations</p>
                                 </div>
 
-                                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-center">
-                                    <p className="text-lg font-bold text-slate-900">3</p>
-                                    <p className="mt-1 text-xs text-slate-500">Office Locations</p>
-                                </div>
+                                <CountUpStat end={3} label="Office Locations" />
                             </motion.div>
                         </motion.div>
 
