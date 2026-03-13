@@ -1,5 +1,10 @@
 "use client";
 
+import { auth, googleProvider } from "@/lib/firebase/client";
+import {
+    GoogleAuthProvider,
+    signInWithPopup,
+} from "firebase/auth";
 import { motion } from "framer-motion";
 import {
     Bus,
@@ -10,6 +15,8 @@ import {
     ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 const fadeUp = {
     hidden: { opacity: 0, y: 24 },
@@ -30,6 +37,70 @@ const stagger = {
 };
 
 export default function LoginPage() {
+    const router = useRouter();
+    const [formData, setFormData] = useState({ identifier: "", password: "" });
+    const [loading, setLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
+    const [message, setMessage] = useState("");
+
+    const handleChange = (e) => {
+        setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setMessage("");
+
+        try {
+            const res = await fetch("/api/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formData),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Login failed");
+
+            setMessage(data.message || "Login successful");
+            setTimeout(() => router.push(data.redirectTo || "/user"), 700);
+        } catch (error) {
+            setMessage(error.message || "Unable to login");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleGoogleLogin = async () => {
+        setGoogleLoading(true);
+        setMessage("");
+
+        try {
+            const result = await signInWithPopup(auth, googleProvider);
+            const credential = GoogleAuthProvider.credentialFromResult(result);
+            const idToken = credential?.idToken;
+
+            if (!idToken) {
+                throw new Error("Unable to read Google token. Try again.");
+            }
+
+            const res = await fetch("/api/login-google", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ idToken }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Google login failed");
+
+            setMessage(data.message || "Google login successful");
+            setTimeout(() => router.push(data.redirectTo || "/user"), 700);
+        } catch (error) {
+            setMessage(error.message || "Unable to login with Google");
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
+
     return (
         <section className="bg-[#f8fafc] py-3 sm:py-4 lg:py-5">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -134,17 +205,20 @@ export default function LoginPage() {
                                 </p>
                             </div>
 
-                            <form className="mt-3.5 space-y-3">
+                            <form className="mt-3.5 space-y-3" onSubmit={handleSubmit}>
                                 <div>
                                     <label htmlFor="login-email" className="mb-1 block text-sm font-medium text-slate-700">
-                                        Email Address
+                                        Email or Phone
                                     </label>
                                     <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-2 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
                                         <Mail size={18} className="text-slate-400" />
                                         <input
                                             id="login-email"
-                                            type="email"
-                                            placeholder="Enter your email"
+                                            type="text"
+                                            name="identifier"
+                                            value={formData.identifier}
+                                            onChange={handleChange}
+                                            placeholder="Enter your email or phone"
                                             className="w-full bg-transparent text-sm outline-none"
                                         />
                                     </div>
@@ -162,6 +236,9 @@ export default function LoginPage() {
                                         <input
                                             id="login-password"
                                             type="password"
+                                            name="password"
+                                            value={formData.password}
+                                            onChange={handleChange}
                                             placeholder="Enter your password"
                                             className="w-full bg-transparent text-sm outline-none"
                                         />
@@ -176,10 +253,15 @@ export default function LoginPage() {
 
                                 <button
                                     type="submit"
+                                    disabled={loading}
                                     className="w-full rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600"
                                 >
-                                    Login
+                                    {loading ? "Logging in..." : "Login"}
                                 </button>
+
+                                {message && (
+                                    <p className="text-center text-sm text-slate-600">{message}</p>
+                                )}
 
                                 {/* Divider */}
                                 <div className="relative py-1">
@@ -196,6 +278,8 @@ export default function LoginPage() {
                                 {/* Google Button */}
                                 <button
                                     type="button"
+                                    disabled={googleLoading}
+                                    onClick={handleGoogleLogin}
                                     className="flex w-full items-center justify-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50"
                                 >
                                     <svg
@@ -209,7 +293,7 @@ export default function LoginPage() {
                                         <path fill="#4CAF50" d="M24 44c5.167 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.145 35.091 26.715 36 24 36c-5.242 0-9.624-3.317-11.284-7.946l-6.522 5.025C9.557 39.556 16.227 44 24 44z" />
                                         <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.79 2.237-2.231 4.166-4.084 5.571l.003-.002 6.19 5.238C36.971 38.205 44 33 44 24c0-1.341-.138-2.65-.389-3.917z" />
                                     </svg>
-                                    Login with Google
+                                    {googleLoading ? "Please wait..." : "Login with Google"}
                                 </button>
 
                                 <p className="text-center text-sm text-slate-600">

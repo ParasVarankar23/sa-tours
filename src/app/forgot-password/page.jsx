@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { motion } from "framer-motion";
 import {
     ArrowLeft,
     KeyRound,
@@ -10,7 +9,8 @@ import {
     ShieldCheck,
     Smartphone,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import Link from "next/link";
+import { useState } from "react";
 
 const fadeUp = {
     hidden: { opacity: 0, y: 24 },
@@ -32,6 +32,64 @@ const stagger = {
 
 export default function ForgotPasswordPage() {
     const [step, setStep] = useState(1);
+    const [email, setEmail] = useState("");
+    const [otp, setOtp] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState("");
+
+    const sendOtp = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setMessage("");
+
+        try {
+            const res = await fetch("/api/forgot-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "send-otp", email }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Failed to send OTP");
+
+            setMessage(data.message || "OTP sent");
+            setStep(2);
+        } catch (error) {
+            setMessage(error.message || "Unable to send OTP");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const resetPassword = async (e) => {
+        e.preventDefault();
+        if (newPassword !== confirmPassword) {
+            setMessage("Passwords do not match");
+            return;
+        }
+
+        setLoading(true);
+        setMessage("");
+        try {
+            const res = await fetch("/api/forgot-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "reset", email, otp, newPassword }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Reset failed");
+
+            setMessage(data.message || "Password reset successful");
+            setTimeout(() => {
+                globalThis.location.href = "/login";
+            }, 900);
+        } catch (error) {
+            setMessage(error.message || "Unable to reset password");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <section className="min-h-[calc(100vh-90px)] bg-[#f8fafc] py-8 sm:py-10 lg:py-12">
@@ -161,19 +219,19 @@ export default function ForgotPasswordPage() {
                             {step === 1 ? (
                                 <form
                                     className="mt-8 space-y-5"
-                                    onSubmit={(e) => {
-                                        e.preventDefault();
-                                        setStep(2);
-                                    }}
+                                    onSubmit={sendOtp}
                                 >
                                     <div>
-                                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                                        <label htmlFor="forgot-email" className="mb-2 block text-sm font-medium text-slate-700">
                                             Email Address
                                         </label>
                                         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
                                             <Mail size={18} className="text-slate-400" />
                                             <input
+                                                id="forgot-email"
                                                 type="email"
+                                                value={email}
+                                                onChange={(e) => setEmail(e.target.value)}
                                                 placeholder="Enter your registered email"
                                                 className="w-full bg-transparent text-sm outline-none"
                                             />
@@ -182,10 +240,13 @@ export default function ForgotPasswordPage() {
 
                                     <button
                                         type="submit"
+                                        disabled={loading}
                                         className="w-full rounded-full bg-orange-500 px-6 py-3.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600"
                                     >
-                                        Send OTP
+                                        {loading ? "Sending..." : "Send OTP"}
                                     </button>
+
+                                    {message && <p className="text-sm text-slate-600">{message}</p>}
 
                                     <Link
                                         href="/login"
@@ -196,15 +257,18 @@ export default function ForgotPasswordPage() {
                                     </Link>
                                 </form>
                             ) : (
-                                <form className="mt-8 space-y-5">
+                                <form className="mt-8 space-y-5" onSubmit={resetPassword}>
                                     <div>
-                                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                                        <label htmlFor="forgot-otp" className="mb-2 block text-sm font-medium text-slate-700">
                                             OTP Code
                                         </label>
                                         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
                                             <Smartphone size={18} className="text-slate-400" />
                                             <input
+                                                id="forgot-otp"
                                                 type="text"
+                                                value={otp}
+                                                onChange={(e) => setOtp(e.target.value)}
                                                 placeholder="Enter OTP"
                                                 className="w-full bg-transparent text-sm outline-none"
                                             />
@@ -212,13 +276,16 @@ export default function ForgotPasswordPage() {
                                     </div>
 
                                     <div>
-                                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                                        <label htmlFor="forgot-new-password" className="mb-2 block text-sm font-medium text-slate-700">
                                             New Password
                                         </label>
                                         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
                                             <LockKeyhole size={18} className="text-slate-400" />
                                             <input
+                                                id="forgot-new-password"
                                                 type="password"
+                                                value={newPassword}
+                                                onChange={(e) => setNewPassword(e.target.value)}
                                                 placeholder="Enter new password"
                                                 className="w-full bg-transparent text-sm outline-none"
                                             />
@@ -226,13 +293,16 @@ export default function ForgotPasswordPage() {
                                     </div>
 
                                     <div>
-                                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                                        <label htmlFor="forgot-confirm-password" className="mb-2 block text-sm font-medium text-slate-700">
                                             Confirm Password
                                         </label>
                                         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
                                             <LockKeyhole size={18} className="text-slate-400" />
                                             <input
+                                                id="forgot-confirm-password"
                                                 type="password"
+                                                value={confirmPassword}
+                                                onChange={(e) => setConfirmPassword(e.target.value)}
                                                 placeholder="Confirm new password"
                                                 className="w-full bg-transparent text-sm outline-none"
                                             />
@@ -241,10 +311,13 @@ export default function ForgotPasswordPage() {
 
                                     <button
                                         type="submit"
+                                        disabled={loading}
                                         className="w-full rounded-full bg-orange-500 px-6 py-3.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600"
                                     >
-                                        Reset Password
+                                        {loading ? "Resetting..." : "Reset Password"}
                                     </button>
+
+                                    {message && <p className="text-sm text-slate-600">{message}</p>}
 
                                     <button
                                         type="button"

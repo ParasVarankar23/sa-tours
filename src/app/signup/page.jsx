@@ -1,14 +1,22 @@
 "use client";
 
+import { auth, googleProvider } from "@/lib/firebase/client";
+import {
+    GoogleAuthProvider,
+    signInWithPopup,
+} from "firebase/auth";
 import { motion } from "framer-motion";
 import {
     Bus,
     Mail,
+    Phone,
     ShieldCheck,
     User,
     Users,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 const fadeUp = {
     hidden: { opacity: 0, y: 24 },
@@ -29,6 +37,74 @@ const stagger = {
 };
 
 export default function SignupPage() {
+    const router = useRouter();
+    const [formData, setFormData] = useState({ fullName: "", email: "", phone: "" });
+    const [loading, setLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
+    const [message, setMessage] = useState("");
+
+    const handleChange = (e) => {
+        setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setMessage("");
+
+        try {
+            const res = await fetch("/api/signup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formData),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Signup failed");
+
+            setMessage(data.message || "Signup successful");
+            setTimeout(() => router.push(data.redirectTo || "/user"), 900);
+        } catch (error) {
+            setMessage(error.message || "Unable to signup");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleGoogleSignup = async () => {
+        setGoogleLoading(true);
+        setMessage("");
+
+        try {
+            const result = await signInWithPopup(auth, googleProvider);
+            const credential = GoogleAuthProvider.credentialFromResult(result);
+            const idToken = credential?.idToken;
+
+            if (!idToken) {
+                throw new Error("Unable to read Google token. Try again.");
+            }
+
+            const res = await fetch("/api/login-google", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    idToken,
+                    fullName: formData.fullName,
+                    phone: formData.phone,
+                }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Google signup failed");
+
+            setMessage(data.message || "Google signup successful");
+            setTimeout(() => router.push(data.redirectTo || "/user"), 700);
+        } catch (error) {
+            setMessage(error.message || "Unable to sign up with Google");
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
+
     return (
         <section className="bg-[#f8fafc] py-3 sm:py-4 lg:py-10">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -132,7 +208,7 @@ export default function SignupPage() {
                                 </p>
                             </div>
 
-                            <form className="mt-4 space-y-3.5">
+                            <form className="mt-4 space-y-3.5" onSubmit={handleSubmit}>
                                 <div>
                                     <label htmlFor="signup-name" className="mb-1.5 block text-sm font-medium text-slate-700">
                                         Full Name
@@ -142,6 +218,9 @@ export default function SignupPage() {
                                         <input
                                             id="signup-name"
                                             type="text"
+                                            name="fullName"
+                                            value={formData.fullName}
+                                            onChange={handleChange}
                                             placeholder="Enter your full name"
                                             className="w-full bg-transparent text-sm outline-none"
                                         />
@@ -157,7 +236,28 @@ export default function SignupPage() {
                                         <input
                                             id="signup-email"
                                             type="email"
+                                            name="email"
+                                            value={formData.email}
+                                            onChange={handleChange}
                                             placeholder="Enter your email"
+                                            className="w-full bg-transparent text-sm outline-none"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label htmlFor="signup-phone" className="mb-1.5 block text-sm font-medium text-slate-700">
+                                        Phone Number
+                                    </label>
+                                    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-2.5 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
+                                        <Phone size={18} className="text-slate-400" />
+                                        <input
+                                            id="signup-phone"
+                                            type="tel"
+                                            name="phone"
+                                            value={formData.phone}
+                                            onChange={handleChange}
+                                            placeholder="Enter your phone number"
                                             className="w-full bg-transparent text-sm outline-none"
                                         />
                                     </div>
@@ -165,10 +265,15 @@ export default function SignupPage() {
 
                                 <button
                                     type="submit"
+                                    disabled={loading}
                                     className="w-full rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600"
                                 >
-                                    Create Account
+                                    {loading ? "Creating..." : "Create Account"}
                                 </button>
+
+                                {message && (
+                                    <p className="text-center text-sm text-slate-600">{message}</p>
+                                )}
 
                                 {/* Divider */}
                                 <div className="relative py-1">
@@ -185,6 +290,8 @@ export default function SignupPage() {
                                 {/* Google Button */}
                                 <button
                                     type="button"
+                                    disabled={googleLoading}
+                                    onClick={handleGoogleSignup}
                                     className="flex w-full items-center justify-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50"
                                 >
                                     <svg
@@ -198,7 +305,7 @@ export default function SignupPage() {
                                         <path fill="#4CAF50" d="M24 44c5.167 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.145 35.091 26.715 36 24 36c-5.242 0-9.624-3.317-11.284-7.946l-6.522 5.025C9.557 39.556 16.227 44 24 44z" />
                                         <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.79 2.237-2.231 4.166-4.084 5.571l.003-.002 6.19 5.238C36.971 38.205 44 33 44 24c0-1.341-.138-2.65-.389-3.917z" />
                                     </svg>
-                                    Sign up with Google
+                                    {googleLoading ? "Please wait..." : "Sign up with Google"}
                                 </button>
 
                                 <p className="text-center text-sm text-slate-600">
