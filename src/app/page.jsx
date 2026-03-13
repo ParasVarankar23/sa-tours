@@ -1,20 +1,20 @@
 import HeroSection from "@/components/home/HeroSection";
-import AboutSection from "@/components/home/AboutSection";
-import FeaturesSection from "@/components/home/FeaturesSection";
-import DestinationSearch from "@/components/home/DestinationSearch";
-import DestinationGrid from "@/components/home/DestinationGrid";
-import TestimonialSection from "@/components/home/TestimonalsSection";
+import AboutPreview from "@/components/home/AboutPreview";
+import SchedulePreview from "@/components/home/SchedulePreview";
+import ServicesPreview from "@/components/home/ServicePreview";
+import RoutesPreview from "@/components/home/RoutesPreview";
+import OfficesPreview from "@/components/home/OfficePreview";
 import CTASection from "@/components/home/CTASection";
 
 export default function HomePage() {
   return (
     <>
       <HeroSection />
-      <AboutSection />
-      <FeaturesSection />
-      <DestinationSearch />
-      <DestinationGrid />
-      <TestimonialSection />
+      <AboutPreview />
+      <SchedulePreview />
+      <ServicesPreview />
+      <RoutesPreview />
+      <OfficesPreview />
       <CTASection />
     </>
   );

@@ -1,89 +1,115 @@
-const heroImages = [
-    "https://images.unsplash.com/photo-1507525428034-b723cf961d3e",
-    "https://images.unsplash.com/photo-1501785888041-af3ef285b470",
-    "https://images.unsplash.com/photo-1493558103817-58b2924bce98",
-    "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee",
-];
+import { ArrowRight, Bus, CalendarDays, MapPin, MessageCircle, Phone } from "lucide-react";
+import Link from "next/link";
 
 export default function HeroSection() {
     return (
-        <section className="px-6 md:px-10 py-8 md:py-12">
-            <div className="grid lg:grid-cols-2 gap-10 items-center">
-                {/* Left Content */}
-                <div>
-                    <p className="text-sm text-orange-500 font-semibold mb-3">
-                        Explore the World ✈️
-                    </p>
+        <section className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(249,115,22,0.22),_transparent_30%),radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.15),_transparent_35%)]" />
+            <div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:px-8 lg:py-24">
+                <div className="flex flex-col justify-center">
+                    <div className="inline-flex w-fit items-center gap-2 rounded-full border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-sm font-medium text-orange-200">
+                        <Bus size={16} />
+                        Reliable Daily Bus Service
+                    </div>
 
-                    <h1 className="text-4xl md:text-6xl font-bold leading-tight text-gray-900">
-                        Discover The <br />
-                        Best Destinations <br />
-                        In The World
+                    <h1 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
+                        Daily Bus Service from Borli, Dighi & Mahasala to Mumbai
                     </h1>
 
-                    <p className="mt-5 text-gray-500 max-w-xl text-sm md:text-base leading-7">
-                        Let’s build your dream holiday with our recommended tours and
-                        beautiful destinations around the world.
+                    <p className="mt-6 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
+                        SA Tours & Travels provides dependable daily bus transportation to Panvel,
+                        Vashi and Mumbai, along with private bus booking for weddings, events,
+                        group travel and special tours.
                     </p>
 
-                    {/* Search Box */}
-                    <div className="mt-8 bg-white rounded-2xl shadow-md border border-gray-100 p-4 flex flex-col md:flex-row gap-4 md:items-center">
-                        <div className="flex-1">
-                            <label className="text-xs text-gray-400 block mb-1">Location</label>
-                            <input
-                                type="text"
-                                placeholder="Where are you going?"
-                                className="w-full outline-none text-sm text-gray-700"
-                            />
-                        </div>
+                    <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                        <a
+                            href="https://wa.me/919999999999"
+                            target="_blank"
+                            className="inline-flex items-center justify-center gap-2 rounded-full bg-orange-500 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 transition hover:bg-orange-600"
+                        >
+                            <MessageCircle size={18} />
+                            Book Your Seat
+                        </a>
 
-                        <div className="w-full md:w-[180px]">
-                            <label className="text-xs text-gray-400 block mb-1">Select Date</label>
-                            <input
-                                type="date"
-                                className="w-full outline-none text-sm text-gray-700 bg-transparent"
-                            />
-                        </div>
+                        <a
+                            href="tel:+919999999999"
+                            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3.5 text-sm font-semibold text-white backdrop-blur hover:bg-white/10"
+                        >
+                            <Phone size={18} />
+                            Call Now
+                        </a>
 
-                        <button className="px-6 py-3 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 transition">
-                            Check Now
-                        </button>
+                        <Link
+                            href="/schedule"
+                            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-6 py-3.5 text-sm font-semibold text-white hover:bg-white/10"
+                        >
+                            <CalendarDays size={18} />
+                            View Schedule
+                        </Link>
+                    </div>
+
+                    <div className="mt-10 grid gap-4 sm:grid-cols-3">
+                        <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+                            <p className="text-3xl font-bold">4+</p>
+                            <p className="mt-1 text-sm text-slate-300">Owned Buses</p>
+                        </div>
+                        <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+                            <p className="text-3xl font-bold">Daily</p>
+                            <p className="mt-1 text-sm text-slate-300">Morning & Return Service</p>
+                        </div>
+                        <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+                            <p className="text-3xl font-bold">3</p>
+                            <p className="mt-1 text-sm text-slate-300">Office Locations</p>
+                        </div>
                     </div>
                 </div>
 
-                {/* Right Image Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-3xl overflow-hidden h-[220px] md:h-[260px]">
-                        <img
-                            src={heroImages[0]}
-                            alt="travel"
-                            className="w-full h-full object-cover"
-                        />
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="rounded-3xl overflow-hidden h-[140px] md:h-[160px]">
-                            <img
-                                src={heroImages[1]}
-                                alt="travel"
-                                className="w-full h-full object-cover"
-                            />
+                <div className="relative">
+                    <div className="grid gap-5 sm:grid-cols-2">
+                        <div className="space-y-5">
+                            <div className="rounded-[2rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                                <div className="h-56 rounded-[1.5rem] bg-gradient-to-br from-orange-400 via-orange-500 to-orange-600" />
+                            </div>
+                            <div className="rounded-[2rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                                <div className="h-36 rounded-[1.5rem] bg-gradient-to-br from-sky-400 via-blue-500 to-blue-700" />
+                            </div>
                         </div>
-                        <div className="rounded-3xl overflow-hidden h-[160px] md:h-[180px]">
-                            <img
-                                src={heroImages[2]}
-                                alt="travel"
-                                className="w-full h-full object-cover"
-                            />
+
+                        <div className="space-y-5 pt-8">
+                            <div className="rounded-[2rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                                <div className="h-36 rounded-[1.5rem] bg-gradient-to-br from-emerald-400 via-emerald-500 to-teal-600" />
+                            </div>
+                            <div className="rounded-[2rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                                <div className="h-56 rounded-[1.5rem] bg-gradient-to-br from-slate-200 via-slate-300 to-slate-400" />
+                            </div>
                         </div>
                     </div>
 
-                    <div className="rounded-3xl overflow-hidden h-[180px] col-span-2">
-                        <img
-                            src={heroImages[3]}
-                            alt="travel"
-                            className="w-full h-full object-cover"
-                        />
+                    <div className="absolute -bottom-6 left-4 right-4 rounded-3xl border border-white/10 bg-white p-5 text-slate-900 shadow-2xl">
+                        <div className="grid gap-4 md:grid-cols-3">
+                            <div className="flex items-center gap-3">
+                                <MapPin className="text-orange-500" size={18} />
+                                <div>
+                                    <p className="text-xs text-slate-500">Primary Route</p>
+                                    <p className="text-sm font-semibold">Borli to Mumbai</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <CalendarDays className="text-orange-500" size={18} />
+                                <div>
+                                    <p className="text-xs text-slate-500">Morning Departure</p>
+                                    <p className="text-sm font-semibold">3:00 AM / 4:00 AM</p>
+                                </div>
+                            </div>
+                            <Link
+                                href="/contact"
+                                className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white"
+                            >
+                                Contact Us
+                                <ArrowRight size={16} />
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>
