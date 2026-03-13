@@ -6,8 +6,10 @@ import Sidebar from "@/components/common/Sidebar";
 import Footer from "@/components/layout/Footer";
 import PublicNavbar from "@/components/layout/Navbar";
 import { usePathname } from "next/navigation";
+import { Toaster } from "sonner";
 
 const publicShellRoutes = new Set([
+    "/",
     "/about",
     "/contact",
     "/forgot-password",
@@ -44,6 +46,7 @@ export default function ClientLayout({ children }) {
     if (portalMeta) {
         return (
             <div className="min-h-screen bg-[#f7f7f7] text-gray-900">
+                <Toaster position="top-center" richColors closeButton duration={3200} />
                 <div className="flex min-h-screen flex-col lg:flex-row">
                     <Sidebar role={portalMeta.roleKey} />
                     <div className="flex min-h-screen flex-1 flex-col">
@@ -59,6 +62,7 @@ export default function ClientLayout({ children }) {
     if (!showPublicShell) {
         return (
             <div className="min-h-screen bg-[#f7f7f7] text-gray-900">
+                <Toaster position="top-center" richColors closeButton duration={3200} />
                 {children}
                 <CookieConsent />
             </div>
@@ -67,6 +71,7 @@ export default function ClientLayout({ children }) {
 
     return (
         <div className="min-h-screen bg-[#f7f7f7] text-gray-900">
+            <Toaster position="top-center" richColors closeButton duration={3200} />
             <div className="mx-auto flex min-h-screen max-w-7xl flex-col bg-white shadow-sm">
                 {/* Global Navbar */}
                 <PublicNavbar />

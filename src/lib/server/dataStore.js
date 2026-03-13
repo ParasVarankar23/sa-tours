@@ -69,3 +69,11 @@ export async function getOtps() {
 export async function saveOtps(otps) {
     return writeJson("otps.json", otps);
 }
+
+export async function getStaffEntries() {
+    return readJson("staff-entries.json", []);
+}
+
+export async function saveStaffEntries(entries) {
+    return writeJson("staff-entries.json", entries);
+}

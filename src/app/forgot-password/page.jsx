@@ -1,5 +1,6 @@
 "use client";
 
+import { showAppToast } from "@/lib/client/toast";
 import { motion } from "framer-motion";
 import {
     ArrowLeft,
@@ -37,12 +38,18 @@ export default function ForgotPasswordPage() {
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState("");
+
+    const getErrorMessage = (error, fallback) => {
+        const raw = String(error?.message || "").trim();
+        if (!raw || raw === "Failed to fetch" || raw.toLowerCase().includes("network")) {
+            return "Network error. Please check your connection and try again.";
+        }
+        return raw || fallback;
+    };
 
     const sendOtp = async (e) => {
         e.preventDefault();
         setLoading(true);
-        setMessage("");
 
         try {
             const res = await fetch("/api/forgot-password", {
@@ -53,10 +60,10 @@ export default function ForgotPasswordPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || "Failed to send OTP");
 
-            setMessage(data.message || "OTP sent");
+            showAppToast("success", data.message || "OTP sent successfully.");
             setStep(2);
         } catch (error) {
-            setMessage(error.message || "Unable to send OTP");
+            showAppToast("error", getErrorMessage(error, "Unable to send OTP."));
         } finally {
             setLoading(false);
         }
@@ -65,12 +72,11 @@ export default function ForgotPasswordPage() {
     const resetPassword = async (e) => {
         e.preventDefault();
         if (newPassword !== confirmPassword) {
-            setMessage("Passwords do not match");
+            showAppToast("error", "Passwords do not match.");
             return;
         }
 
         setLoading(true);
-        setMessage("");
         try {
             const res = await fetch("/api/forgot-password", {
                 method: "POST",
@@ -80,12 +86,12 @@ export default function ForgotPasswordPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || "Reset failed");
 
-            setMessage(data.message || "Password reset successful");
+            showAppToast("success", data.message || "Password reset successful.");
             setTimeout(() => {
                 globalThis.location.href = "/login";
             }, 900);
         } catch (error) {
-            setMessage(error.message || "Unable to reset password");
+            showAppToast("error", getErrorMessage(error, "Unable to reset password."));
         } finally {
             setLoading(false);
         }
@@ -246,8 +252,6 @@ export default function ForgotPasswordPage() {
                                         {loading ? "Sending..." : "Send OTP"}
                                     </button>
 
-                                    {message && <p className="text-sm text-slate-600">{message}</p>}
-
                                     <Link
                                         href="/login"
                                         className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-orange-500"
@@ -316,8 +320,6 @@ export default function ForgotPasswordPage() {
                                     >
                                         {loading ? "Resetting..." : "Reset Password"}
                                     </button>
-
-                                    {message && <p className="text-sm text-slate-600">{message}</p>}
 
                                     <button
                                         type="button"

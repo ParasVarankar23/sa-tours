@@ -1,5 +1,6 @@
 import { generateId, generateTempPassword, hashPassword, signToken } from "@/lib/server/auth";
 import { getUsers, saveUsers } from "@/lib/server/dataStore";
+import { syncUserToFirebase } from "@/lib/server/firebaseSync";
 import { sendSignupPasswordEmail } from "@/lib/server/mailer";
 import { NextResponse } from "next/server";
 
@@ -19,7 +20,15 @@ export async function POST(request) {
         const phoneExists = users.some((u) => u.phone === phone);
 
         if (emailExists || phoneExists) {
-            return NextResponse.json({ message: "Email or phone already registered" }, { status: 409 });
+            let message = "Email or phone already registered";
+            if (emailExists && phoneExists) {
+                message = "Email and phone are already registered";
+            } else if (emailExists) {
+                message = "Email is already registered";
+            } else if (phoneExists) {
+                message = "Phone is already registered";
+            }
+            return NextResponse.json({ message }, { status: 409 });
         }
 
         const password = generateTempPassword(fullName);
@@ -36,6 +45,20 @@ export async function POST(request) {
             createdAt: new Date().toISOString(),
         };
 
+        const syncResult = await syncUserToFirebase({
+            localUserId: user.id,
+            fullName,
+            email,
+            phone,
+            role: user.role,
+            password,
+            authProvider: "password",
+        });
+
+        if (syncResult.authResult.firebaseAuthUid) {
+            user.firebaseAuthUid = syncResult.authResult.firebaseAuthUid;
+        }
+
         users.push(user);
         await saveUsers(users);
         await sendSignupPasswordEmail(email, fullName, password);
@@ -45,6 +68,16 @@ export async function POST(request) {
             message: "Signup successful. Password sent to your email.",
             role: user.role,
             redirectTo: "/user",
+            token,
+            credentialsPreview: {
+                email,
+                password,
+            },
+            firebaseSync: {
+                auth: syncResult.authResult.status,
+                realtimeDb: syncResult.dbResult.status,
+                warnings: syncResult.warnings,
+            },
         });
 
         response.cookies.set("sa_auth_token", token, {

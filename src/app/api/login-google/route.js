@@ -1,5 +1,6 @@
 import { generateId, generateTempPassword, hashPassword, signToken } from "@/lib/server/auth";
 import { getUsers, saveUsers } from "@/lib/server/dataStore";
+import { syncUserToFirebase } from "@/lib/server/firebaseSync";
 import { NextResponse } from "next/server";
 
 function roleRedirect(role) {
@@ -40,6 +41,7 @@ export async function POST(request) {
         const users = await getUsers();
         let user = users.find((u) => u.email === email);
         let created = false;
+        let syncResult = null;
 
         if (!user) {
             const fullName = providedName || googleName || "Google User";
@@ -58,6 +60,20 @@ export async function POST(request) {
                 authProvider: "google",
             };
 
+            syncResult = await syncUserToFirebase({
+                localUserId: user.id,
+                fullName,
+                email,
+                phone: providedPhone,
+                role: user.role,
+                password,
+                authProvider: "google",
+            });
+
+            if (syncResult.authResult.firebaseAuthUid) {
+                user.firebaseAuthUid = syncResult.authResult.firebaseAuthUid;
+            }
+
             users.push(user);
             await saveUsers(users);
             created = true;
@@ -68,6 +84,14 @@ export async function POST(request) {
             message: created ? "Google signup successful" : "Google login successful",
             role: user.role,
             redirectTo: roleRedirect(user.role),
+            token,
+            firebaseSync: syncResult
+                ? {
+                    auth: syncResult.authResult.status,
+                    realtimeDb: syncResult.dbResult.status,
+                    warnings: syncResult.warnings,
+                }
+                : null,
         });
 
         response.cookies.set("sa_auth_token", token, {

@@ -1,5 +1,6 @@
 import { generateId, generateTempPassword, hashPassword, verifyToken } from "@/lib/server/auth";
 import { getUsers, saveUsers } from "@/lib/server/dataStore";
+import { syncUserToFirebase } from "@/lib/server/firebaseSync";
 import { sendSignupPasswordEmail } from "@/lib/server/mailer";
 import { NextResponse } from "next/server";
 
@@ -62,9 +63,34 @@ export async function POST(request) {
         createdBy: payload.userId,
     };
 
+    const syncResult = await syncUserToFirebase({
+        localUserId: staffUser.id,
+        fullName,
+        email,
+        phone,
+        role: staffUser.role,
+        password,
+        authProvider: "password",
+    });
+
+    if (syncResult.authResult.firebaseAuthUid) {
+        staffUser.firebaseAuthUid = syncResult.authResult.firebaseAuthUid;
+    }
+
     users.push(staffUser);
     await saveUsers(users);
     await sendSignupPasswordEmail(email, fullName, password);
 
-    return NextResponse.json({ message: "Staff access created and password emailed" });
+    return NextResponse.json({
+        message: "Staff access created and password emailed",
+        credentialsPreview: {
+            email,
+            password,
+        },
+        firebaseSync: {
+            auth: syncResult.authResult.status,
+            realtimeDb: syncResult.dbResult.status,
+            warnings: syncResult.warnings,
+        },
+    });
 }

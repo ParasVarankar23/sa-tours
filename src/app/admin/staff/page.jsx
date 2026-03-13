@@ -5,12 +5,14 @@ import { useState } from "react";
 export default function AdminStaffPage() {
     const [formData, setFormData] = useState({ fullName: "", email: "", phone: "" });
     const [message, setMessage] = useState("");
+    const [credentialsPreview, setCredentialsPreview] = useState(null);
     const [loading, setLoading] = useState(false);
 
     async function handleSubmit(e) {
         e.preventDefault();
         setLoading(true);
         setMessage("");
+        setCredentialsPreview(null);
 
         try {
             const res = await fetch("/api/staff", {
@@ -23,6 +25,7 @@ export default function AdminStaffPage() {
             if (!res.ok) throw new Error(data.message || "Failed");
 
             setMessage("Staff created successfully. Password sent on email.");
+            setCredentialsPreview(data.credentialsPreview || null);
             setFormData({ fullName: "", email: "", phone: "" });
         } catch (err) {
             setMessage(err.message || "Unable to create staff");
@@ -38,12 +41,14 @@ export default function AdminStaffPage() {
 
             <form onSubmit={handleSubmit} className="mt-6 grid gap-4 sm:max-w-xl">
                 <input
+                    required
                     value={formData.fullName}
                     onChange={(e) => setFormData((p) => ({ ...p, fullName: e.target.value }))}
                     placeholder="Full name"
                     className="rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:border-orange-400"
                 />
                 <input
+                    required
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
@@ -51,6 +56,8 @@ export default function AdminStaffPage() {
                     className="rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:border-orange-400"
                 />
                 <input
+                    required
+                    type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
                     placeholder="Phone"
@@ -67,6 +74,14 @@ export default function AdminStaffPage() {
             </form>
 
             {message && <p className="mt-4 text-sm text-slate-700">{message}</p>}
+
+            {credentialsPreview && (
+                <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-slate-700">
+                    <p className="font-semibold text-slate-900">Staff Login Credentials</p>
+                    <p className="mt-1">Email: {credentialsPreview.email}</p>
+                    <p>Password: {credentialsPreview.password}</p>
+                </div>
+            )}
         </div>
     );
 }

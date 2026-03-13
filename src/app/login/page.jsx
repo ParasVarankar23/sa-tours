@@ -1,5 +1,6 @@
 "use client";
 
+import { showAppToast } from "@/lib/client/toast";
 import { auth, googleProvider } from "@/lib/firebase/client";
 import {
     GoogleAuthProvider,
@@ -41,7 +42,20 @@ export default function LoginPage() {
     const [formData, setFormData] = useState({ identifier: "", password: "" });
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
-    const [message, setMessage] = useState("");
+
+    const getErrorMessage = (error, fallback) => {
+        const raw = String(error?.message || "").trim();
+        if (!raw || raw === "Failed to fetch" || raw.toLowerCase().includes("network")) {
+            return "Network error. Please check your connection and try again.";
+        }
+        if (raw.toLowerCase() === "invalid password") {
+            return "Login failed. Invalid password.";
+        }
+        if (raw.toLowerCase() === "user not found") {
+            return "Login failed. User not found.";
+        }
+        return raw || fallback;
+    };
 
     const handleChange = (e) => {
         setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -50,7 +64,6 @@ export default function LoginPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        setMessage("");
 
         try {
             const res = await fetch("/api/login", {
@@ -61,10 +74,17 @@ export default function LoginPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || "Login failed");
 
-            setMessage(data.message || "Login successful");
+            if (data.token) {
+                localStorage.setItem("authToken", data.token);
+            }
+
+            showAppToast("success", "Login successful.");
+            if (Array.isArray(data.firebaseSync?.warnings) && data.firebaseSync.warnings.length > 0) {
+                showAppToast("warning", data.firebaseSync.warnings[0]);
+            }
             setTimeout(() => router.push(data.redirectTo || "/user"), 700);
         } catch (error) {
-            setMessage(error.message || "Unable to login");
+            showAppToast("error", getErrorMessage(error, "Unable to login."));
         } finally {
             setLoading(false);
         }
@@ -72,7 +92,6 @@ export default function LoginPage() {
 
     const handleGoogleLogin = async () => {
         setGoogleLoading(true);
-        setMessage("");
 
         try {
             const result = await signInWithPopup(auth, googleProvider);
@@ -92,10 +111,22 @@ export default function LoginPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || "Google login failed");
 
-            setMessage(data.message || "Google login successful");
+            if (data.token) {
+                localStorage.setItem("authToken", data.token);
+            }
+
+            showAppToast("success", "Login successful.");
             setTimeout(() => router.push(data.redirectTo || "/user"), 700);
         } catch (error) {
-            setMessage(error.message || "Unable to login with Google");
+            const raw = String(error?.message || "").trim();
+            if (raw.includes("auth/invalid-continue-uri") || raw.includes("INVALID_CONTINUE_URI")) {
+                showAppToast(
+                    "error",
+                    "Firebase Google auth is not configured for localhost. Add localhost in Firebase Authentication Settings -> Authorized domains."
+                );
+            } else {
+                showAppToast("error", getErrorMessage(error, "Unable to login with Google."));
+            }
         } finally {
             setGoogleLoading(false);
         }
@@ -258,10 +289,6 @@ export default function LoginPage() {
                                 >
                                     {loading ? "Logging in..." : "Login"}
                                 </button>
-
-                                {message && (
-                                    <p className="text-center text-sm text-slate-600">{message}</p>
-                                )}
 
                                 {/* Divider */}
                                 <div className="relative py-1">

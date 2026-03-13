@@ -1,5 +1,6 @@
 import { signToken, verifyPassword } from "@/lib/server/auth";
 import { getUsers } from "@/lib/server/dataStore";
+import { syncUserToFirebase } from "@/lib/server/firebaseSync";
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
@@ -30,11 +31,27 @@ export async function POST(request) {
             user: "/user",
         };
 
+        const syncResult = await syncUserToFirebase({
+            localUserId: user.id,
+            fullName: user.fullName,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            password,
+            authProvider: user.authProvider || "password",
+        });
+
         const token = signToken({ userId: user.id, role: user.role, email: user.email });
         const response = NextResponse.json({
             message: "Login successful",
             role: user.role,
             redirectTo: roleToRoute[user.role] || "/user",
+            token,
+            firebaseSync: {
+                auth: syncResult.authResult.status,
+                realtimeDb: syncResult.dbResult.status,
+                warnings: syncResult.warnings,
+            },
         });
 
         response.cookies.set("sa_auth_token", token, {

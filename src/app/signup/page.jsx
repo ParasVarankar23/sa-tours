@@ -1,5 +1,6 @@
 "use client";
 
+import { showAppToast } from "@/lib/client/toast";
 import { auth, googleProvider } from "@/lib/firebase/client";
 import {
     GoogleAuthProvider,
@@ -41,7 +42,18 @@ export default function SignupPage() {
     const [formData, setFormData] = useState({ fullName: "", email: "", phone: "" });
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
-    const [message, setMessage] = useState("");
+    const [credentialsPreview, setCredentialsPreview] = useState(null);
+
+    const getErrorMessage = (error, fallback) => {
+        const raw = String(error?.message || "").trim();
+        if (!raw || raw === "Failed to fetch" || raw.toLowerCase().includes("network")) {
+            return "Network error. Please check your connection and try again.";
+        }
+        if (raw.toLowerCase() === "email or phone already registered") {
+            return "Signup failed. Email or phone is already registered.";
+        }
+        return raw || fallback;
+    };
 
     const handleChange = (e) => {
         setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -50,7 +62,7 @@ export default function SignupPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        setMessage("");
+        setCredentialsPreview(null);
 
         try {
             const res = await fetch("/api/signup", {
@@ -61,10 +73,20 @@ export default function SignupPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || "Signup failed");
 
-            setMessage(data.message || "Signup successful");
+            if (data.token) {
+                localStorage.setItem("authToken", data.token);
+            }
+
+            showAppToast("success", "Signup successful.");
+            if (Array.isArray(data.firebaseSync?.warnings) && data.firebaseSync.warnings.length > 0) {
+                showAppToast("warning", data.firebaseSync.warnings[0]);
+            }
+            if (data.credentialsPreview) {
+                setCredentialsPreview(data.credentialsPreview);
+            }
             setTimeout(() => router.push(data.redirectTo || "/user"), 900);
         } catch (error) {
-            setMessage(error.message || "Unable to signup");
+            showAppToast("error", getErrorMessage(error, "Unable to sign up."));
         } finally {
             setLoading(false);
         }
@@ -72,7 +94,7 @@ export default function SignupPage() {
 
     const handleGoogleSignup = async () => {
         setGoogleLoading(true);
-        setMessage("");
+        setCredentialsPreview(null);
 
         try {
             const result = await signInWithPopup(auth, googleProvider);
@@ -96,10 +118,25 @@ export default function SignupPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || "Google signup failed");
 
-            setMessage(data.message || "Google signup successful");
+            if (data.token) {
+                localStorage.setItem("authToken", data.token);
+            }
+
+            showAppToast("success", "Signup successful.");
+            if (Array.isArray(data.firebaseSync?.warnings) && data.firebaseSync.warnings.length > 0) {
+                showAppToast("warning", data.firebaseSync.warnings[0]);
+            }
             setTimeout(() => router.push(data.redirectTo || "/user"), 700);
         } catch (error) {
-            setMessage(error.message || "Unable to sign up with Google");
+            const raw = String(error?.message || "").trim();
+            if (raw.includes("auth/invalid-continue-uri") || raw.includes("INVALID_CONTINUE_URI")) {
+                showAppToast(
+                    "error",
+                    "Firebase Google auth is not configured for localhost. Add localhost in Firebase Authentication Settings -> Authorized domains."
+                );
+            } else {
+                showAppToast("error", getErrorMessage(error, "Unable to sign up with Google."));
+            }
         } finally {
             setGoogleLoading(false);
         }
@@ -271,8 +308,12 @@ export default function SignupPage() {
                                     {loading ? "Creating..." : "Create Account"}
                                 </button>
 
-                                {message && (
-                                    <p className="text-center text-sm text-slate-600">{message}</p>
+                                {credentialsPreview && (
+                                    <div className="rounded-2xl border border-orange-200 bg-orange-50 p-3 text-sm text-slate-700">
+                                        <p className="font-semibold text-slate-900">Login Credentials</p>
+                                        <p className="mt-1">Email: {credentialsPreview.email}</p>
+                                        <p>Password: {credentialsPreview.password}</p>
+                                    </div>
                                 )}
 
                                 {/* Divider */}
