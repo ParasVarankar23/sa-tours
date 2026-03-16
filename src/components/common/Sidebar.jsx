@@ -73,10 +73,6 @@ function SidebarContent({ role, pathname, onClose }) {
                         <X size={18} />
                     </button>
                 </div>
-
-                <div className="mt-4 inline-flex items-center rounded-full bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-600 ring-1 ring-orange-100">
-                    Logged in as {formatRole(role)}
-                </div>
             </div>
 
             {/* Nav */}

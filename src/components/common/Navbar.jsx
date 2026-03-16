@@ -183,126 +183,143 @@ export default function Navbar({
             <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
                 <div className="px-4 py-3 sm:px-6 lg:px-8">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                        {/* LEFT SIDE */}
-                        <div className="flex min-w-0 items-center gap-3">
-                            {/* Mobile menu button */}
-                            <button
-                                type="button"
-                                onClick={onMenuClick}
-                                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-orange-300 hover:text-orange-500 lg:hidden"
-                                aria-label="Open sidebar"
-                            >
-                                <Menu size={20} />
-                            </button>
+                        <div className="flex w-full items-center justify-between gap-3">
+                            {/* LEFT SIDE */}
+                            <div className="flex min-w-0 items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={onMenuClick}
+                                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-orange-300 hover:text-orange-500 lg:hidden"
+                                    aria-label="Open sidebar"
+                                >
+                                    <Menu size={20} />
+                                </button>
 
-                            <div className="min-w-0">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-500 sm:text-xs">
-                                    SA Tours Dashboard
-                                </p>
+                                <div className="min-w-0">
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-500 sm:text-xs">
+                                        SA Tours Dashboard
+                                    </p>
 
-                                <p className="mt-1 text-sm font-medium text-slate-600 sm:text-base">
-                                    Welcome back,{" "}
-                                    <span className="font-semibold text-slate-900">
-                                        {fullName || "User"}
-                                    </span>
-                                </p>
+                                    <p className="mt-1 truncate text-sm font-medium text-slate-600 sm:text-base">
+                                        Welcome back,{" "}
+                                        <span className="font-semibold text-slate-900">
+                                            {fullName || "User"}
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* RIGHT SIDE */}
+                            <div className="flex items-center gap-3">
+                                {/* Search (desktop only) */}
+                                <div className="hidden xl:block">
+                                    <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition focus-within:border-orange-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-orange-100">
+                                        <Search size={17} className="shrink-0 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search pages..."
+                                            className="w-full min-w-0 bg-transparent text-sm text-slate-700 outline-none sm:min-w-[220px] lg:min-w-[280px] xl:min-w-[320px]"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    {/* Notifications */}
+                                    <button
+                                        type="button"
+                                        className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-orange-300 hover:text-orange-500"
+                                        aria-label="Notifications"
+                                    >
+                                        <Bell size={18} />
+                                        <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-orange-500 ring-2 ring-white" />
+                                    </button>
+
+                                    {/* Profile Dropdown */}
+                                    <div className="relative" ref={profileMenuRef}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowProfileMenu((prev) => !prev)}
+                                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm transition hover:border-orange-300 sm:gap-3 sm:px-3"
+                                        >
+                                            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-md shadow-orange-200 sm:h-11 sm:w-11">
+                                                {profileImage ? (
+                                                    <Image
+                                                        src={profileImage}
+                                                        alt={fullName || "Profile"}
+                                                        fill
+                                                        className="object-cover"
+                                                    />
+                                                ) : (
+                                                    <User size={18} className="text-white sm:hidden" />
+                                                )}
+
+                                                {!profileImage && (
+                                                    <span className="hidden sm:flex">
+                                                        <User size={20} className="text-white" />
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="hidden min-w-0 text-left lg:block">
+                                                <p className="max-w-[150px] truncate text-sm font-semibold text-slate-900 lg:max-w-[180px]">
+                                                    {fullName || "Dashboard User"}
+                                                </p>
+                                                <p className="text-xs text-slate-500">{role}</p>
+                                            </div>
+
+                                            <ChevronDown
+                                                size={16}
+                                                className={`hidden text-slate-500 transition lg:block ${showProfileMenu ? "rotate-180" : ""
+                                                    }`}
+                                            />
+                                        </button>
+
+                                        {showProfileMenu && (
+                                            <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleViewProfile}
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-orange-600"
+                                                >
+                                                    <User size={16} />
+                                                    View Profile
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSettings}
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-orange-600"
+                                                >
+                                                    <Settings size={16} />
+                                                    Settings
+                                                </button>
+
+                                                <div className="my-2 border-t border-slate-100" />
+
+                                                <button
+                                                    type="button"
+                                                    onClick={handleLogout}
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-red-600 transition hover:bg-red-50"
+                                                >
+                                                    <LogOut size={16} />
+                                                    Logout
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        {/* RIGHT SIDE */}
-                        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-                            {/* Search */}
-                            <div className="order-2 xl:order-1">
-                                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition focus-within:border-orange-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-orange-100">
-                                    <Search size={17} className="shrink-0 text-slate-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="Search pages..."
-                                        className="w-full min-w-0 bg-transparent text-sm text-slate-700 outline-none sm:min-w-[220px] lg:min-w-[280px] xl:min-w-[320px]"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="order-1 flex items-center gap-2 sm:gap-3 xl:order-2">
-                                {/* Notifications */}
-                                <button
-                                    type="button"
-                                    className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-orange-300 hover:text-orange-500"
-                                    aria-label="Notifications"
-                                >
-                                    <Bell size={18} />
-                                    <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-orange-500 ring-2 ring-white" />
-                                </button>
-
-                                {/* Profile Dropdown */}
-                                <div className="relative" ref={profileMenuRef}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowProfileMenu((prev) => !prev)}
-                                        className="inline-flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-orange-300"
-                                    >
-                                        {/* PROFILE IMAGE OR ICON */}
-                                        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-md shadow-orange-200">
-                                            {profileImage ? (
-                                                <Image
-                                                    src={profileImage}
-                                                    alt={fullName || "Profile"}
-                                                    fill
-                                                    className="object-cover"
-                                                />
-                                            ) : (
-                                                <User size={20} className="text-white" />
-                                            )}
-                                        </div>
-
-                                        <div className="hidden min-w-0 text-left sm:block">
-                                            <p className="max-w-[150px] truncate text-sm font-semibold text-slate-900 lg:max-w-[180px]">
-                                                {fullName || "Dashboard User"}
-                                            </p>
-                                            <p className="text-xs text-slate-500">{role}</p>
-                                        </div>
-
-                                        <ChevronDown
-                                            size={16}
-                                            className={`hidden text-slate-500 transition sm:block ${showProfileMenu ? "rotate-180" : ""
-                                                }`}
-                                        />
-                                    </button>
-
-                                    {showProfileMenu && (
-                                        <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
-                                            <button
-                                                type="button"
-                                                onClick={handleViewProfile}
-                                                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-orange-600"
-                                            >
-                                                <User size={16} />
-                                                View Profile
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                onClick={handleSettings}
-                                                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-orange-600"
-                                            >
-                                                <Settings size={16} />
-                                                Settings
-                                            </button>
-
-                                            <div className="my-2 border-t border-slate-100" />
-
-                                            <button
-                                                type="button"
-                                                onClick={handleLogout}
-                                                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-red-600 transition hover:bg-red-50"
-                                            >
-                                                <LogOut size={16} />
-                                                Logout
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
+                        {/* Mobile search row */}
+                        <div className="block xl:hidden">
+                            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition focus-within:border-orange-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-orange-100">
+                                <Search size={17} className="shrink-0 text-slate-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Search pages..."
+                                    className="w-full min-w-0 bg-transparent text-sm text-slate-700 outline-none"
+                                />
                             </div>
                         </div>
                     </div>
