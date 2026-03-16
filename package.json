@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "cloudinary": "^2.9.0",
     "firebase": "^12.10.0",
     "firebase-admin": "^13.7.0",
     "framer-motion": "^12.36.0",
