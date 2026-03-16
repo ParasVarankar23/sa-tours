@@ -11,7 +11,7 @@ import {
     Smartphone,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const fadeUp = {
     hidden: { opacity: 0, y: 24 },
@@ -38,30 +38,58 @@ export default function ForgotPasswordPage() {
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
+    const [resendCooldown, setResendCooldown] = useState(0);
+
+    useEffect(() => {
+        if (resendCooldown <= 0) return;
+
+        const timer = setInterval(() => {
+            setResendCooldown((prev) => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [resendCooldown]);
 
     const getErrorMessage = (error, fallback) => {
         const raw = String(error?.message || "").trim();
+
         if (!raw || raw === "Failed to fetch" || raw.toLowerCase().includes("network")) {
             return "Network error. Please check your connection and try again.";
         }
+
         return raw || fallback;
     };
 
     const sendOtp = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
+
         setLoading(true);
 
         try {
-            const res = await fetch("/api/forgot-password", {
+            const res = await fetch("/api/auth/forgot-password", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "send-otp", email }),
+                body: JSON.stringify({
+                    action: "send-otp",
+                    email: email.trim(),
+                }),
             });
+
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || "Failed to send OTP");
+
+            if (!res.ok) {
+                throw new Error(data.error || data.message || "Failed to send OTP");
+            }
 
             showAppToast("success", data.message || "OTP sent successfully.");
             setStep(2);
+            setResendCooldown(30);
         } catch (error) {
             showAppToast("error", getErrorMessage(error, "Unable to send OTP."));
         } finally {
@@ -71,24 +99,37 @@ export default function ForgotPasswordPage() {
 
     const resetPassword = async (e) => {
         e.preventDefault();
+
         if (newPassword !== confirmPassword) {
             showAppToast("error", "Passwords do not match.");
             return;
         }
 
         setLoading(true);
+
         try {
-            const res = await fetch("/api/forgot-password", {
+            const res = await fetch("/api/auth/forgot-password", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "reset", email, otp, newPassword }),
+                body: JSON.stringify({
+                    action: "reset-password",
+                    email: email.trim(),
+                    otp: otp.trim(),
+                    newPassword,
+                    confirmPassword,
+                }),
             });
+
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || "Reset failed");
+
+            if (!res.ok) {
+                throw new Error(data.error || data.message || "Reset failed");
+            }
 
             showAppToast("success", data.message || "Password reset successful.");
+
             setTimeout(() => {
-                globalThis.location.href = "/login";
+                window.location.href = "/login";
             }, 900);
         } catch (error) {
             showAppToast("error", getErrorMessage(error, "Unable to reset password."));
@@ -132,10 +173,7 @@ export default function ForgotPasswordPage() {
                             set a new password to securely access your SA Tours & Travels account.
                         </motion.p>
 
-                        <motion.div
-                            variants={stagger}
-                            className="mt-8 grid gap-4 sm:grid-cols-3"
-                        >
+                        <motion.div variants={stagger} className="mt-8 grid gap-4 sm:grid-cols-3">
                             <motion.div
                                 variants={fadeUp}
                                 whileHover={{ y: -4 }}
@@ -202,7 +240,7 @@ export default function ForgotPasswordPage() {
                                 </p>
                             </div>
 
-                            {/* STEP INDICATOR */}
+                            {/* Step indicator */}
                             <div className="mt-6 flex items-center gap-3">
                                 <div className="flex-1">
                                     <div className="h-2 rounded-full bg-orange-500" />
@@ -223,12 +261,12 @@ export default function ForgotPasswordPage() {
                             </div>
 
                             {step === 1 ? (
-                                <form
-                                    className="mt-8 space-y-5"
-                                    onSubmit={sendOtp}
-                                >
+                                <form className="mt-8 space-y-5" onSubmit={sendOtp}>
                                     <div>
-                                        <label htmlFor="forgot-email" className="mb-2 block text-sm font-medium text-slate-700">
+                                        <label
+                                            htmlFor="forgot-email"
+                                            className="mb-2 block text-sm font-medium text-slate-700"
+                                        >
                                             Email Address
                                         </label>
                                         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
@@ -240,6 +278,7 @@ export default function ForgotPasswordPage() {
                                                 onChange={(e) => setEmail(e.target.value)}
                                                 placeholder="Enter your registered email"
                                                 className="w-full bg-transparent text-sm outline-none"
+                                                required
                                             />
                                         </div>
                                     </div>
@@ -247,7 +286,7 @@ export default function ForgotPasswordPage() {
                                     <button
                                         type="submit"
                                         disabled={loading}
-                                        className="w-full rounded-full bg-orange-500 px-6 py-3.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600"
+                                        className="w-full rounded-full bg-orange-500 px-6 py-3.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
                                     >
                                         {loading ? "Sending..." : "Send OTP"}
                                     </button>
@@ -263,7 +302,10 @@ export default function ForgotPasswordPage() {
                             ) : (
                                 <form className="mt-8 space-y-5" onSubmit={resetPassword}>
                                     <div>
-                                        <label htmlFor="forgot-otp" className="mb-2 block text-sm font-medium text-slate-700">
+                                        <label
+                                            htmlFor="forgot-otp"
+                                            className="mb-2 block text-sm font-medium text-slate-700"
+                                        >
                                             OTP Code
                                         </label>
                                         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
@@ -273,14 +315,29 @@ export default function ForgotPasswordPage() {
                                                 type="text"
                                                 value={otp}
                                                 onChange={(e) => setOtp(e.target.value)}
-                                                placeholder="Enter OTP"
+                                                placeholder="Enter 6-digit OTP"
                                                 className="w-full bg-transparent text-sm outline-none"
+                                                required
                                             />
                                         </div>
                                     </div>
 
+                                    <button
+                                        type="button"
+                                        onClick={sendOtp}
+                                        disabled={loading || resendCooldown > 0}
+                                        className="text-sm font-medium text-orange-500 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        {resendCooldown > 0
+                                            ? `Resend OTP in ${resendCooldown}s`
+                                            : "Resend OTP"}
+                                    </button>
+
                                     <div>
-                                        <label htmlFor="forgot-new-password" className="mb-2 block text-sm font-medium text-slate-700">
+                                        <label
+                                            htmlFor="forgot-new-password"
+                                            className="mb-2 block text-sm font-medium text-slate-700"
+                                        >
                                             New Password
                                         </label>
                                         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
@@ -292,12 +349,16 @@ export default function ForgotPasswordPage() {
                                                 onChange={(e) => setNewPassword(e.target.value)}
                                                 placeholder="Enter new password"
                                                 className="w-full bg-transparent text-sm outline-none"
+                                                required
                                             />
                                         </div>
                                     </div>
 
                                     <div>
-                                        <label htmlFor="forgot-confirm-password" className="mb-2 block text-sm font-medium text-slate-700">
+                                        <label
+                                            htmlFor="forgot-confirm-password"
+                                            className="mb-2 block text-sm font-medium text-slate-700"
+                                        >
                                             Confirm Password
                                         </label>
                                         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
@@ -309,6 +370,7 @@ export default function ForgotPasswordPage() {
                                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                                 placeholder="Confirm new password"
                                                 className="w-full bg-transparent text-sm outline-none"
+                                                required
                                             />
                                         </div>
                                     </div>
@@ -316,7 +378,7 @@ export default function ForgotPasswordPage() {
                                     <button
                                         type="submit"
                                         disabled={loading}
-                                        className="w-full rounded-full bg-orange-500 px-6 py-3.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600"
+                                        className="w-full rounded-full bg-orange-500 px-6 py-3.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
                                     >
                                         {loading ? "Resetting..." : "Reset Password"}
                                     </button>

@@ -17,7 +17,7 @@ export default function Navbar({ title = "Dashboard", role = "User" }) {
 
         async function loadProfile() {
             try {
-                const res = await fetch("/api/me", { cache: "no-store" });
+                const res = await fetch("/api/auth/me", { cache: "no-store" });
                 if (!res.ok) return;
                 const data = await res.json();
                 if (active) {
@@ -54,7 +54,7 @@ export default function Navbar({ title = "Dashboard", role = "User" }) {
 
     async function performLogout() {
         try {
-            await fetch("/api/logout", { method: "POST" });
+            await fetch("/api/auth/logout", { method: "POST" });
             localStorage.removeItem("authToken");
             showAppToast("success", "Logged out successfully.");
         } catch {

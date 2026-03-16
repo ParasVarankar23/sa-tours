@@ -1,11 +1,8 @@
 "use client";
 
 import { showAppToast } from "@/lib/client/toast";
-import { auth, googleProvider } from "@/lib/firebase/client";
-import {
-    GoogleAuthProvider,
-    signInWithPopup,
-} from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { motion } from "framer-motion";
 import {
     Bus,
@@ -18,6 +15,9 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+
+const auth = getFirebaseAuth();
+const googleProvider = new GoogleAuthProvider();
 
 const fadeUp = {
     hidden: { opacity: 0, y: 24 },
@@ -39,26 +39,40 @@ const stagger = {
 
 export default function LoginPage() {
     const router = useRouter();
-    const [formData, setFormData] = useState({ identifier: "", password: "" });
+    const [formData, setFormData] = useState({ loginId: "", password: "" });
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
 
     const getErrorMessage = (error, fallback) => {
         const raw = String(error?.message || "").trim();
+
         if (!raw || raw === "Failed to fetch" || raw.toLowerCase().includes("network")) {
             return "Network error. Please check your connection and try again.";
         }
-        if (raw.toLowerCase() === "invalid password") {
-            return "Login failed. Invalid password.";
+
+        if (
+            raw.toLowerCase() === "invalid email or password" ||
+            raw.toLowerCase() === "wrong password"
+        ) {
+            return "Login failed. Invalid email/phone or password.";
         }
+
         if (raw.toLowerCase() === "user not found") {
             return "Login failed. User not found.";
         }
+
+        if (raw.toLowerCase() === "no user found for the provided login id") {
+            return "No account found with this email or phone number.";
+        }
+
         return raw || fallback;
     };
 
     const handleChange = (e) => {
-        setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+        setFormData((prev) => ({
+            ...prev,
+            [e.target.name]: e.target.value,
+        }));
     };
 
     const handleSubmit = async (e) => {
@@ -66,23 +80,33 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            const res = await fetch("/api/login", {
+            const res = await fetch("/api/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(formData),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message || "Login failed");
 
-            if (data.token) {
-                localStorage.setItem("authToken", data.token);
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || data.message || "Login failed");
+            }
+
+            if (data.authToken) {
+                localStorage.setItem("authToken", data.authToken);
             }
 
             showAppToast("success", "Login successful.");
-            if (Array.isArray(data.firebaseSync?.warnings) && data.firebaseSync.warnings.length > 0) {
-                showAppToast("warning", data.firebaseSync.warnings[0]);
-            }
-            setTimeout(() => router.push(data.redirectTo || "/user"), 700);
+
+            const role = data.user?.role;
+
+            setTimeout(() => {
+                if (role === "admin") {
+                    router.push("/admin");
+                } else {
+                    router.push("/user");
+                }
+            }, 700);
         } catch (error) {
             showAppToast("error", getErrorMessage(error, "Unable to login."));
         } finally {
@@ -102,28 +126,48 @@ export default function LoginPage() {
                 throw new Error("Unable to read Google token. Try again.");
             }
 
-            const res = await fetch("/api/login-google", {
+            const res = await fetch("/api/auth/login-google", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ idToken }),
             });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || "Google login failed");
 
-            if (data.token) {
-                localStorage.setItem("authToken", data.token);
+            if (!res.ok) {
+                throw new Error(data.error || data.message || "Google login failed");
+            }
+
+            if (data.authToken) {
+                localStorage.setItem("authToken", data.authToken);
             }
 
             showAppToast("success", "Login successful.");
-            setTimeout(() => router.push(data.redirectTo || "/user"), 700);
+
+            const role = data.user?.role;
+
+            setTimeout(() => {
+                if (role === "admin") {
+                    router.push("/admin");
+                } else {
+                    router.push("/user");
+                }
+            }, 700);
         } catch (error) {
             const raw = String(error?.message || "").trim();
-            if (raw.includes("auth/invalid-continue-uri") || raw.includes("INVALID_CONTINUE_URI")) {
+
+            if (
+                raw.includes("auth/invalid-continue-uri") ||
+                raw.includes("INVALID_CONTINUE_URI")
+            ) {
                 showAppToast(
                     "error",
-                    "Firebase Google auth is not configured for localhost. Add localhost in Firebase Authentication Settings -> Authorized domains."
+                    "Firebase Google auth is not configured for localhost. Add localhost in Firebase Authentication → Settings → Authorized domains."
                 );
+            } else if (raw.includes("auth/popup-closed-by-user")) {
+                showAppToast("error", "Google popup was closed before login.");
+            } else if (raw.includes("auth/popup-blocked")) {
+                showAppToast("error", "Popup blocked by browser. Please allow popups.");
             } else {
                 showAppToast("error", getErrorMessage(error, "Unable to login with Google."));
             }
@@ -169,11 +213,7 @@ export default function LoginPage() {
                             Borli, Dighi, Mahasala, Panvel, Vashi and Mumbai.
                         </motion.p>
 
-                        {/* INFO CARDS */}
-                        <motion.div
-                            variants={stagger}
-                            className="mt-5 grid gap-3 sm:grid-cols-3"
-                        >
+                        <motion.div variants={stagger} className="mt-5 grid gap-3 sm:grid-cols-3">
                             <motion.div
                                 variants={fadeUp}
                                 whileHover={{ y: -4 }}
@@ -230,7 +270,9 @@ export default function LoginPage() {
                                 <p className="text-sm font-semibold uppercase tracking-[0.22em] text-orange-500">
                                     Welcome Back
                                 </p>
-                                <h2 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">Login</h2>
+                                <h2 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">
+                                    Login
+                                </h2>
                                 <p className="mt-1.5 text-sm leading-6 text-slate-600">
                                     Access your account for bookings, schedule details and travel updates.
                                 </p>
@@ -238,26 +280,33 @@ export default function LoginPage() {
 
                             <form className="mt-3.5 space-y-3" onSubmit={handleSubmit}>
                                 <div>
-                                    <label htmlFor="login-email" className="mb-1 block text-sm font-medium text-slate-700">
-                                        Email or Phone
+                                    <label
+                                        htmlFor="login-id"
+                                        className="mb-1 block text-sm font-medium text-slate-700"
+                                    >
+                                        Email or Phone Number
                                     </label>
                                     <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-2 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
                                         <Mail size={18} className="text-slate-400" />
                                         <input
-                                            id="login-email"
+                                            id="login-id"
                                             type="text"
-                                            name="identifier"
-                                            value={formData.identifier}
+                                            name="loginId"
+                                            value={formData.loginId}
                                             onChange={handleChange}
-                                            placeholder="Enter your email or phone"
+                                            placeholder="Enter email or phone number"
                                             className="w-full bg-transparent text-sm outline-none"
+                                            required
                                         />
                                     </div>
                                 </div>
 
                                 <div>
                                     <div className="mb-1 flex items-center justify-between">
-                                        <label htmlFor="login-password" className="block text-sm font-medium text-slate-700">
+                                        <label
+                                            htmlFor="login-password"
+                                            className="block text-sm font-medium text-slate-700"
+                                        >
                                             Password
                                         </label>
                                     </div>
@@ -272,8 +321,10 @@ export default function LoginPage() {
                                             onChange={handleChange}
                                             placeholder="Enter your password"
                                             className="w-full bg-transparent text-sm outline-none"
+                                            required
                                         />
                                     </div>
+
                                     <Link
                                         href="/forgot-password"
                                         className="mt-1.5 block text-right text-[11px] font-medium text-orange-500 hover:text-orange-600"
@@ -285,7 +336,7 @@ export default function LoginPage() {
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="w-full rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600"
+                                    className="w-full rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
                                 >
                                     {loading ? "Logging in..." : "Login"}
                                 </button>
@@ -307,7 +358,7 @@ export default function LoginPage() {
                                     type="button"
                                     disabled={googleLoading}
                                     onClick={handleGoogleLogin}
-                                    className="flex w-full items-center justify-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50"
+                                    className="flex w-full items-center justify-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
                                 >
                                     <svg
                                         width="18"

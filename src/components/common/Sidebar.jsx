@@ -44,7 +44,7 @@ export default function Sidebar({ role = "user" }) {
     return (
         <aside className="w-full border-r border-slate-200 bg-white lg:w-72">
             <div className="border-b border-slate-200 px-5 py-5">
-                <h2 className="text-xl font-bold text-slate-900">SNK Portal</h2>
+                <h2 className="text-xl font-bold text-slate-900">SA Tours</h2>
                 <p className="text-sm text-slate-500">SA Tours & Travels</p>
             </div>
 
@@ -69,7 +69,7 @@ export default function Sidebar({ role = "user" }) {
             </nav>
 
             <div className="border-t border-slate-200 p-4 text-xs text-slate-500">
-                © 2026 SNK Portal
+                © 2026 SA Tours
             </div>
         </aside>
     );
