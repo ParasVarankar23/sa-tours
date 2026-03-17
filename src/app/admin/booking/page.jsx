@@ -22,6 +22,7 @@ export default function BookingPage() {
   const [selectedBus, setSelectedBus] = useState(null);
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [bookings, setBookings] = useState({});
+  const [viewBooking, setViewBooking] = useState(null);
   const [bookingForm, setBookingForm] = useState({ name: "", phone: "", email: "", pickup: "", pickupTime: "", drop: "", dropTime: "" });
   const [editingSeat, setEditingSeat] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -340,6 +341,8 @@ export default function BookingPage() {
                     layout={String(selectedBus.seatLayout || "31")}
                     cabins={selectedBus.cabins || []}
                     bookedSeats={Object.keys(bookings || {}).map((k) => k)}
+                    bookedMap={bookings}
+                    onViewBooking={(seat, booking) => setViewBooking({ seat, booking })}
                     selectedSeats={selectedSeats}
                     onSelect={(s) => {
                       // toggle seat in selectedSeats
@@ -553,48 +556,52 @@ export default function BookingPage() {
                         <div className="text-sm text-slate-500">No bookings for this bus/date.</div>
                       ) : (
                         Object.entries(bookings).map(([seat, b]) => (
-                          <div key={seat} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
-                            <div>
-                              <div className="font-semibold">Seat {seat}</div>
-                              <div className="text-xs text-slate-500">{b.name} • {b.phone} {b.email ? `• ${b.email}` : ""}</div>
-                              <div className="text-xs text-slate-400">{b.pickup || "-"}{b.pickupTime ? ` (${b.pickupTime})` : ""} → {b.drop || "-"}{b.dropTime ? ` (${b.dropTime})` : ""}</div>
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => {
-                                  setSelectedSeats([seat]);
-                                  setEditingSeat(seat);
-                                  setBookingForm({ name: b.name || "", phone: b.phone || "", email: b.email || "", pickup: b.pickup || "", pickupTime: b.pickupTime || "", drop: b.drop || "", dropTime: b.dropTime || "" });
-                                }}
-                                className="rounded-xl border px-3 py-1 text-sm"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const s = seat;
-                                  setConfirmMessage(`Are you sure you want to cancel booking for seat ${s}? This will delete the booking record and notify the passenger via email.`);
-                                  setConfirmTarget(s);
-                                  setConfirmAction(() => async () => {
-                                    try {
-                                      const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`, { method: "DELETE" });
-                                      const data = await res.json();
-                                      if (!res.ok) throw new Error(data.error || "Cancel failed");
-                                      showAppToast("success", data.message || "Booking cancelled and notification sent");
-                                      await fetchBookings();
-                                    } catch (err) {
-                                      console.error(err);
-                                      showAppToast("error", err.message || "Cancel failed");
-                                      throw err;
-                                    }
-                                  });
-                                  setConfirmOpen(true);
-                                }}
-                                disabled={confirmOpen}
-                                className="rounded-xl border border-red-200 px-3 py-1 text-sm text-red-600"
-                              >
-                                Cancel
-                              </button>
+                          <div key={seat} className="rounded-2xl border border-slate-200 bg-white p-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <div className="text-lg font-bold text-slate-900">Seat {seat}</div>
+                                <div className="mt-1 text-sm text-slate-700">{b.name || "—"} <span className="mx-2 text-slate-400">•</span> {b.phone || "—"}</div>
+                                {b.email ? <div className="mt-1 text-sm text-slate-500">{b.email}</div> : null}
+                                <div className="mt-2 text-sm text-slate-400">{b.pickup || "-"}{b.pickupTime ? ` (${b.pickupTime})` : ""} → {b.drop || "-"}{b.dropTime ? ` (${b.dropTime})` : ""}</div>
+                              </div>
+
+                              <div className="flex flex-col items-end gap-3">
+                                <button
+                                  onClick={() => {
+                                    setSelectedSeats([seat]);
+                                    setEditingSeat(seat);
+                                    setBookingForm({ name: b.name || "", phone: b.phone || "", email: b.email || "", pickup: b.pickup || "", pickupTime: b.pickupTime || "", drop: b.drop || "", dropTime: b.dropTime || "" });
+                                  }}
+                                  className="rounded-full border border-slate-200 px-4 py-2 text-sm"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const s = seat;
+                                    setConfirmMessage(`Are you sure you want to cancel booking for seat ${s}? This will delete the booking record and notify the passenger via email.`);
+                                    setConfirmTarget(s);
+                                    setConfirmAction(() => async () => {
+                                      try {
+                                        const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`, { method: "DELETE" });
+                                        const data = await res.json();
+                                        if (!res.ok) throw new Error(data.error || "Cancel failed");
+                                        showAppToast("success", data.message || "Booking cancelled and notification sent");
+                                        await fetchBookings();
+                                      } catch (err) {
+                                        console.error(err);
+                                        showAppToast("error", err.message || "Cancel failed");
+                                        throw err;
+                                      }
+                                    });
+                                    setConfirmOpen(true);
+                                  }}
+                                  disabled={confirmOpen}
+                                  className="rounded-full border border-red-200 px-4 py-2 text-sm text-red-600"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))
@@ -631,6 +638,74 @@ export default function BookingPage() {
             }
           }}
         />
+      )}
+
+      {/* View booked seat modal (admin) */}
+      {viewBooking && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-lg font-bold text-slate-900">Seat {viewBooking.seat}</div>
+                  <div className="mt-2 text-sm text-slate-700 font-semibold">{viewBooking.booking?.name || "—"}</div>
+                  <div className="mt-1 text-sm text-slate-500">{viewBooking.booking?.phone || viewBooking.booking?.phoneNumber || "—"} {viewBooking.booking?.email ? <span className="mx-2 text-slate-300">•</span> : null} {viewBooking.booking?.email ? <span className="text-sm text-slate-500">{viewBooking.booking?.email}</span> : null}</div>
+                  <div className="mt-3 text-sm text-slate-400">{viewBooking.booking?.pickup || "-"}{viewBooking.booking?.pickupTime ? ` (${viewBooking.booking?.pickupTime})` : ""} → {viewBooking.booking?.drop || "-"}{viewBooking.booking?.dropTime ? ` (${viewBooking.booking?.dropTime})` : ""}</div>
+                </div>
+
+                <div className="flex flex-col items-end gap-3">
+                  <button
+                    onClick={() => setViewBooking(null)}
+                    className="rounded-full border border-slate-200 px-4 py-2 text-sm"
+                  >
+                    Close
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const s = String(viewBooking.seat);
+                      setSelectedSeats([s]);
+                      setEditingSeat(s);
+                      const b = viewBooking.booking || {};
+                      setBookingForm({ name: b.name || "", phone: b.phone || "", email: b.email || "", pickup: b.pickup || "", pickupTime: b.pickupTime || "", drop: b.drop || "", dropTime: b.dropTime || "" });
+                      setViewBooking(null);
+                    }}
+                    className="rounded-full border border-slate-200 px-4 py-2 text-sm"
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const s = String(viewBooking.seat);
+                      setConfirmMessage(`Are you sure you want to cancel booking for seat ${s}? This will delete the booking record and notify the passenger via email.`);
+                      setConfirmTarget(s);
+                      setConfirmAction(() => async () => {
+                        try {
+                          const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`, { method: "DELETE" });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data.error || "Cancel failed");
+                          showAppToast("success", data.message || "Booking cancelled and notification sent");
+                          await fetchBookings();
+                        } catch (err) {
+                          console.error(err);
+                          showAppToast("error", err.message || "Cancel failed");
+                          throw err;
+                        }
+                      });
+                      setConfirmOpen(true);
+                      setViewBooking(null);
+                    }}
+                    className="rounded-full border border-red-200 px-4 py-2 text-sm text-red-600"
+                    disabled={confirmOpen}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -21,6 +21,11 @@ export default function BookingPage() {
     const [schedules, setSchedules] = useState({});
     const [loading, setLoading] = useState(false);
     const [selectedBus, setSelectedBus] = useState(null);
+    const [bookings, setBookings] = useState({});
+    const [selectedSeats, setSelectedSeats] = useState([]);
+    const [bookingForms, setBookingForms] = useState({});
+    const [bookingForm, setBookingForm] = useState({ name: "", phone: "", email: "", pickup: "", pickupTime: "", drop: "", dropTime: "" });
+    const [viewBooking, setViewBooking] = useState(null);
 
     useEffect(() => {
         const fetchAll = async () => {
@@ -54,6 +59,31 @@ export default function BookingPage() {
 
         fetchAll();
     }, []);
+
+    const fetchBookings = async () => {
+        try {
+            if (!selectedBus || !date) {
+                setBookings({});
+                return;
+            }
+            const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to load bookings");
+            // sanitize bookings keys
+            const raw = data.bookings || {};
+            const entries = Object.entries(raw).filter(([k]) => /^[0-9]+$/.test(k));
+            const safe = Object.fromEntries(entries.map(([k, v]) => [k, v && typeof v === "object" ? v : {}]));
+            setBookings(safe);
+        } catch (err) {
+            console.error(err);
+            showAppToast("error", err.message || "Failed to load bookings");
+        }
+    };
+
+    useEffect(() => {
+        fetchBookings();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedBus, date]);
 
     const availableBuses = useMemo(() => {
         if (!date) return [];
@@ -313,24 +343,236 @@ export default function BookingPage() {
                                     <SeatLayout
                                         layout={String(selectedBus.seatLayout || "31")}
                                         cabins={selectedBus.cabins || []}
+                                        bookedSeats={Object.keys(bookings || {}).map((k) => String(k))}
+                                        bookedMap={bookings}
+                                        selectedSeats={selectedSeats}
+                                        onSelect={(s) => {
+                                            const id = String(s);
+                                            setSelectedSeats((prev) => {
+                                                // toggle
+                                                if (prev.includes(id)) {
+                                                    // remove seat and its form
+                                                    setBookingForms((bf) => {
+                                                        const copy = { ...bf };
+                                                        delete copy[id];
+                                                        return copy;
+                                                    });
+                                                    return prev.filter((x) => x !== id);
+                                                }
+
+                                                // add seat and initialize form (copy top-level bookingForm if present)
+                                                setBookingForms((bf) => ({
+                                                    ...bf,
+                                                    [id]: bf[id] || { ...bookingForm },
+                                                }));
+
+                                                return [...prev, id];
+                                            });
+                                        }}
+                                        onViewBooking={(seat, booking) => {
+                                            setViewBooking({ seat, booking });
+                                        }}
                                     />
                                 </div>
                             </div>
 
-                            {/* Footer Action */}
-                            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-                                <button
-                                    onClick={() => setSelectedBus(null)}
-                                    className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                                >
-                                    Close
-                                </button>
+                            {/* Booking Footer */}
+                            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:items-center">
+                                <div className="sm:col-span-2">
+                                    <div className="flex items-center gap-4">
+                                        <div className="text-sm text-slate-500">Selected Seat(s):</div>
+                                        <div className="font-semibold">{selectedSeats.length ? selectedSeats.join(", ") : "—"}</div>
+                                    </div>
 
-                                <button className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#059669] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition hover:bg-[#047857]">
-                                    <Ticket className="h-5 w-5" />
-                                    Start Booking
-                                </button>
+                                    <div className="mt-3 space-y-3">
+                                        {selectedSeats.length === 0 ? (
+                                            <div className="text-sm text-slate-500">No seat selected</div>
+                                        ) : (
+                                            selectedSeats.map((seat) => {
+                                                const form = bookingForms[String(seat)] || { ...bookingForm };
+                                                return (
+                                                    <div key={seat} className="rounded-2xl border p-3">
+                                                        <div className="mb-2 font-semibold">Seat {seat}</div>
+                                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                                            <input
+                                                                placeholder="Name"
+                                                                value={form.name || ""}
+                                                                onChange={(e) => setBookingForms((bf) => ({ ...bf, [seat]: { ...form, name: e.target.value } }))}
+                                                                className="w-full rounded-lg border px-3 py-2"
+                                                            />
+                                                            <input
+                                                                placeholder="Phone"
+                                                                value={form.phone || ""}
+                                                                onChange={(e) => setBookingForms((bf) => ({ ...bf, [seat]: { ...form, phone: e.target.value } }))}
+                                                                className="w-full rounded-lg border px-3 py-2"
+                                                            />
+                                                            <input
+                                                                placeholder="Email "
+                                                                value={form.email || ""}
+                                                                onChange={(e) => setBookingForms((bf) => ({ ...bf, [seat]: { ...form, email: e.target.value } }))}
+                                                                className="w-full rounded-lg border px-3 py-2"
+                                                            />
+                                                        </div>
+
+                                                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                            <select
+                                                                value={form.pickup || ""}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    // resolve pickup time from bus stops
+                                                                    let time = "";
+                                                                    try {
+                                                                        const stops = selectedBus?.stops || [];
+                                                                        const found = Array.isArray(stops) ? stops.find((s) => (s && (s.stopName || s)) === val || (s.stopName && s.stopName === val)) : null;
+                                                                        if (found) time = found.time || found.stopTime || "";
+                                                                    } catch (err) { }
+                                                                    setBookingForms((bf) => ({ ...bf, [seat]: { ...form, pickup: val, pickupTime: time } }));
+                                                                }}
+                                                                className="w-full rounded-lg border px-3 py-2"
+                                                            >
+                                                                <option value="">Select pickup</option>
+                                                                {(selectedBus?.stops || []).map((s, i) => (
+                                                                    <option key={i} value={s.stopName || s}>{s.stopName || s}</option>
+                                                                ))}
+                                                            </select>
+
+                                                            <select
+                                                                value={form.drop || ""}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    let time = "";
+                                                                    try {
+                                                                        const stops = selectedBus?.stops || [];
+                                                                        const found = Array.isArray(stops) ? stops.find((s) => (s && (s.stopName || s)) === val || (s.stopName && s.stopName === val)) : null;
+                                                                        if (found) time = found.time || found.stopTime || "";
+                                                                    } catch (err) { }
+                                                                    setBookingForms((bf) => ({ ...bf, [seat]: { ...form, drop: val, dropTime: time } }));
+                                                                }}
+                                                                className="w-full rounded-lg border px-3 py-2"
+                                                            >
+                                                                <option value="">Select drop</option>
+                                                                {(selectedBus?.stops || []).map((s, i) => (
+                                                                    <option key={i} value={s.stopName || s}>{s.stopName || s}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-slate-500">
+                                                            <div>Pickup time: <span className="font-medium text-slate-700">{form.pickupTime || "—"}</span></div>
+                                                            <div>Drop time: <span className="font-medium text-slate-700">{form.dropTime || "—"}</span></div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-end gap-3">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedBus(null);
+                                            setSelectedSeats([]);
+                                            setBookingForm({ name: "", phone: "", email: "", pickup: "", pickupTime: "", drop: "", dropTime: "" });
+                                        }}
+                                        className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                    >
+                                        Close
+                                    </button>
+
+                                    <button
+                                        onClick={async () => {
+                                            if (!selectedSeats.length) return showAppToast("error", "Select at least one seat to book");
+
+                                            // Ensure each selected seat has a passenger name and phone
+                                            for (const s of selectedSeats) {
+                                                const form = bookingForms[String(s)];
+                                                if (!form || !form.name || !form.phone) {
+                                                    return showAppToast("error", `Provide name and phone for seat ${s}`);
+                                                }
+                                            }
+
+                                            try {
+                                                const results = [];
+                                                for (const seatNo of selectedSeats) {
+                                                    const form = bookingForms[String(seatNo)] || {};
+                                                    const payload = {
+                                                        busId: selectedBus.busId,
+                                                        busNumber: selectedBus.busNumber || "",
+                                                        startTime: selectedBus.startTime || "",
+                                                        endTime: selectedBus.endTime || "",
+                                                        date,
+                                                        seatNo,
+                                                        name: form.name || "",
+                                                        phone: form.phone || "",
+                                                        email: form.email || "",
+                                                        pickup: form.pickup || "",
+                                                        pickupTime: form.pickupTime || "",
+                                                        drop: form.drop || "",
+                                                        dropTime: form.dropTime || "",
+                                                    };
+
+                                                    const res = await fetch("/api/booking", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                                                    const data = await res.json();
+                                                    results.push({ seat: seatNo, ok: res.ok, data });
+                                                    if (!res.ok) break;
+                                                }
+
+                                                const firstFail = results.find((r) => !r.ok);
+                                                if (firstFail) throw new Error(firstFail.data.error || `Failed for seat ${firstFail.seat}`);
+
+                                                showAppToast("success", "Seats booked successfully");
+                                                // refresh bookings
+                                                await fetchBookings();
+                                                setSelectedSeats([]);
+                                                setBookingForms({});
+                                            } catch (err) {
+                                                console.error(err);
+                                                showAppToast("error", err.message || "Booking failed");
+                                            }
+                                        }}
+                                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#059669] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition hover:bg-[#047857]"
+                                    >
+                                        <Ticket className="h-5 w-5" />
+                                        Book Selected
+                                    </button>
+                                </div>
                             </div>
+
+                            {viewBooking && (
+                                <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 px-4">
+                                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                                        <h3 className="text-lg font-bold text-slate-900">Booking details — Seat {viewBooking.seat}</h3>
+                                        <p className="mt-3 text-sm text-slate-700">Name: <span className="font-semibold">{viewBooking.booking?.name || "—"}</span></p>
+                                        <p className="mt-1 text-sm text-slate-700">Phone: <span className="font-semibold">{viewBooking.booking?.phone || viewBooking.booking?.phoneNumber || "—"}</span></p>
+                                        <p className="mt-1 text-sm text-slate-700">Email: <span className="font-semibold">{viewBooking.booking?.email || "—"}</span></p>
+                                        <p className="mt-2 text-sm text-slate-700">Pickup: <span className="font-semibold">{viewBooking.booking?.pickup || "—"}</span>{viewBooking.booking?.pickupTime ? <span className="ml-2 text-slate-500">({viewBooking.booking?.pickupTime})</span> : null}</p>
+                                        <p className="mt-1 text-sm text-slate-700">Drop: <span className="font-semibold">{viewBooking.booking?.drop || "—"}</span>{viewBooking.booking?.dropTime ? <span className="ml-2 text-slate-500">({viewBooking.booking?.dropTime})</span> : null}</p>
+
+                                        <div className="mt-6 flex justify-end gap-3">
+                                            <button
+                                                onClick={() => setViewBooking(null)}
+                                                className="rounded-2xl border px-4 py-2 text-sm"
+                                            >
+                                                Close
+                                            </button>
+
+                                            <button
+                                                onClick={() => {
+                                                    // populate form with booking data for reference/edit
+                                                    const b = viewBooking.booking || {};
+                                                    setBookingForm((p) => ({ ...p, name: b.name || "", phone: b.phone || b.phoneNumber || "", email: b.email || "", pickup: b.pickup || "", pickupTime: b.pickupTime || "", drop: b.drop || "", dropTime: b.dropTime || "" }));
+                                                    setSelectedSeats([String(viewBooking.seat)]);
+                                                    setViewBooking(null);
+                                                }}
+                                                className="rounded-2xl bg-[#f97316] px-4 py-2 text-sm font-semibold text-white"
+                                            >
+                                                Use passenger
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

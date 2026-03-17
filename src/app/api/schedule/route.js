@@ -18,12 +18,27 @@ export async function POST(req) {
             return NextResponse.json({ success: false, error: "busId and valid date (YYYY-MM-DD) are required" }, { status: 400 });
         }
 
+        // Allow schedule-specific meta: startTime, endTime, stops, available
+        const startTime = body.startTime ? String(body.startTime).trim() : null;
+        const endTime = body.endTime ? String(body.endTime).trim() : null;
+        const stops = Array.isArray(body.stops) ? body.stops : null;
+        const available = body.available === undefined ? true : Boolean(body.available);
+
         const db = getAdminDb();
         const path = `${COLLECTION}/${busId}/${date}`;
 
-        await db.ref(path).set({ available: true, updatedAt: new Date().toISOString() });
+        const value = {
+            available,
+            updatedAt: new Date().toISOString(),
+        };
 
-        return NextResponse.json({ success: true, message: "Availability set" }, { status: 200 });
+        if (startTime) value.startTime = startTime;
+        if (endTime) value.endTime = endTime;
+        if (stops) value.stops = stops;
+
+        await db.ref(path).set(value);
+
+        return NextResponse.json({ success: true, message: "Schedule saved", schedule: value }, { status: 200 });
     } catch (err) {
         console.error("POST /api/schedule error:", err);
         return NextResponse.json({ success: false, error: "Failed to set availability" }, { status: 500 });

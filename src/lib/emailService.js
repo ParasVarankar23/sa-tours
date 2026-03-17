@@ -18,6 +18,10 @@ const transporter = nodemailer.createTransport({
     tls: {
         rejectUnauthorized: !allowSelfSignedCert,
     },
+    // avoid very long hangs
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
 });
 
 // Verify transporter on startup
@@ -44,6 +48,26 @@ function escapeHtml(value = "") {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+}
+
+async function sendMailWithRetry(mailOptions, attempts = 3) {
+    let lastErr = null;
+    for (let i = 0; i < attempts; i++) {
+        try {
+            const info = await transporter.sendMail(mailOptions);
+            return info;
+        } catch (err) {
+            lastErr = err;
+            console.warn(`sendMail attempt ${i + 1} failed:`, err && err.message ? err.message : err);
+            // exponential backoff
+            const wait = Math.min(1000 * Math.pow(2, i), 5000);
+            await new Promise((res) => setTimeout(res, wait));
+        }
+    }
+
+    // all attempts failed
+    const msg = lastErr && lastErr.message ? lastErr.message : String(lastErr);
+    throw new Error(`All sendMail attempts failed: ${msg}`);
 }
 
 function infoRow(label, value) {
@@ -396,8 +420,8 @@ export async function sendSignupEmail(email, name, generatedPassword) {
             html: htmlContent,
         };
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log("Signup email sent successfully:", info.messageId);
+        const info = await sendMailWithRetry(mailOptions);
+        console.log("Signup email sent successfully:", info?.messageId || info);
         return true;
     } catch (error) {
         console.error("Error sending signup email:", error);
@@ -433,8 +457,8 @@ export async function sendForgotPasswordEmail(email, otp) {
             html: htmlContent,
         };
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log("Forgot password OTP email sent:", info.messageId);
+        const info = await sendMailWithRetry(mailOptions);
+        console.log("Forgot password OTP email sent:", info?.messageId || info);
         return true;
     } catch (error) {
         console.error("Error sending forgot password email:", error);
@@ -509,7 +533,7 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
             mailOptions.subject
         );
 
-        const info = await transporter.sendMail(mailOptions);
+        const info = await sendMailWithRetry(mailOptions);
         console.log(
             "Booking confirmation email sent:",
             info?.messageId || info
@@ -594,7 +618,7 @@ export async function sendBookingCancellation(email, name, booking = {}) {
             mailOptions.subject
         );
 
-        const info = await transporter.sendMail(mailOptions);
+        const info = await sendMailWithRetry(mailOptions);
         console.log(
             "Booking cancellation email sent:",
             info?.messageId || info

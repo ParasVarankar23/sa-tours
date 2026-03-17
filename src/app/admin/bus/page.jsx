@@ -20,6 +20,26 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+function timeToMinutes(t) {
+    if (!t) return null;
+    const parts = String(t).split(":");
+    if (parts.length < 2) return null;
+    const hh = parseInt(parts[0], 10);
+    const mm = parseInt(parts[1], 10);
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+    return hh * 60 + mm;
+}
+
+function minutesToTime(m) {
+    if (m === null || m === undefined || Number.isNaN(m)) return "";
+    const wrap = ((m % (24 * 60)) + 24 * 60) % (24 * 60);
+    const hh = Math.floor(wrap / 60)
+        .toString()
+        .padStart(2, "0");
+    const mm = (wrap % 60).toString().padStart(2, "0");
+    return `${hh}:${mm}`;
+}
+
 const seatLayoutOptions = ["31", "27", "23"];
 const ITEMS_PER_PAGE = 10;
 
@@ -54,6 +74,24 @@ export default function AdminBusPage() {
 
     const [formData, setFormData] = useState(initialForm);
     const [editData, setEditData] = useState(initialForm);
+    const [editOriginalStartTime, setEditOriginalStartTime] = useState("");
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [confirmMessage, setConfirmMessage] = useState("");
+    const [confirmAction, setConfirmAction] = useState(() => () => { });
+
+    const openConfirm = (message, action) => {
+        setConfirmMessage(message);
+        setConfirmAction(() => action);
+        setConfirmOpen(true);
+    };
+
+    const closeConfirm = () => {
+        setConfirmOpen(false);
+        setConfirmMessage("");
+        setConfirmAction(() => () => { });
+    };
+    const [editOriginalStops, setEditOriginalStops] = useState([]);
+    const [editOriginalEndTime, setEditOriginalEndTime] = useState("");
 
     const fetchBuses = async () => {
         try {
@@ -118,6 +156,44 @@ export default function AdminBusPage() {
         const { name, value } = e.target;
 
         if (isEdit) {
+            // If editing startTime, shift stop times by delta
+            if (name === "startTime") {
+                try {
+                    const prevBase = editOriginalStartTime || editData.startTime || "";
+                    const prevMin = timeToMinutes(prevBase);
+                    const newMin = timeToMinutes(value);
+
+                    let updatedStops = Array.isArray(editData.stops) ? [...editData.stops] : [];
+
+                    if (prevMin !== null && newMin !== null) {
+                        const delta = newMin - prevMin;
+                        updatedStops = updatedStops.map((s) => {
+                            const orig = timeToMinutes(s.time || s.stopTime || "");
+                            if (orig === null) return { ...s };
+                            return { ...s, time: minutesToTime(orig + delta) };
+                        });
+
+                        // shift endTime too
+                        const prevEnd = editOriginalEndTime || editData.endTime || "";
+                        const prevEndMin = timeToMinutes(prevEnd);
+                        if (prevEndMin !== null) {
+                            const newEnd = minutesToTime(prevEndMin + delta);
+                            setEditData((prev) => ({ ...prev, endTime: newEnd }));
+                            setEditOriginalEndTime(newEnd);
+                        }
+                    }
+
+                    setEditData((prev) => ({ ...prev, [name]: value, stops: updatedStops }));
+                    // update base to new value so subsequent changes are relative
+                    setEditOriginalStartTime(value);
+                    // also update original stops array
+                    setEditOriginalStops((prev) => (Array.isArray(prev) ? prev.map((s, i) => ({ ...(s || {}), time: (updatedStops[i] && updatedStops[i].time) || (s && s.time) || "" })) : updatedStops.map((s) => ({ ...(s || {}), time: s.time || "" }))));
+                } catch (err) {
+                    setEditData((prev) => ({ ...prev, [name]: value }));
+                }
+                return;
+            }
+
             setEditData((prev) => ({
                 ...prev,
                 [name]: value,
@@ -132,8 +208,47 @@ export default function AdminBusPage() {
 
     const handleStopChange = (index, field, value, isEdit = false) => {
         if (isEdit) {
+            // if changing a stop time, shift subsequent stops by the delta and update endTime
             const updatedStops = [...(editData.stops || [])];
-            updatedStops[index][field] = value;
+
+            if (field === "time") {
+                const origTime = (editOriginalStops && editOriginalStops[index] && editOriginalStops[index].time) || (editData.stops && editData.stops[index] && editData.stops[index].time) || "";
+                const origMin = timeToMinutes(origTime);
+                const newMin = timeToMinutes(value);
+
+                updatedStops[index] = { ...(updatedStops[index] || {}), time: value };
+
+                if (origMin !== null && newMin !== null) {
+                    const delta = newMin - origMin;
+                    for (let i = index + 1; i < updatedStops.length; i++) {
+                        const s = updatedStops[i] || {};
+                        const sMin = timeToMinutes(s.time || s.stopTime || "");
+                        if (sMin !== null) {
+                            updatedStops[i] = { ...s, time: minutesToTime(sMin + delta) };
+                        }
+                    }
+
+                    // shift endTime as well
+                    const prevEnd = editOriginalEndTime || editData.endTime || "";
+                    const prevEndMin = timeToMinutes(prevEnd);
+                    if (prevEndMin !== null) {
+                        const newEnd = minutesToTime(prevEndMin + delta);
+                        setEditData((prev) => ({ ...prev, endTime: newEnd }));
+                        setEditOriginalEndTime(newEnd);
+                    }
+
+                    // update original stops so further changes are relative to new base
+                    setEditOriginalStops((prev) => {
+                        const base = Array.isArray(prev) ? [...prev] : (editData.stops || []).map((s) => ({ ...s }));
+                        for (let i = index; i < updatedStops.length; i++) {
+                            base[i] = { ...(base[i] || {}), time: updatedStops[i].time || "" };
+                        }
+                        return base;
+                    });
+                }
+            } else {
+                updatedStops[index] = { ...(updatedStops[index] || {}), [field]: value };
+            }
 
             setEditData((prev) => ({
                 ...prev,
@@ -271,7 +386,7 @@ export default function AdminBusPage() {
 
     const handleAddBus = async (e) => {
         e.preventDefault();
-
+        if (saving) return;
         const error = validateBusForm(formData);
         if (error) {
             return showAppToast("error", error);
@@ -322,12 +437,16 @@ export default function AdminBusPage() {
             cabins: Array.isArray(bus.cabins) ? bus.cabins : [],
         });
 
+        setEditOriginalStartTime(bus.startTime || "");
+        setEditOriginalStops(Array.isArray(bus.stops) ? bus.stops.map((s) => ({ ...(s || {}), time: s.time || s.stopTime || "" })) : []);
+        setEditOriginalEndTime(bus.endTime || "");
+
         setShowEditModal(true);
     };
 
     const handleUpdateBus = async (e) => {
         e.preventDefault();
-
+        if (saving) return;
         const error = validateBusForm(editData);
         if (error) {
             return showAppToast("error", error);
@@ -362,30 +481,29 @@ export default function AdminBusPage() {
     };
 
     const handleDeleteBus = async (busId) => {
-        const confirmDelete = window.confirm("Delete this bus?");
-        if (!confirmDelete) return;
+        openConfirm(`Delete bus ${busId}? This action cannot be undone.`, async () => {
+            try {
+                setDeletingId(busId);
 
-        try {
-            setDeletingId(busId);
+                const res = await fetch(`/api/bus?busId=${busId}`, {
+                    method: "DELETE",
+                });
 
-            const res = await fetch(`/api/bus?busId=${busId}`, {
-                method: "DELETE",
-            });
+                const data = await res.json();
 
-            const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || "Failed to delete bus");
+                }
 
-            if (!res.ok) {
-                throw new Error(data.error || "Failed to delete bus");
+                showAppToast("success", "Bus deleted successfully");
+                fetchBuses();
+            } catch (error) {
+                console.error(error);
+                showAppToast("error", error.message || "Failed to delete bus");
+            } finally {
+                setDeletingId("");
             }
-
-            showAppToast("success", "Bus deleted successfully");
-            fetchBuses();
-        } catch (error) {
-            console.error(error);
-            showAppToast("error", error.message || "Failed to delete bus");
-        } finally {
-            setDeletingId("");
-        }
+        });
     };
 
     const goToPage = (page) => {
@@ -700,6 +818,40 @@ export default function AdminBusPage() {
                                 cabins={layoutModalBus.cabins || []}
                                 compact={false}
                             />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirm Modal */}
+            {confirmOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-4">
+                    <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                        <h3 className="text-lg font-bold">Confirm action</h3>
+                        <p className="mt-3 text-sm text-slate-700">{confirmMessage}</p>
+
+                        <div className="mt-6 flex items-center justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    closeConfirm();
+                                }}
+                                className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        await confirmAction();
+                                    } finally {
+                                        closeConfirm();
+                                    }
+                                }}
+                                className="rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                            >
+                                Confirm
+                            </button>
                         </div>
                     </div>
                 </div>

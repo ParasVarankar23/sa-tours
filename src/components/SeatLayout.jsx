@@ -60,7 +60,7 @@ function makeLayout(layout, cabinsCount = 6) {
     return { rows: [...rows, back], cabins };
 }
 
-export default function SeatLayout({ layout = "31", bookedSeats = [], selectedSeats = [], onSelect, compact = false, cabins = [] }) {
+export default function SeatLayout({ layout = "31", bookedSeats = [], bookedMap = {}, selectedSeats = [], onSelect, onViewBooking, compact = false, cabins = [] }) {
     const L = String(layout || "31");
     const cabinsCount = Array.isArray(cabins) ? cabins.length : 6;
     const { rows, cabins: cabinNumbers } = makeLayout(L, cabinsCount);
@@ -72,6 +72,7 @@ export default function SeatLayout({ layout = "31", bookedSeats = [], selectedSe
         if (!s) return <div className="w-0" />;
         const id = toStr(s);
         const isBooked = bookedSet.has(id);
+        const booking = bookedMap && bookedMap[id] ? bookedMap[id] : null;
         const isSelected = selectedSet.has(id);
 
         const base = "flex items-center justify-center rounded-md border select-none";
@@ -84,7 +85,17 @@ export default function SeatLayout({ layout = "31", bookedSeats = [], selectedSe
         });
 
         return (
-            <button key={id} disabled={isBooked} onClick={() => onSelect && onSelect(id)} className={cls}>
+            <button
+                key={id}
+                onClick={() => {
+                    if (isBooked) {
+                        if (onViewBooking) return onViewBooking(id, booking);
+                        return;
+                    }
+                    return onSelect && onSelect(id);
+                }}
+                className={cls}
+            >
                 {id}
             </button>
         );

@@ -33,9 +33,34 @@ export async function GET() {
 
         const data = snapshot.val();
 
-        const staff = Object.values(data).sort(
-            (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
+        // Merge profile photo info from users/{uid} when available
+        const staffEntries = Object.values(data);
+
+        const staff = await Promise.all(
+            staffEntries.map(async (s) => {
+                try {
+                    const userSnap = await db.ref(`users/${s.uid}`).once("value");
+                    if (userSnap.exists()) {
+                        const u = userSnap.val();
+                        return {
+                            ...s,
+                            photoUrl: u.photoUrl || s.photoUrl || "",
+                            photoPublicId: u.photoPublicId || s.photoPublicId || "",
+                        };
+                    }
+                } catch (e) {
+                    console.warn("Failed to fetch user profile for staff merge:", e && e.message ? e.message : e);
+                }
+
+                return {
+                    ...s,
+                    photoUrl: s.photoUrl || "",
+                    photoPublicId: s.photoPublicId || "",
+                };
+            })
         );
+
+        staff.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
         return NextResponse.json({ success: true, staff });
     } catch (err) {

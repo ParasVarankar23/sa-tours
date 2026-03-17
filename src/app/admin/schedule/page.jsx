@@ -1,5 +1,6 @@
 "use client";
 
+import { useAuth } from "@/hooks/useAuth";
 import { showAppToast } from "@/lib/client/toast";
 import {
     BusFront,
@@ -11,6 +12,7 @@ import {
     Save,
     ShieldCheck,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 export default function SchedulePage() {
@@ -19,6 +21,97 @@ export default function SchedulePage() {
     const [busId, setBusId] = useState("");
     const [date, setDate] = useState("");
     const [saving, setSaving] = useState(false);
+    const [schedules, setSchedules] = useState({});
+    const [searchTerm, setSearchTerm] = useState("");
+    const [filterType, setFilterType] = useState("all");
+    const [selectedDate, setSelectedDate] = useState("");
+    const today = new Date();
+
+    const formatDate = (dateStr) => {
+        const d = new Date(dateStr);
+        return d;
+    };
+
+    const isSameDay = (d1, d2) =>
+        d1.getFullYear() === d2.getFullYear() &&
+        d1.getMonth() === d2.getMonth() &&
+        d1.getDate() === d2.getDate();
+
+    const startOfWeek = (date) => {
+        const d = new Date(date);
+        const day = d.getDay(); // 0 = Sunday
+        const diff = d.getDate() - day;
+        return new Date(d.setDate(diff));
+    };
+
+    const endOfWeek = (date) => {
+        const start = startOfWeek(date);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        return end;
+    };
+
+    const allSchedules = buses.flatMap((b) => {
+        const dates = schedules[b.busId] ? Object.keys(schedules[b.busId]) : [];
+        return dates.map((d) => ({
+            busId: b.busId,
+            busNumber: b.busNumber,
+            routeName: b.routeName,
+            date: d,
+        }));
+    });
+
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const ROWS_PER_PAGE = 10;
+
+    const filteredSchedules = allSchedules.filter((item) => {
+        const scheduleDate = formatDate(item.date);
+
+        // Search filter
+        const matchesSearch =
+            item.busNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.routeName.toLowerCase().includes(searchTerm.toLowerCase());
+
+        if (!matchesSearch) return false;
+
+        // Date filters
+        if (filterType === "today") {
+            return isSameDay(scheduleDate, today);
+        }
+
+        if (filterType === "date") {
+            return selectedDate ? isSameDay(scheduleDate, new Date(selectedDate)) : true;
+        }
+
+        if (filterType === "week") {
+            const start = startOfWeek(today);
+            const end = endOfWeek(today);
+            return scheduleDate >= start && scheduleDate <= end;
+        }
+
+        if (filterType === "month") {
+            return (
+                scheduleDate.getMonth() === today.getMonth() &&
+                scheduleDate.getFullYear() === today.getFullYear()
+            );
+        }
+
+        if (filterType === "year") {
+            return scheduleDate.getFullYear() === today.getFullYear();
+        }
+
+        return true; // all
+    });
+
+    const totalPages = Math.max(1, Math.ceil(filteredSchedules.length / ROWS_PER_PAGE));
+
+    // reset page when filters/search change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, filterType, selectedDate, buses, schedules]);
+
+    const paginatedSchedules = filteredSchedules.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE);
 
     useEffect(() => {
         const fetchBuses = async () => {
@@ -43,9 +136,31 @@ export default function SchedulePage() {
         fetchBuses();
     }, []);
 
+    useEffect(() => {
+        fetchSchedules();
+    }, []);
+
     const selectedBus = useMemo(() => {
         return buses.find((b) => b.busId === busId) || null;
     }, [buses, busId]);
+
+    const router = useRouter();
+    const { user } = useAuth();
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [confirmMessage, setConfirmMessage] = useState("");
+    const [confirmAction, setConfirmAction] = useState(() => () => { });
+
+    const openConfirm = (message, action) => {
+        setConfirmMessage(message);
+        setConfirmAction(() => action);
+        setConfirmOpen(true);
+    };
+
+    const closeConfirm = () => {
+        setConfirmOpen(false);
+        setConfirmMessage("");
+        setConfirmAction(() => () => { });
+    };
 
     const handleSetAvailable = async () => {
         if (!busId) return showAppToast("error", "Select a bus");
@@ -68,12 +183,98 @@ export default function SchedulePage() {
             showAppToast("success", "Bus marked available on selected date");
             setBusId("");
             setDate("");
+            fetchSchedules();
         } catch (err) {
             console.error(err);
             showAppToast("error", err.message || "Failed to set availability");
         } finally {
             setSaving(false);
         }
+    };
+
+    const fetchSchedules = async () => {
+        try {
+            const res = await fetch("/api/schedule");
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to load schedules");
+            }
+
+            setSchedules(data.schedules || {});
+        } catch (err) {
+            console.error(err);
+            showAppToast("error", err.message || "Failed to load schedules");
+        }
+    };
+
+    const handleDeleteAvailability = async () => {
+        if (!busId) return showAppToast("error", "Select a bus");
+        if (!date) return showAppToast("error", "Select a date");
+
+        openConfirm(
+            `Are you sure you want to remove availability for ${selectedBus?.busNumber || busId} on ${date}?`,
+            async () => {
+                setSaving(true);
+                try {
+                    const res = await fetch(`/api/schedule?busId=${encodeURIComponent(busId)}&date=${encodeURIComponent(date)}`, {
+                        method: "DELETE",
+                    });
+
+                    const data = await res.json();
+
+                    if (!res.ok) {
+                        throw new Error(data.error || "Failed to remove availability");
+                    }
+
+                    showAppToast("success", "Availability removed");
+                    setBusId("");
+                    setDate("");
+                    fetchSchedules();
+                } catch (err) {
+                    console.error(err);
+                    showAppToast("error", err.message || "Failed to remove availability");
+                } finally {
+                    setSaving(false);
+                }
+            }
+        );
+    };
+
+    const handleDeleteFor = async (targetBusId, targetDate) => {
+        const bus = buses.find((b) => b.busId === targetBusId);
+        openConfirm(
+            `Are you sure you want to remove availability for ${bus?.busNumber || targetBusId} on ${targetDate}?`,
+            async () => {
+                try {
+                    const res = await fetch(`/api/schedule?busId=${encodeURIComponent(targetBusId)}&date=${encodeURIComponent(targetDate)}`, {
+                        method: "DELETE",
+                    });
+
+                    const data = await res.json();
+
+                    if (!res.ok) throw new Error(data.error || "Failed to remove availability");
+
+                    showAppToast("success", "Availability removed");
+                    fetchSchedules();
+                } catch (err) {
+                    console.error(err);
+                    showAppToast("error", err.message || "Failed to remove availability");
+                }
+            }
+        );
+    };
+
+    const handleEditFor = (targetBusId, targetDate) => {
+        router.push(`/admin/schedule/edit?busId=${encodeURIComponent(targetBusId)}&date=${encodeURIComponent(targetDate)}`);
+    };
+
+    const handleEdit = () => {
+        if (!busId) return showAppToast("error", "Select a bus");
+        if (!date) return showAppToast("error", "Select a date");
+
+        // Navigate to an edit page (implement page separately if needed)
+        router.push(`/admin/schedule/edit?busId=${encodeURIComponent(busId)}&date=${encodeURIComponent(date)}`);
     };
 
     return (
@@ -99,6 +300,40 @@ export default function SchedulePage() {
                     </span>
                 </div>
             </div>
+
+            {/* Confirm Modal */}
+            {confirmOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-4">
+                    <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                        <h3 className="text-lg font-bold">Confirm action</h3>
+                        <p className="mt-3 text-sm text-slate-700">{confirmMessage}</p>
+
+                        <div className="mt-6 flex items-center justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    closeConfirm();
+                                }}
+                                className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        await confirmAction();
+                                    } finally {
+                                        closeConfirm();
+                                    }
+                                }}
+                                className="rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Summary Cards */}
             <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -284,6 +519,27 @@ export default function SchedulePage() {
                                             {selectedBus.seatLayout} Seats
                                         </span>
                                     </div>
+
+                                    {user?.role === "admin" && date ? (
+                                        <div className="mt-4 flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={handleEdit}
+                                                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                            >
+                                                Edit
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={handleDeleteAvailability}
+                                                disabled={saving}
+                                                className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    ) : null}
                                 </div>
                             </div>
                         ) : (
@@ -296,6 +552,139 @@ export default function SchedulePage() {
                                 </p>
                             </div>
                         )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Schedules Table */}
+            <div className="mt-8">
+                <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <h2 className="text-lg font-bold text-slate-900">Schedules</h2>
+
+                    {/* Search + Filters */}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        {/* Search Bar */}
+                        <div className="relative">
+                            <input
+                                type="text"
+                                placeholder="Search by bus number or route..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:w-72"
+                            />
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                            </svg>
+                        </div>
+
+                        {/* Filter Select */}
+                        <select
+                            value={filterType}
+                            onChange={(e) => setFilterType(e.target.value)}
+                            className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        >
+                            <option value="all">All</option>
+                            <option value="today">Today</option>
+                            <option value="date">Specific Date</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                        </select>
+
+                        {/* Specific Date Picker */}
+                        {filterType === "date" && (
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => setSelectedDate(e.target.value)}
+                                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            />
+                        )}
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <table className="min-w-full table-auto">
+                        <thead>
+                            <tr className="border-b bg-slate-50 text-left text-sm font-semibold text-slate-600">
+                                <th className="px-3 py-3">Bus</th>
+                                <th className="px-3 py-3">Route</th>
+                                <th className="px-3 py-3">Scheduled Date</th>
+                                <th className="px-3 py-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredSchedules.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-500">
+                                        No schedules found
+                                    </td>
+                                </tr>
+                            ) : (
+                                paginatedSchedules.map((item) => (
+                                    <tr
+                                        key={`${item.busId}-${item.date}`}
+                                        className="border-b last:border-b-0 transition hover:bg-slate-50"
+                                    >
+                                        <td className="px-3 py-3 font-medium text-slate-800">{item.busNumber}</td>
+                                        <td className="px-3 py-3 text-slate-700">{item.routeName}</td>
+                                        <td className="px-3 py-3 text-slate-700">{item.date}</td>
+                                        <td className="px-3 py-3">
+                                            {user?.role === "admin" ? (
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => handleEditFor(item.busId, item.date)}
+                                                        className="rounded-2xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                                                    >
+                                                        Edit
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => handleDeleteFor(item.busId, item.date)}
+                                                        className="rounded-2xl bg-red-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-red-700"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <span className="text-sm text-slate-500">No access</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+
+                    {/* Pagination controls */}
+                    <div className="mt-4 flex items-center justify-between">
+                        <div className="text-sm text-slate-500">Showing {filteredSchedules.length === 0 ? 0 : (currentPage - 1) * ROWS_PER_PAGE + 1} - {filteredSchedules.length === 0 ? 0 : Math.min(currentPage * ROWS_PER_PAGE, filteredSchedules.length)} of {filteredSchedules.length}</div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="rounded-md border border-slate-200 px-3 py-1 text-sm text-slate-700 disabled:opacity-50"
+                            >
+                                Prev
+                            </button>
+
+                            <div className="text-sm text-slate-700">Page {currentPage} / {totalPages}</div>
+
+                            <button
+                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="rounded-md border border-slate-200 px-3 py-1 text-sm text-slate-700 disabled:opacity-50"
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

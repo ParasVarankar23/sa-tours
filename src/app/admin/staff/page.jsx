@@ -1,35 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { showAppToast } from "../../../lib/client/toast";
 import {
-    Plus,
-    Pencil,
-    Trash2,
-    X,
-    Users,
-    Phone,
-    Mail,
     BriefcaseBusiness,
-    UserRound,
-    Search,
+    Building2,
+    Car,
     ChevronLeft,
     ChevronRight,
-    Car,
-    Sparkles,
-    Building2,
     Filter,
+    Mail,
+    Pencil,
+    Phone,
+    Plus,
+    Search,
+    Sparkles,
+    Trash2,
+    UserRound,
+    Users,
+    X,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { showAppToast } from "../../../lib/client/toast";
 
 import {
-    BarChart,
     Bar,
+    BarChart,
+    CartesianGrid,
+    Cell,
+    ResponsiveContainer,
+    Tooltip,
     XAxis,
     YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    Cell,
 } from "recharts";
 
 const positionOptions = ["All", "Driver", "Cleaner", "Office Staff"];
@@ -63,6 +63,9 @@ export default function AdminStaffPage() {
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [confirmMessage, setConfirmMessage] = useState("");
+    const [confirmAction, setConfirmAction] = useState(() => async () => { });
 
     const [formData, setFormData] = useState(initialForm);
     const [editData, setEditData] = useState({
@@ -252,31 +255,42 @@ export default function AdminStaffPage() {
         }
     };
 
+    const openConfirm = (message, action) => {
+        setConfirmMessage(message);
+        setConfirmAction(() => action);
+        setConfirmOpen(true);
+    };
+
+    const closeConfirm = () => {
+        setConfirmOpen(false);
+        setConfirmMessage("");
+        setConfirmAction(() => async () => { });
+    };
+
     const handleDeleteStaff = async (uid) => {
-        const confirmDelete = window.confirm("Delete this staff member?");
-        if (!confirmDelete) return;
+        openConfirm("Delete this staff member?", async () => {
+            try {
+                setDeletingId(uid);
 
-        try {
-            setDeletingId(uid);
+                const res = await fetch(`/api/staff?uid=${uid}`, {
+                    method: "DELETE",
+                });
 
-            const res = await fetch(`/api/staff?uid=${uid}`, {
-                method: "DELETE",
-            });
+                const data = await res.json();
 
-            const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || "Failed to delete staff");
+                }
 
-            if (!res.ok) {
-                throw new Error(data.error || "Failed to delete staff");
+                showAppToast("success", "Staff deleted successfully");
+                fetchStaff();
+            } catch (err) {
+                console.error(err);
+                showAppToast("error", err.message || "Error deleting staff");
+            } finally {
+                setDeletingId("");
             }
-
-            showAppToast("success", "Staff deleted successfully");
-            fetchStaff();
-        } catch (err) {
-            console.error(err);
-            showAppToast("error", err.message || "Error deleting staff");
-        } finally {
-            setDeletingId("");
-        }
+        });
     };
 
     const goToPage = (page) => {
@@ -460,7 +474,15 @@ export default function AdminStaffPage() {
                                         <td className="px-5 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50">
-                                                    <UserRound className="h-5 w-5 text-[#f97316]" />
+                                                    {staff.photoUrl ? (
+                                                        <img
+                                                            src={staff.photoUrl}
+                                                            alt={staff.name || "staff"}
+                                                            className="h-11 w-11 rounded-2xl object-cover"
+                                                        />
+                                                    ) : (
+                                                        <UserRound className="h-5 w-5 text-[#f97316]" />
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <p className="font-semibold text-slate-900">
@@ -479,7 +501,7 @@ export default function AdminStaffPage() {
                                         </td>
 
                                         <td className="px-5 py-4">
-                                            <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
+                                            <span className="inline-flex items-center whitespace-nowrap rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
                                                 {staff.position || "-"}
                                             </span>
                                         </td>
@@ -496,7 +518,7 @@ export default function AdminStaffPage() {
 
                                                 <button
                                                     onClick={() => handleDeleteStaff(staff.uid)}
-                                                    disabled={deletingId === staff.uid}
+                                                    disabled={deletingId === staff.uid || confirmOpen}
                                                     className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-60"
                                                 >
                                                     <Trash2 className="h-4 w-4" />
@@ -533,8 +555,8 @@ export default function AdminStaffPage() {
                                     key={page}
                                     onClick={() => goToPage(page)}
                                     className={`h-10 w-10 rounded-xl text-sm font-semibold transition ${currentPage === page
-                                            ? "bg-[#f97316] text-white"
-                                            : "border border-slate-200 text-slate-700 hover:bg-slate-50"
+                                        ? "bg-[#f97316] text-white"
+                                        : "border border-slate-200 text-slate-700 hover:bg-slate-50"
                                         }`}
                                 >
                                     {page}
@@ -809,6 +831,41 @@ export default function AdminStaffPage() {
                     </form>
                 </ModalWrapper>
             )}
+
+            {confirmOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                    <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl">
+                        <div className="p-6">
+                            <h3 className="text-lg font-bold text-slate-900">Please confirm</h3>
+                            <p className="mt-3 text-sm text-slate-700">{confirmMessage}</p>
+
+                            <div className="mt-6 flex items-center justify-end gap-3">
+                                <button
+                                    onClick={() => closeConfirm()}
+                                    className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    Cancel
+                                </button>
+
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await confirmAction();
+                                        } catch (err) {
+                                            console.error(err);
+                                        } finally {
+                                            closeConfirm();
+                                        }
+                                    }}
+                                    className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-700"
+                                >
+                                    Confirm
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -876,8 +933,8 @@ function InputField({
             </label>
             <div
                 className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${readOnly
-                        ? "border-slate-200 bg-slate-50"
-                        : "border-slate-200 bg-white focus-within:border-orange-400"
+                    ? "border-slate-200 bg-slate-50"
+                    : "border-slate-200 bg-white focus-within:border-orange-400"
                     }`}
             >
                 {icon}
