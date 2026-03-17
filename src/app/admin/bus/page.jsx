@@ -1,11 +1,11 @@
 "use client";
 
+import SeatLayout from "@/components/SeatLayout";
 import { showAppToast } from "@/lib/client/toast";
 import {
     Armchair,
     Building2,
     BusFront,
-    CalendarDays,
     ChevronLeft,
     ChevronRight,
     Clock3,
@@ -16,39 +16,26 @@ import {
     Route,
     Search,
     Trash2,
-    X,
+    X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-const seatLayoutOptions = ["32", "27", "23"];
+const seatLayoutOptions = ["31", "27", "23"];
 const ITEMS_PER_PAGE = 10;
-
-const createInitialStops = () =>
-    Array.from({ length: 20 }, () => ({
-        stopName: "",
-        time: "",
-    }));
-
-const createInitialCabins = () =>
-    Array.from({ length: 6 }, (_, i) => ({
-        cabinNo: i + 1,
-        label: `CB${i + 1}`,
-    }));
 
 const initialForm = {
     busId: "",
     busNumber: "",
     busName: "",
-    busType: "AC ",
-    travelDate: "",
+    busType: "",
     routeName: "",
     startPoint: "",
     endPoint: "",
     startTime: "",
     endTime: "",
-    seatLayout: "32",
-    stops: createInitialStops(),
-    cabins: createInitialCabins(),
+    seatLayout: "",
+    stops: [],
+    cabins: [],
 };
 
 export default function AdminBusPage() {
@@ -62,6 +49,8 @@ export default function AdminBusPage() {
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
+    const [showLayoutModal, setShowLayoutModal] = useState(false);
+    const [layoutModalBus, setLayoutModalBus] = useState(null);
 
     const [formData, setFormData] = useState(initialForm);
     const [editData, setEditData] = useState(initialForm);
@@ -119,7 +108,7 @@ export default function AdminBusPage() {
     const busStats = useMemo(() => {
         return {
             total: busList.length,
-            seats32: busList.filter((b) => b.seatLayout === "32").length,
+            seats31: busList.filter((b) => b.seatLayout === "31").length,
             seats27: busList.filter((b) => b.seatLayout === "27").length,
             seats23: busList.filter((b) => b.seatLayout === "23").length,
         };
@@ -143,7 +132,7 @@ export default function AdminBusPage() {
 
     const handleStopChange = (index, field, value, isEdit = false) => {
         if (isEdit) {
-            const updatedStops = [...editData.stops];
+            const updatedStops = [...(editData.stops || [])];
             updatedStops[index][field] = value;
 
             setEditData((prev) => ({
@@ -151,7 +140,7 @@ export default function AdminBusPage() {
                 stops: updatedStops,
             }));
         } else {
-            const updatedStops = [...formData.stops];
+            const updatedStops = [...(formData.stops || [])];
             updatedStops[index][field] = value;
 
             setFormData((prev) => ({
@@ -164,13 +153,13 @@ export default function AdminBusPage() {
     const addStop = (isEdit = false) => {
         if (isEdit) {
             setEditData((prev) => {
-                const stops = Array.isArray(prev.stops) ? [...prev.stops] : createInitialStops();
+                const stops = Array.isArray(prev.stops) ? [...prev.stops] : [];
                 if (stops.length < 20) stops.push({ stopName: "", time: "" });
                 return { ...prev, stops };
             });
         } else {
             setFormData((prev) => {
-                const stops = Array.isArray(prev.stops) ? [...prev.stops] : createInitialStops();
+                const stops = Array.isArray(prev.stops) ? [...prev.stops] : [];
                 if (stops.length < 20) stops.push({ stopName: "", time: "" });
                 return { ...prev, stops };
             });
@@ -180,7 +169,7 @@ export default function AdminBusPage() {
     const removeStop = (index, isEdit = false) => {
         if (isEdit) {
             setEditData((prev) => {
-                const stops = Array.isArray(prev.stops) ? [...prev.stops] : createInitialStops();
+                const stops = Array.isArray(prev.stops) ? [...prev.stops] : [];
                 if (index >= 0 && index < stops.length) {
                     stops.splice(index, 1);
                 }
@@ -188,7 +177,7 @@ export default function AdminBusPage() {
             });
         } else {
             setFormData((prev) => {
-                const stops = Array.isArray(prev.stops) ? [...prev.stops] : createInitialStops();
+                const stops = Array.isArray(prev.stops) ? [...prev.stops] : [];
                 if (index >= 0 && index < stops.length) {
                     stops.splice(index, 1);
                 }
@@ -199,7 +188,7 @@ export default function AdminBusPage() {
 
     const handleCabinChange = (index, value, isEdit = false) => {
         if (isEdit) {
-            const updatedCabins = [...editData.cabins];
+            const updatedCabins = [...(editData.cabins || [])];
             updatedCabins[index].label = value;
 
             setEditData((prev) => ({
@@ -207,7 +196,7 @@ export default function AdminBusPage() {
                 cabins: updatedCabins,
             }));
         } else {
-            const updatedCabins = [...formData.cabins];
+            const updatedCabins = [...(formData.cabins || [])];
             updatedCabins[index].label = value;
 
             setFormData((prev) => ({
@@ -220,17 +209,23 @@ export default function AdminBusPage() {
     const addCabin = (isEdit = false) => {
         if (isEdit) {
             setEditData((prev) => {
-                const cabins = Array.isArray(prev.cabins) ? [...prev.cabins] : createInitialCabins();
+                const cabins = Array.isArray(prev.cabins) ? [...prev.cabins] : [];
                 if (cabins.length < 8) {
-                    cabins.push({ cabinNo: cabins.length + 1, label: `CB${cabins.length + 1}` });
+                    cabins.push({
+                        cabinNo: cabins.length + 1,
+                        label: `CB${cabins.length + 1}`,
+                    });
                 }
                 return { ...prev, cabins };
             });
         } else {
             setFormData((prev) => {
-                const cabins = Array.isArray(prev.cabins) ? [...prev.cabins] : createInitialCabins();
+                const cabins = Array.isArray(prev.cabins) ? [...prev.cabins] : [];
                 if (cabins.length < 8) {
-                    cabins.push({ cabinNo: cabins.length + 1, label: `CB${cabins.length + 1}` });
+                    cabins.push({
+                        cabinNo: cabins.length + 1,
+                        label: `CB${cabins.length + 1}`,
+                    });
                 }
                 return { ...prev, cabins };
             });
@@ -240,13 +235,13 @@ export default function AdminBusPage() {
     const removeCabin = (index, isEdit = false) => {
         if (isEdit) {
             setEditData((prev) => {
-                const cabins = Array.isArray(prev.cabins) ? [...prev.cabins] : createInitialCabins();
+                const cabins = Array.isArray(prev.cabins) ? [...prev.cabins] : [];
                 if (cabins.length > 1 && index >= 0 && index < cabins.length) cabins.splice(index, 1);
                 return { ...prev, cabins };
             });
         } else {
             setFormData((prev) => {
-                const cabins = Array.isArray(prev.cabins) ? [...prev.cabins] : createInitialCabins();
+                const cabins = Array.isArray(prev.cabins) ? [...prev.cabins] : [];
                 if (cabins.length > 1 && index >= 0 && index < cabins.length) cabins.splice(index, 1);
                 return { ...prev, cabins };
             });
@@ -258,7 +253,6 @@ export default function AdminBusPage() {
             !data.busNumber.trim() ||
             !data.busName.trim() ||
             !data.busType.trim() ||
-            !data.travelDate.trim() ||
             !data.routeName.trim() ||
             !data.startPoint.trim() ||
             !data.endPoint.trim() ||
@@ -269,7 +263,7 @@ export default function AdminBusPage() {
         }
 
         if (!seatLayoutOptions.includes(String(data.seatLayout))) {
-            return "Invalid seat layout selected";
+            return "Please select a valid seat layout";
         }
 
         return null;
@@ -302,11 +296,7 @@ export default function AdminBusPage() {
 
             showAppToast("success", "Bus created successfully");
             setShowAddModal(false);
-            setFormData({
-                ...initialForm,
-                stops: createInitialStops(),
-                cabins: createInitialCabins(),
-            });
+            setFormData(initialForm);
             fetchBuses();
         } catch (error) {
             console.error(error);
@@ -317,48 +307,19 @@ export default function AdminBusPage() {
     };
 
     const openEditModal = (bus) => {
-        const filledStops =
-            bus.stops && bus.stops.length > 0
-                ? [
-                    ...bus.stops,
-                    ...Array.from(
-                        { length: Math.max(0, 20 - bus.stops.length) },
-                        () => ({
-                            stopName: "",
-                            time: "",
-                        })
-                    ),
-                ].slice(0, 20)
-                : createInitialStops();
-
-        const filledCabins =
-            bus.cabins && bus.cabins.length > 0
-                ? [
-                    ...bus.cabins,
-                    ...Array.from(
-                        { length: Math.max(0, 6 - bus.cabins.length) },
-                        (_, i) => ({
-                            cabinNo: (bus.cabins?.length || 0) + i + 1,
-                            label: `CB${(bus.cabins?.length || 0) + i + 1}`,
-                        })
-                    ),
-                ].slice(0, 6)
-                : createInitialCabins();
-
         setEditData({
             busId: bus.busId || "",
             busNumber: bus.busNumber || "",
             busName: bus.busName || "",
-            busType: bus.busType || "AC",
-            travelDate: bus.travelDate || "",
+            busType: bus.busType || "",
             routeName: bus.routeName || "",
             startPoint: bus.startPoint || "",
             endPoint: bus.endPoint || "",
             startTime: bus.startTime || "",
             endTime: bus.endTime || "",
-            seatLayout: bus.seatLayout || "32",
-            stops: filledStops,
-            cabins: filledCabins,
+            seatLayout: bus.seatLayout || "",
+            stops: Array.isArray(bus.stops) ? bus.stops : [],
+            cabins: Array.isArray(bus.cabins) ? bus.cabins : [],
         });
 
         setShowEditModal(true);
@@ -465,8 +426,8 @@ export default function AdminBusPage() {
                     icon={<BusFront className="h-6 w-6 text-[#f97316]" />}
                 />
                 <SummaryCard
-                    title="32 Seat Layout"
-                    value={busStats.seats32}
+                    title="31 Seat Layout"
+                    value={busStats.seats31}
                     icon={<Armchair className="h-6 w-6 text-[#f97316]" />}
                 />
                 <SummaryCard
@@ -512,7 +473,7 @@ export default function AdminBusPage() {
                                     className="w-full appearance-none rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm outline-none transition focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
                                 >
                                     <option value="All">All Layouts</option>
-                                    <option value="32">32 Seats</option>
+                                    <option value="31">31 Seats</option>
                                     <option value="27">27 Seats</option>
                                     <option value="23">23 Seats</option>
                                 </select>
@@ -531,9 +492,7 @@ export default function AdminBusPage() {
                                 <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                                     Route
                                 </th>
-                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Date
-                                </th>
+                                {/* Date column removed - travelDate not used */}
                                 <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                                     Time
                                 </th>
@@ -549,13 +508,13 @@ export default function AdminBusPage() {
                         <tbody className="divide-y divide-slate-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
+                                    <td colSpan={5} className="px-5 py-12 text-center text-slate-500">
                                         Loading buses...
                                     </td>
                                 </tr>
                             ) : paginatedBuses.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
+                                    <td colSpan={5} className="px-5 py-12 text-center text-slate-500">
                                         No buses found.
                                     </td>
                                 </tr>
@@ -587,9 +546,7 @@ export default function AdminBusPage() {
                                             </p>
                                         </td>
 
-                                        <td className="px-5 py-4 text-sm text-slate-700">
-                                            {bus.travelDate}
-                                        </td>
+                                        {/* travelDate removed */}
 
                                         <td className="px-5 py-4">
                                             <p className="text-sm text-slate-700">
@@ -599,7 +556,15 @@ export default function AdminBusPage() {
 
                                         <td className="px-5 py-4">
                                             <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
-                                                {bus.seatLayout} Seats
+                                                <button
+                                                    onClick={() => {
+                                                        setLayoutModalBus(bus);
+                                                        setShowLayoutModal(true);
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    {bus.seatLayout} Seats
+                                                </button>
                                             </span>
                                         </td>
 
@@ -695,6 +660,7 @@ export default function AdminBusPage() {
                     data={editData}
                     onClose={() => setShowEditModal(false)}
                     onSubmit={handleUpdateBus}
+                    isEdit={true}
                     saving={saving}
                     handleInputChange={(e) => handleInputChange(e, true)}
                     handleStopChange={(index, field, value) =>
@@ -708,6 +674,35 @@ export default function AdminBusPage() {
                     addCabin={() => addCabin(true)}
                     removeCabin={(i) => removeCabin(i, true)}
                 />
+            )}
+
+            {showLayoutModal && layoutModalBus && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-4">
+                    <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
+                        <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-3xl border-b border-slate-200 bg-white px-6 py-4">
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-900">{layoutModalBus.busNumber} — Seat Layout</h3>
+                                <p className="text-sm text-slate-500">{layoutModalBus.busName} • {layoutModalBus.routeName}</p>
+                            </div>
+
+                            <button
+                                onClick={() => setShowLayoutModal(false)}
+                                className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            <SeatLayout
+                                layout={String(layoutModalBus.seatLayout || "31")}
+                                bookedSeats={layoutModalBus.bookedSeats || []}
+                                cabins={layoutModalBus.cabins || []}
+                                compact={false}
+                            />
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
@@ -729,17 +724,14 @@ function BusFormModal({
     removeStop,
     addCabin,
     removeCabin,
+    isEdit = false,
 }) {
     const [visibleStops, setVisibleStops] = useState(10);
 
-    const shownStops = data.stops.slice(0, visibleStops);
+    const shownStops = (data.stops || []).slice(0, visibleStops);
 
     const showMore = () => setVisibleStops((v) => Math.min(20, v + 10));
     const showLess = () => setVisibleStops(10);
-    const handleAddStopClick = () => {
-        if (addStop) addStop();
-        setVisibleStops((v) => Math.min(20, v + 1));
-    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-4">
@@ -748,7 +740,7 @@ function BusFormModal({
                     <div>
                         <h3 className="text-xl font-bold text-slate-900">{title}</h3>
                         <p className="text-sm text-slate-500">
-                            Fill bus details, 20 stops and seat layout.
+                            Fill bus details, route stops and seat layout.
                         </p>
                     </div>
 
@@ -806,6 +798,7 @@ function BusFormModal({
                                                 onChange={handleInputChange}
                                                 className="w-full bg-transparent outline-none"
                                             >
+                                                <option value="">Select Bus Type</option>
                                                 <option value="AC">AC</option>
                                                 <option value="Non-AC">Non-AC</option>
                                             </select>
@@ -824,21 +817,15 @@ function BusFormModal({
                                                 onChange={handleInputChange}
                                                 className="w-full bg-transparent outline-none"
                                             >
-                                                <option value="32">32 Seats</option>
+                                                <option value="">Select Seat Layout</option>
+                                                <option value="31">31 Seats</option>
                                                 <option value="27">27 Seats</option>
                                                 <option value="23">23 Seats</option>
                                             </select>
                                         </div>
                                     </div>
 
-                                    <InputField
-                                        label="Travel Date"
-                                        name="travelDate"
-                                        type="date"
-                                        value={data.travelDate}
-                                        onChange={handleInputChange}
-                                        icon={<CalendarDays className="h-5 w-5 text-[#f97316]" />}
-                                    />
+                                    {/* Travel Date removed - not used */}
 
                                     <InputField
                                         label="Route Name"
@@ -887,76 +874,88 @@ function BusFormModal({
                                 </div>
                             </div>
 
-                            {/* 20 Stops */}
+                            {/* Route Stops */}
                             <div className="rounded-3xl border border-slate-200 p-5">
                                 <div className="mb-4">
                                     <h4 className="text-lg font-semibold text-slate-900">
-                                        Route Stops & Timing (20 Stops)
+                                        Route Stops & Timing ({data.stops?.length || 0}/20)
                                     </h4>
                                     <p className="text-sm text-slate-500">
                                         Add up to 20 route stops between start and end point.
                                     </p>
                                 </div>
 
-                                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                                    {shownStops.map((stop, index) => (
-                                        <div
-                                            key={index}
-                                            className="relative rounded-2xl border border-slate-200 p-4"
-                                        >
-                                            <button
-                                                type="button"
-                                                onClick={() => removeStop(index)}
-                                                className="absolute right-3 top-3 rounded-md p-1 text-red-600 hover:bg-red-50"
-                                                title="Remove stop"
+                                {shownStops.length === 0 ? (
+                                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+                                        <p className="text-sm font-medium text-slate-700">
+                                            No stops added yet
+                                        </p>
+                                        <p className="mt-1 text-xs text-slate-500">
+                                            Click “Add Stop” to add route stops.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                        {shownStops.map((stop, index) => (
+                                            <div
+                                                key={index}
+                                                className="relative rounded-2xl border border-slate-200 p-4"
                                             >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeStop(index)}
+                                                    className="absolute right-3 top-3 rounded-md p-1 text-red-600 hover:bg-red-50"
+                                                    title="Remove stop"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </button>
 
-                                            <p className="mb-3 text-sm font-semibold text-slate-700">
-                                                Stop {index + 1}
-                                            </p>
+                                                <p className="mb-3 text-sm font-semibold text-slate-700">
+                                                    Stop {index + 1}
+                                                </p>
 
-                                            <div className="space-y-3">
-                                                <InputField
-                                                    label="Stop Name"
-                                                    value={stop.stopName}
-                                                    onChange={(e) =>
-                                                        handleStopChange(index, "stopName", e.target.value)
-                                                    }
-                                                    icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
-                                                    placeholder={`Stop ${index + 1} name`}
-                                                />
+                                                <div className="space-y-3">
+                                                    <InputField
+                                                        label="Stop Name"
+                                                        value={stop.stopName}
+                                                        onChange={(e) =>
+                                                            handleStopChange(index, "stopName", e.target.value)
+                                                        }
+                                                        icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
+                                                        placeholder={`Stop ${index + 1} name`}
+                                                    />
 
-                                                <InputField
-                                                    label="Time"
-                                                    type="time"
-                                                    value={stop.time}
-                                                    onChange={(e) =>
-                                                        handleStopChange(index, "time", e.target.value)
-                                                    }
-                                                    icon={<Clock3 className="h-5 w-5 text-[#f97316]" />}
-                                                />
+                                                    <InputField
+                                                        label="Time"
+                                                        type="time"
+                                                        value={stop.time}
+                                                        onChange={(e) =>
+                                                            handleStopChange(index, "time", e.target.value)
+                                                        }
+                                                        icon={<Clock3 className="h-5 w-5 text-[#f97316]" />}
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
+                                )}
 
-                                <div className="mt-4 flex items-center justify-between">
+                                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                                     <div className="text-sm text-slate-500">
-                                        Showing {shownStops.length} of {data.stops.length} stop(s)
+                                        Showing {shownStops.length} of {data.stops?.length || 0} stop(s)
                                     </div>
 
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex flex-wrap items-center gap-3">
                                         <button
                                             type="button"
-                                            onClick={handleAddStopClick}
-                                            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                            onClick={() => addStop && addStop()}
+                                            disabled={(data.stops?.length || 0) >= 20}
+                                            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                                         >
                                             Add Stop
                                         </button>
 
-                                        {visibleStops < 20 && (
+                                        {(data.stops?.length || 0) > visibleStops && (
                                             <button
                                                 type="button"
                                                 onClick={showMore}
@@ -966,7 +965,7 @@ function BusFormModal({
                                             </button>
                                         )}
 
-                                        {visibleStops > 10 && (
+                                        {visibleStops > 10 && (data.stops?.length || 0) > 10 && (
                                             <button
                                                 type="button"
                                                 onClick={showLess}
@@ -983,47 +982,59 @@ function BusFormModal({
                             <div className="rounded-3xl border border-slate-200 p-5">
                                 <div className="mb-4">
                                     <h4 className="text-lg font-semibold text-slate-900">
-                                        Cabin Options ({data.cabins.length})
+                                        Cabin Options ({data.cabins?.length || 0})
                                     </h4>
                                     <p className="text-sm text-slate-500">
                                         Customize cabin labels like CB1, CB2, etc.
                                     </p>
                                 </div>
 
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                    {data.cabins.map((cabin, index) => (
-                                        <div key={index} className="flex items-center gap-2">
-                                            <div className="flex-1">
-                                                <InputField
-                                                    label={`Cabin ${index + 1}`}
-                                                    value={cabin.label}
-                                                    onChange={(e) =>
-                                                        handleCabinChange(index, e.target.value)
-                                                    }
-                                                    icon={<Building2 className="h-5 w-5 text-[#f97316]" />}
-                                                    placeholder={`CB${index + 1}`}
-                                                />
-                                            </div>
+                                {(data.cabins?.length || 0) === 0 ? (
+                                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+                                        <p className="text-sm font-medium text-slate-700">
+                                            No cabins added yet
+                                        </p>
+                                        <p className="mt-1 text-xs text-slate-500">
+                                            Click “Add Cabin” to create cabin labels.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                        {(data.cabins || []).map((cabin, index) => (
+                                            <div key={index} className="flex items-center gap-2">
+                                                <div className="flex-1">
+                                                    <InputField
+                                                        label={`Cabin ${index + 1}`}
+                                                        value={cabin.label}
+                                                        onChange={(e) =>
+                                                            handleCabinChange(index, e.target.value)
+                                                        }
+                                                        icon={<Building2 className="h-5 w-5 text-[#f97316]" />}
+                                                        placeholder={`CB${index + 1}`}
+                                                    />
+                                                </div>
 
-                                            <div className="mt-6 ml-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeCabin(index)}
-                                                    className="rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                                                    title="Remove cabin"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
+                                                <div className="mt-6 ml-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeCabin(index)}
+                                                        className="rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                                                        title="Remove cabin"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
+                                )}
 
                                 <div className="mt-3">
                                     <button
                                         type="button"
                                         onClick={() => addCabin && addCabin()}
-                                        className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                        disabled={(data.cabins?.length || 0) >= 8}
+                                        className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                                     >
                                         Add Cabin
                                     </button>
@@ -1046,9 +1057,10 @@ function BusFormModal({
                                 <SeatVisualizer
                                     seatLayout={data.seatLayout}
                                     busNumber={data.busNumber}
+                                    busName={data.busName}
                                     routeName={data.routeName}
                                     startTime={data.startTime}
-                                    cabins={data.cabins}
+                                    cabins={data.cabins || []}
                                 />
                             </div>
                         </div>
@@ -1068,7 +1080,7 @@ function BusFormModal({
                             disabled={saving}
                             className="rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-60"
                         >
-                            {saving ? "Saving..." : "Save Bus"}
+                            {saving ? "Saving..." : isEdit ? "Update Bus" : "Save Bus"}
                         </button>
                     </div>
                 </form>
@@ -1080,9 +1092,20 @@ function BusFormModal({
 /* =========================
    Better Seat Visualizer
 ========================= */
-function SeatVisualizer({ seatLayout, busNumber, routeName, startTime, cabins }) {
+function SeatVisualizer({ seatLayout, busNumber, busName, routeName, startTime, cabins }) {
+    if (!seatLayout) {
+        return (
+            <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm text-center">
+                <p className="text-sm font-medium text-slate-700">No seat layout selected</p>
+                <p className="mt-1 text-xs text-slate-500">
+                    Please select a seat layout to preview the bus seating.
+                </p>
+            </div>
+        );
+    }
+
     const layout = useMemo(() => {
-        if (seatLayout === "32") {
+        if (seatLayout === "31") {
             return {
                 pairRow: [1, 2],
                 mainRows: [
@@ -1095,8 +1118,8 @@ function SeatVisualizer({ seatLayout, busNumber, routeName, startTime, cabins })
                     [21, 22, 23],
                     [24, 25, 26],
                 ],
-                singleRow: [27],
-                lastRow: [28, 29, 30, 31, 32],
+                singleRow: [],
+                lastRow: [27, 28, 29, 30, 31],
             };
         }
 
@@ -1138,14 +1161,14 @@ function SeatVisualizer({ seatLayout, busNumber, routeName, startTime, cabins })
                     <div>
                         <p className="text-slate-500">Bus No.</p>
                         <p className="font-semibold text-slate-900">
-                            {busNumber || "MH06BW7405"}
+                            {busNumber || "--"}
                         </p>
                     </div>
 
                     <div className="text-left sm:text-center">
                         <p className="text-slate-500">Operator</p>
                         <p className="font-bold tracking-wide text-slate-900">
-                            SA TRAVEL&apos;S
+                            {busName || "--"}
                         </p>
                     </div>
 
@@ -1160,7 +1183,7 @@ function SeatVisualizer({ seatLayout, busNumber, routeName, startTime, cabins })
                 <div className="mt-3 rounded-xl bg-orange-50 px-3 py-2 text-xs text-slate-700">
                     Route:{" "}
                     <span className="font-semibold text-slate-900">
-                        {routeName || "Borli - Dongri"}
+                        {routeName || "--"}
                     </span>
                 </div>
             </div>
@@ -1176,7 +1199,7 @@ function SeatVisualizer({ seatLayout, busNumber, routeName, startTime, cabins })
                     </span>
                 </div>
 
-                {/* First pair row: left empty, both pair seats on right */}
+                {/* First pair row */}
                 <div className="mb-3 grid grid-cols-[1fr_28px_1fr_1fr] gap-2">
                     <div />
                     <div className="rounded-lg bg-orange-50/70" />
@@ -1184,7 +1207,7 @@ function SeatVisualizer({ seatLayout, busNumber, routeName, startTime, cabins })
                     <SeatTicketBox seatNo={layout.pairRow[1]} />
                 </div>
 
-                {/* Main rows: left 1, aisle, right 2 */}
+                {/* Main rows */}
                 <div className="space-y-3">
                     {layout.mainRows.map((row, index) => (
                         <div
@@ -1234,26 +1257,34 @@ function SeatVisualizer({ seatLayout, busNumber, routeName, startTime, cabins })
                 </div>
 
                 {/* Cabin */}
-                <div className="mt-5">
-                    <div className="mb-2 text-center text-base font-bold tracking-wide text-slate-900">
-                        CABIN
-                    </div>
+                {(() => {
+                    const cabinCount = Array.isArray(cabins) ? cabins.length : 6;
+                    // determine last seat number from layout
+                    const allSeats = [
+                        ...(layout.pairRow || []),
+                        ...(layout.singleRow || []),
+                        ...layout.lastRow,
+                        ...layout.mainRows.flat(),
+                    ].filter(Boolean);
+                    const lastSeat = allSeats.length ? Math.max(...allSeats) : 0;
+                    const cabinNumbers = Array.from({ length: cabinCount }, (_, i) => lastSeat + i + 1);
 
-                    <div className="space-y-2">
-                        {cabins.map((cabin, index) => (
-                            <div
-                                key={index}
-                                className="grid grid-cols-[80px_1fr] items-center gap-2"
-                            >
-                                <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs font-semibold text-slate-700">
-                                    {cabin.label || `CB${index + 1}`}
-                                </div>
-
-                                <div className="h-9 rounded-lg border border-dashed border-slate-300 bg-white" />
+                    return (
+                        <div className="mt-5">
+                            <div className="mb-2 text-center text-base font-bold tracking-wide text-slate-900">
+                                CABIN
                             </div>
-                        ))}
-                    </div>
-                </div>
+
+                            <div className="space-y-2">
+                                <div className="grid grid-cols-6 gap-2">
+                                    {cabinNumbers.map((cn) => (
+                                        <SeatTicketBox key={cn} seatNo={cn} />
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
             </div>
         </div>
     );
@@ -1265,10 +1296,7 @@ function SeatTicketBox({ seatNo }) {
             <div className="text-xs font-bold text-slate-900">{seatNo}</div>
 
             <div className="mt-1 space-y-1 text-[9px] leading-none text-slate-500">
-                <div className="flex items-center gap-1">
-                    <span>T.No:</span>
-                    <span className="block h-[1px] flex-1 bg-slate-300" />
-                </div>
+
 
                 <div className="flex items-center gap-1">
                     <span>Name:</span>
@@ -1281,7 +1309,16 @@ function SeatTicketBox({ seatNo }) {
                 </div>
 
                 <div className="flex items-center gap-1">
-                    <span>M.No:</span>
+                    <span>Drop:</span>
+                    <span className="block h-[1px] flex-1 bg-slate-300" />
+                </div>
+
+                <div className="flex items-center gap-1">
+                    <span>Mobile:</span>
+                    <span className="block h-[1px] flex-1 bg-slate-300" />
+                </div>
+                <div className="flex items-center gap-1">
+                    <span>Email:</span>
                     <span className="block h-[1px] flex-1 bg-slate-300" />
                 </div>
             </div>

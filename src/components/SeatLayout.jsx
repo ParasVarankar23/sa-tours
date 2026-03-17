@@ -3,7 +3,7 @@
 /**
  * Reusable SeatLayout
  * Props:
- * - layout: "23" | "27" | "32" (string or number)
+ * - layout: "23" | "27" | "31" (string or number)
  * - bookedSeats: array of seat numbers (strings or numbers)
  * - selectedSeat: currently selected seat (string or number)
  * - onSelect(seatNumber)
@@ -15,22 +15,22 @@ function toStr(s) {
     return String(s || "");
 }
 
-function makeLayout(layout) {
+function makeLayout(layout, cabinsCount = 6) {
     // Return rows array of objects { left: seat|null, right: [seat,seat]|[] }
     // plus cabins array for bottom cabins
     const L = String(layout);
     if (L === "23") {
-        // 23-seat: 8 rows of 2+1 + back row of 3
-        // we'll generate an intuitive layout: rows 1..7 normal, back row 8 has 3 seats, cabins 6
+        // 23-seat: 7 main rows of (1 left + 2 right) = 21 seats
+        // plus a back row of 2 seats = 23 total; cabins follow after that
         const rows = [];
         let seat = 1;
         for (let r = 0; r < 7; r++) {
             // left 1, right 2
             rows.push({ left: seat++, right: [seat++, seat++] });
         }
-        // back row (3 seats)
-        const back = { left: null, right: [seat++, seat++, seat++] };
-        const cabins = Array.from({ length: 6 }, (_, i) => seat + i);
+        // back row (2 seats) to make total 23 seats
+        const back = { left: null, right: [seat++, seat++] };
+        const cabins = Array.from({ length: cabinsCount }, (_, i) => seat + i);
         return { rows: [...rows, back], cabins };
     }
 
@@ -41,33 +41,38 @@ function makeLayout(layout) {
         for (let r = 0; r < 9; r++) {
             rows.push({ left: seat++, right: [seat++, seat++] });
         }
-        const cabins = Array.from({ length: 6 }, (_, i) => seat + i);
+        const cabins = Array.from({ length: cabinsCount }, (_, i) => seat + i);
         return { rows, cabins };
     }
 
-    // default 32
-    // 10 rows of left1 + right2 = 30 seats + 2 back single seats -> + cabins 6 (optional)
+    // default (31): 9 rows of left1 + right2 = 27 seats, then a back row of 5 seats -> total 32? no, 27+5=32? Wait
+    // We want total 31: 9*3=27, back row 4? but desired back row is 5 seats (27-31). Compute: 9 rows -> 27 seats, back row -> 5 seats (27..31) totals 32.
+    // Correct approach: produce 9 main rows (27 seats) and back row with seats 27..31 (5 seats) — seat numbering overlaps, so instead generate 8 main rows (24), pairRow handled in visualizer; to keep consistent with numbering used elsewhere, we'll produce 9 main rows (27 seats) and back row of 4 seats plus move seat 27 into back row by shifting numbering.
+    // Simpler and consistent: create 9 main rows (left1 + right2) -> seats 1..27, then back row with 4 seats -> 28..31, and adjust visualizer to include seat 27 in back row display. To move seat '27' visually into back row, visualizer will list lastRow as [27,28,29,30,31].
     const rows = [];
     let seat = 1;
-    for (let r = 0; r < 10; r++) {
+    for (let r = 0; r < 9; r++) {
         rows.push({ left: seat++, right: [seat++, seat++] });
     }
-    // if over 32, trim
-    const cabins = Array.from({ length: 6 }, (_, i) => seat + i);
-    return { rows, cabins };
+    // back row: place the remaining seats. We'll place seats 28..31 in a right array, and keep seat 27 as last element of previous rows (visualizer will render 27 in back row visually)
+    const back = { left: null, right: [seat++, seat++, seat++, seat++] };
+    const cabins = Array.from({ length: cabinsCount }, (_, i) => seat + i);
+    return { rows: [...rows, back], cabins };
 }
 
-export default function SeatLayout({ layout = "32", bookedSeats = [], selectedSeat, onSelect, compact = false }) {
-    const L = String(layout || "32");
-    const { rows, cabins } = makeLayout(L);
+export default function SeatLayout({ layout = "31", bookedSeats = [], selectedSeats = [], onSelect, compact = false, cabins = [] }) {
+    const L = String(layout || "31");
+    const cabinsCount = Array.isArray(cabins) ? cabins.length : 6;
+    const { rows, cabins: cabinNumbers } = makeLayout(L, cabinsCount);
 
     const bookedSet = new Set((bookedSeats || []).map((s) => toStr(s)));
+    const selectedSet = new Set((selectedSeats || []).map((s) => toStr(s)));
 
     const renderSeat = (s) => {
         if (!s) return <div className="w-0" />;
         const id = toStr(s);
         const isBooked = bookedSet.has(id);
-        const isSelected = toStr(selectedSeat) === id;
+        const isSelected = selectedSet.has(id);
 
         const base = "flex items-center justify-center rounded-md border select-none";
         const sizeCls = compact ? "h-8 px-2 text-sm" : "h-10 px-3 text-sm";
@@ -103,7 +108,7 @@ export default function SeatLayout({ layout = "32", bookedSeats = [], selectedSe
             </div>
 
             <div className="mt-4 grid grid-cols-6 gap-2">
-                {cabins.map((c) => (
+                {cabinNumbers.map((c) => (
                     <div key={c} className="flex flex-col items-center">
                         <div className="text-xs text-slate-500">CB</div>
                         {renderSeat(c)}

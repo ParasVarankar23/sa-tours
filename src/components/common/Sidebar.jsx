@@ -26,10 +26,10 @@ const roleLinks = {
         { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
         { href: "/admin/staff", label: "Staff Access", icon: UserCog },
         { href: "/admin/bus", label: "Buses", icon: BusFront },
+        { href: "/admin/schedule", label: "Schedule", icon: CalendarDays },
         { href: "/admin/booking", label: "Booking", icon: Ticket },
         { href: "/admin/payment", label: "Payment History", icon: ReceiptText },
         { href: "/admin/notifications", label: "Notifications", icon: Bell },
-        { href: "/schedule", label: "Schedule", icon: CalendarDays },
         { href: "/routes", label: "Routes", icon: Route },
         { href: "/settings", label: "Settings", icon: Settings },
     ],
@@ -47,7 +47,6 @@ const roleLinks = {
 
     user: [
         { href: "/user", label: "User Home", icon: GraduationCap },
-        { href: "/user/buses", label: "View Bus", icon: BusFront },
         { href: "/user/booking", label: "View Booking", icon: Ticket },
         { href: "/user/payment", label: "View Payment History", icon: ReceiptText },
         { href: "/user/notifications", label: "Notifications", icon: Bell },
