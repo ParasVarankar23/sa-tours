@@ -1,5 +1,5 @@
+import { deleteCloudinaryImage, uploadAssetToCloudinary } from "@/lib/cloudinary";
 import { getAdminDb } from "@/lib/firebaseAdmin";
-import { uploadAssetToCloudinary, deleteCloudinaryImage } from "@/lib/cloudinary";
 import jwt from "jsonwebtoken";
 
 function getUidFromRequest(request) {
@@ -34,25 +34,49 @@ export async function GET(request) {
         const db = getAdminDb();
         const snapshot = await db.ref(`users/${uid}`).get();
 
-        if (!snapshot.exists()) {
-            return Response.json({ error: "Profile not found" }, { status: 404 });
+        if (snapshot.exists()) {
+            const p = snapshot.val();
+
+            return Response.json({
+                success: true,
+                profile: {
+                    uid,
+                    name: p.name || "",
+                    email: p.email || "",
+                    phone: p.phone || "",
+                    address: p.address || "",
+                    role: normalizeRole(p.role),
+                    photoUrl: p.photoUrl || "",
+                    photoPublicId: p.photoPublicId || "",
+                },
+            });
         }
 
-        const p = snapshot.val();
+        // Fallback: check staff collection for staff-only accounts
+        try {
+            const staffSnap = await db.ref(`staff/${uid}`).get();
+            if (staffSnap.exists()) {
+                const s = staffSnap.val();
+                return Response.json({
+                    success: true,
+                    profile: {
+                        uid,
+                        name: s.name || "",
+                        email: s.email || "",
+                        phone: s.phoneNumber || s.phone || "",
+                        address: s.address || "",
+                        role: "staff",
+                        photoUrl: s.photoUrl || "",
+                        photoPublicId: s.photoPublicId || "",
+                        position: s.position || null,
+                    },
+                });
+            }
+        } catch (e) {
+            console.warn("Failed to lookup staff fallback for profile:", e && e.message ? e.message : e);
+        }
 
-        return Response.json({
-            success: true,
-            profile: {
-                uid,
-                name: p.name || "",
-                email: p.email || "",
-                phone: p.phone || "",
-                address: p.address || "",
-                role: normalizeRole(p.role),
-                photoUrl: p.photoUrl || "",
-                photoPublicId: p.photoPublicId || "",
-            },
-        });
+        return Response.json({ error: "Profile not found" }, { status: 404 });
     } catch (error) {
         console.error("GET /api/profile error:", error);
         return Response.json({ error: "Failed to load profile" }, { status: 500 });

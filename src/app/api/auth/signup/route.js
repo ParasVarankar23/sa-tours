@@ -72,6 +72,14 @@ export async function POST(request) {
             // Don't fail the signup if email fails, just log the error
         }
 
+        const jwtSecret = process.env.JWT_SECRET;
+        const jwtExpiration = process.env.JWT_EXPIRATION || "7d";
+
+        let authToken = null;
+        if (jwtSecret) {
+            authToken = jwt.sign({ user_id: user.uid, role: normalizedRole }, jwtSecret, { expiresIn: jwtExpiration });
+        }
+
         return Response.json(
             {
                 success: true,
@@ -82,6 +90,7 @@ export async function POST(request) {
                     name: name.trim(),
                     role: normalizedRole,
                 },
+                authToken,
             },
             { status: 201 }
         );

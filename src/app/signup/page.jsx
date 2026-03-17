@@ -115,19 +115,23 @@ export default function SignupPage() {
         setCredentialsPreview(null);
 
         try {
+            // Force account chooser for clarity and to avoid silent sign-in
+            googleProvider.setCustomParameters({ prompt: "select_account" });
+            console.debug("calling signInWithPopup (signup)...");
             const result = await signInWithPopup(auth, googleProvider);
-            const credential = GoogleAuthProvider.credentialFromResult(result);
-            const idToken = credential?.idToken;
+            console.debug("signInWithPopup (signup) result:", result);
+            // Use Firebase ID token (same project) so Admin SDK can verify it server-side
+            const firebaseIdToken = await result.user.getIdToken();
 
-            if (!idToken) {
-                throw new Error("Unable to read Google token. Try again.");
+            if (!firebaseIdToken) {
+                throw new Error("Unable to read Firebase ID token. Try again.");
             }
 
-            const res = await fetch("/api/auth/login-google", {
+            const res = await fetch("/api/auth/google-login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    idToken,
+                    idToken: firebaseIdToken,
                     fullName: formData.fullName,
                 }),
             });
@@ -152,10 +156,13 @@ export default function SignupPage() {
             }
 
             const role = data.user?.role;
+            const position = data.user?.position;
 
             setTimeout(() => {
                 if (role === "admin") {
                     router.push("/admin");
+                } else if (role === "staff" || position) {
+                    router.push("/staff-portal");
                 } else {
                     router.push("/user");
                 }

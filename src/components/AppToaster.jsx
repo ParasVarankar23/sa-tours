@@ -8,23 +8,23 @@ export default function AppToaster() {
             position="top-center"
             reverseOrder={false}
             toastOptions={{
-                duration: 3000,
+                duration: 4000,
                 style: {
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "12px",
-                    background: "#ffffff",
-                    color: "#111827",
+                    background: '#363636',
+                    color: '#fff',
                 },
                 success: {
+                    duration: 3000,
                     iconTheme: {
-                        primary: "#16a34a",
-                        secondary: "#ffffff",
+                        primary: '#4ade80',
+                        secondary: '#fff',
                     },
                 },
                 error: {
+                    duration: 4000,
                     iconTheme: {
-                        primary: "#dc2626",
-                        secondary: "#ffffff",
+                        primary: '#ef4444',
+                        secondary: '#fff',
                     },
                 },
             }}

@@ -100,16 +100,41 @@ export default function Navbar({
     async function performLogout() {
         try {
             await fetch("/api/auth/logout", { method: "POST" });
-            localStorage.removeItem("authToken");
+            // Clear client-side auth tokens and session state
+            try {
+                localStorage.removeItem("authToken");
+            } catch (e) { }
+            try {
+                sessionStorage.removeItem("authToken");
+            } catch (e) { }
+            try {
+                // remove cookie named authToken if present
+                document.cookie = "authToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+            } catch (e) { }
             showAppToast("success", "Logged out successfully.");
         } catch {
-            localStorage.removeItem("authToken");
+            try { localStorage.removeItem("authToken"); } catch (e) { }
             showAppToast("warning", "Logged out locally. Server logout may have failed.");
         } finally {
             setShowLogoutModal(false);
             setShowProfileMenu(false);
-            router.replace("/login");
-            router.refresh();
+            try {
+                // Try soft navigation first
+                router.replace("/login");
+            } catch (e) {
+                // ignore
+            }
+
+            // Ensure navigation happens even if router.replace didn't work
+            try {
+                if (typeof window !== "undefined") {
+                    // use replace to avoid leaving a history entry
+                    window.location.replace("/login");
+                }
+            } catch (e) {
+                // last resort: push location
+                try { window.location.href = "/login"; } catch (e) { }
+            }
         }
     }
 
@@ -138,7 +163,7 @@ export default function Navbar({
                             <div>
                                 <h3 className="text-lg font-bold text-slate-900">Confirm Logout</h3>
                                 <p className="mt-1 text-sm text-slate-500">
-                                    You will be logged out automatically in {logoutCountdown} seconds.
+                                    You will be logged out automatically in {logoutCountdown > 0 ? logoutCountdown + ' seconds' : '...'}
                                 </p>
                             </div>
 

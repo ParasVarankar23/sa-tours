@@ -109,10 +109,13 @@ export default function LoginPage() {
             showAppToast("success", "Login successful.");
 
             const role = data.user?.role;
+            const position = data.user?.position;
 
             setTimeout(() => {
                 if (role === "admin") {
                     router.push("/admin");
+                } else if (role === "staff" || position) {
+                    router.push("/staff-portal");
                 } else {
                     router.push("/user");
                 }
@@ -128,18 +131,23 @@ export default function LoginPage() {
         setGoogleLoading(true);
 
         try {
+            // Force account chooser to ensure user can pick an email
+            googleProvider.setCustomParameters({ prompt: "select_account" });
+            console.debug("calling signInWithPopup...");
             const result = await signInWithPopup(auth, googleProvider);
-            const credential = GoogleAuthProvider.credentialFromResult(result);
-            const idToken = credential?.idToken;
+            console.debug("signInWithPopup result:", result);
+            // The credential.idToken is a Google OAuth ID token (aud = OAuth client).
+            // We need a Firebase ID token for server-side verification with the Admin SDK.
+            const firebaseIdToken = await result.user.getIdToken();
 
-            if (!idToken) {
-                throw new Error("Unable to read Google token. Try again.");
+            if (!firebaseIdToken) {
+                throw new Error("Unable to read Firebase ID token. Try again.");
             }
 
-            const res = await fetch("/api/auth/login-google", {
+            const res = await fetch("/api/auth/google-login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ idToken }),
+                body: JSON.stringify({ idToken: firebaseIdToken }),
             });
 
             const data = await res.json().catch(() => ({}));

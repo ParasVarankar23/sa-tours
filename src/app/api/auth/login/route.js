@@ -183,6 +183,16 @@ export async function POST(request) {
         const userSnapshot = await get(ref(db, `users/${user.uid}`));
         const userData = userSnapshot.exists() ? userSnapshot.val() : null;
 
+        // If staff record exists for uid, treat as staff and include position
+        let staffSnapshot = null;
+        let staffData = null;
+        try {
+            staffSnapshot = await get(ref(db, `staff/${user.uid}`));
+            if (staffSnapshot.exists()) staffData = staffSnapshot.val();
+        } catch (e) {
+            // ignore
+        }
+
         // Get ID token for client-side verification
         await user.getIdToken();
 
@@ -197,7 +207,9 @@ export async function POST(request) {
         }
 
         // App token with only user_id claim
-        const normalizedRole = normalizeRole(userData?.role) || "student";
+        let normalizedRole = normalizeRole(userData?.role) || null;
+        if (staffData) normalizedRole = "staff";
+        if (!normalizedRole) normalizedRole = "user";
 
         const appToken = jwt.sign(
             { user_id: user.uid, role: normalizedRole },
@@ -214,6 +226,7 @@ export async function POST(request) {
                     email: user.email,
                     name: userData?.name || null,
                     role: normalizedRole,
+                    position: staffData?.position || null,
                 },
                 authToken: appToken,
             },

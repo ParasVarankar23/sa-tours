@@ -1,6 +1,6 @@
 "use client";
 
-import { toast } from "sonner";
+import { toast } from "react-hot-toast";
 
 export function showAppToast(type, text) {
     const message = String(text || "").trim();
@@ -17,7 +17,8 @@ export function showAppToast(type, text) {
     }
 
     if (type === "warning") {
-        toast.warning(message);
+        // react-hot-toast doesn't have toast.warning by default — use generic toast with styling
+        toast(message, { icon: "⚠️" });
         return;
     }
 

@@ -10,7 +10,7 @@ const smtpPass = (process.env.SMTP_PASS || "")
 const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 587,
-    secure: false, // TLS
+    secure: false,
     auth: {
         user: smtpUser,
         pass: smtpPass,
@@ -20,208 +20,373 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-// verify transporter on startup to produce helpful logs
-transporter.verify()
+// Verify transporter on startup
+transporter
+    .verify()
     .then(() => console.log("SMTP transporter verified and ready"))
-    .catch((err) => console.warn("SMTP transporter verification failed:", err && err.message ? err.message : err));
+    .catch((err) =>
+        console.warn(
+            "SMTP transporter verification failed:",
+            err?.message || err
+        )
+    );
 
-/**
- * Send signup welcome email with generated password
- * @param {string} email - User's email address
- * @param {string} name - User's name
- * @param {string} generatedPassword - Generated password
- */
-export async function sendSignupEmail(email, name, generatedPassword) {
-    const loginUrl = process.env.NEXT_PUBLIC_APP_URL
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/login`
-        : "https://sa-tours.vercel.app/login";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://sa-tours.vercel.app";
 
-    const htmlContent = `
+/* =========================================================
+   Shared Helpers
+========================================================= */
+
+function escapeHtml(value = "") {
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function infoRow(label, value) {
+    return `
+        <tr>
+            <td style="padding: 10px 0; width: 38%; color: #64748b; font-size: 14px; font-weight: 600; vertical-align: top;">
+                ${escapeHtml(label)}
+            </td>
+            <td style="padding: 10px 0; color: #0f172a; font-size: 15px; font-weight: 700; vertical-align: top;">
+                ${escapeHtml(value || "--")}
+            </td>
+        </tr>
+    `;
+}
+
+function createEmailTemplate({
+    preheader = "SA Tours Notification",
+    title = "SA Tours",
+    subtitle = "Travel made simple",
+    badgeText = "SA TOURS",
+    introTitle = "",
+    introText = "",
+    bodyHtml = "",
+    buttonText = "",
+    buttonUrl = "",
+    footerNote = "Need help? Contact SA Tours support.",
+}) {
+    const safeTitle = escapeHtml(title);
+    const safeSubtitle = escapeHtml(subtitle);
+    const safeBadgeText = escapeHtml(badgeText);
+    const safeIntroTitle = escapeHtml(introTitle);
+    const safeIntroText = escapeHtml(introText);
+    const safeFooterNote = escapeHtml(footerNote);
+
+    const buttonHtml =
+        buttonText && buttonUrl
+            ? `
+            <div style="text-align:center; margin: 28px 0 8px;">
+                <a href="${buttonUrl}" style="
+                    display:inline-block;
+                    padding: 14px 26px;
+                    border-radius: 12px;
+                    background: linear-gradient(135deg, #f97316, #ea580c);
+                    color: #ffffff;
+                    text-decoration: none;
+                    font-size: 14px;
+                    font-weight: 700;
+                    letter-spacing: 0.2px;
+                    box-shadow: 0 10px 24px rgba(249,115,22,0.25);
+                ">
+                    ${escapeHtml(buttonText)}
+                </a>
+            </div>
+        `
+            : "";
+
+    return `
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>Welcome to SA Tours</title>
-            <style>
-                body {
-                    margin: 0;
-                    padding: 0;
-                    background-color: #f8fafc;
-                    font-family: Arial, sans-serif;
-                    line-height: 1.6;
-                    color: #334155;
-                }
-                .wrapper {
-                    width: 100%;
-                    background-color: #f8fafc;
-                    padding: 24px 0;
-                }
-                .container {
-                    max-width: 600px;
-                    margin: 0 auto;
-                    background: #ffffff;
-                    border-radius: 16px;
-                    overflow: hidden;
-                    border: 1px solid #fed7aa;
-                    box-shadow: 0 10px 30px rgba(249, 115, 22, 0.08);
-                }
-                .header {
-                    background: linear-gradient(135deg, #f97316, #ea580c);
-                    color: #ffffff;
-                    padding: 28px 24px;
-                    text-align: center;
-                }
-                .brand {
-                    font-size: 28px;
-                    font-weight: bold;
-                    margin: 0;
-                    letter-spacing: 0.5px;
-                }
-                .subtitle {
-                    margin: 8px 0 0 0;
-                    font-size: 14px;
-                    opacity: 0.95;
-                }
-                .content {
-                    padding: 28px 24px;
-                    background-color: #ffffff;
-                }
-                .hello {
-                    font-size: 16px;
-                    margin: 0 0 16px 0;
-                }
-                .message {
-                    margin: 0 0 18px 0;
-                    font-size: 15px;
-                    color: #475569;
-                }
-                .credential-box {
-                    background: #fff7ed;
-                    border: 1px solid #fdba74;
-                    border-radius: 14px;
-                    padding: 20px;
-                    margin: 22px 0;
-                }
-                .credential-label {
-                    font-size: 13px;
-                    color: #9a3412;
-                    margin-bottom: 6px;
-                    font-weight: 600;
-                }
-                .credential-value {
-                    font-size: 15px;
-                    color: #1e293b;
-                    font-weight: 700;
-                    word-break: break-word;
-                }
-                .password-box {
-                    margin-top: 16px;
-                    padding: 16px;
-                    background: #ffffff;
-                    border: 2px dashed #f97316;
-                    border-radius: 12px;
-                    text-align: center;
-                }
-                .password-title {
-                    margin: 0 0 8px 0;
-                    font-size: 13px;
-                    color: #9a3412;
-                    font-weight: 600;
-                }
-                .password {
-                    font-size: 28px;
-                    font-weight: bold;
-                    color: #ea580c;
-                    letter-spacing: 2px;
-                    font-family: monospace;
-                }
-                .warning {
-                    background-color: #fff7ed;
-                    border: 1px solid #fdba74;
-                    color: #9a3412;
-                    padding: 14px 16px;
-                    border-radius: 12px;
-                    margin: 20px 0;
-                    font-size: 14px;
-                }
-                .button-wrap {
-                    text-align: center;
-                    margin: 24px 0;
-                }
-                .button {
-                    display: inline-block;
-                    background: linear-gradient(135deg, #f97316, #ea580c);
-                    color: #ffffff !important;
-                    text-decoration: none;
-                    padding: 12px 24px;
-                    border-radius: 10px;
-                    font-size: 14px;
-                    font-weight: bold;
-                }
-                .support {
-                    margin-top: 18px;
-                    font-size: 14px;
-                    color: #64748b;
-                }
-                .footer {
-                    text-align: center;
-                    padding: 18px 24px 24px;
-                    font-size: 12px;
-                    color: #94a3b8;
-                    background: #fffaf5;
-                    border-top: 1px solid #ffedd5;
-                }
-            </style>
+            <title>${safeTitle}</title>
         </head>
-        <body>
-            <div class="wrapper">
-                <div class="container">
-                    <div class="header">
-                        <h1 class="brand">SA Tours</h1>
-                        <p class="subtitle">Your travel account is ready</p>
+        <body style="margin:0; padding:0; background-color:#f8fafc; font-family:Arial, Helvetica, sans-serif; color:#334155;">
+            <!-- Preheader -->
+            <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">
+                ${escapeHtml(preheader)}
+            </div>
+
+            <div style="width:100%; background:#f8fafc; padding:28px 12px;">
+                <div style="
+                    max-width:680px;
+                    margin:0 auto;
+                    background:#ffffff;
+                    border:1px solid #fed7aa;
+                    border-radius:24px;
+                    overflow:hidden;
+                    box-shadow:0 16px 40px rgba(15,23,42,0.08);
+                ">
+                    <!-- Header -->
+                    <div style="
+                        background: linear-gradient(135deg, #f97316, #ea580c);
+                        padding:32px 24px;
+                        text-align:center;
+                        color:#ffffff;
+                    ">
+                        <div style="
+                            display:inline-block;
+                            background: rgba(255,255,255,0.18);
+                            border:1px solid rgba(255,255,255,0.22);
+                            padding:6px 14px;
+                            border-radius:999px;
+                            font-size:11px;
+                            font-weight:700;
+                            letter-spacing:1.2px;
+                            margin-bottom:14px;
+                        ">
+                            ${safeBadgeText}
+                        </div>
+
+                        <h1 style="margin:0; font-size:34px; line-height:1.2; font-weight:800;">
+                            ${safeTitle}
+                        </h1>
+
+                        <p style="margin:10px 0 0; font-size:15px; opacity:0.95;">
+                            ${safeSubtitle}
+                        </p>
                     </div>
 
-                    <div class="content">
-                        <p class="hello">Hello <strong>${name}</strong>,</p>
+                    <!-- Body -->
+                    <div style="padding:30px 24px;">
+                        ${introTitle
+            ? `
+                            <h2 style="
+                                margin:0 0 10px;
+                                font-size:22px;
+                                line-height:1.3;
+                                color:#0f172a;
+                                font-weight:800;
+                            ">
+                                ${safeIntroTitle}
+                            </h2>
+                        `
+            : ""
+        }
 
-                        <p class="message">
-                            Welcome to <strong>SA Tours</strong>! Your account has been created successfully.
-                            You can now log in and start exploring available buses, routes, and bookings.
-                        </p>
+                        ${introText
+            ? `
+                            <p style="
+                                margin:0 0 22px;
+                                font-size:15px;
+                                line-height:1.7;
+                                color:#475569;
+                            ">
+                                ${safeIntroText}
+                            </p>
+                        `
+            : ""
+        }
 
-                        <div class="credential-box">
-                            <div class="credential-label">Registered Email</div>
-                            <div class="credential-value">${email}</div>
+                        ${bodyHtml}
 
-                            <div class="password-box">
-                                <p class="password-title">Your Temporary Password</p>
-                                <div class="password">${generatedPassword}</div>
-                            </div>
-                        </div>
-
-                        <div class="warning">
-                            <strong>Important:</strong> Please keep this password secure. 
-                            We recommend changing it after your first login for better security.
-                        </div>
-
-                        <div class="button-wrap">
-                            <a href="${loginUrl}" class="button">Login to SA Tours</a>
-                        </div>
-
-                        <p class="support">
-                            If you need any help, feel free to contact the SA Tours support team.
-                        </p>
+                        ${buttonHtml}
                     </div>
 
-                    <div class="footer">
-                        <p>&copy; 2026 SA Tours. All rights reserved.</p>
+                    <!-- Footer -->
+                    <div style="
+                        background:#fffaf5;
+                        border-top:1px solid #ffedd5;
+                        padding:20px 24px 26px;
+                        text-align:center;
+                    ">
+                        <p style="margin:0; font-size:13px; color:#64748b;">
+                            ${safeFooterNote}
+                        </p>
+                        <p style="margin:10px 0 0; font-size:12px; color:#94a3b8;">
+                            © 2026 SA Tours. All rights reserved.
+                        </p>
                     </div>
                 </div>
             </div>
         </body>
         </html>
     `;
+}
+
+function createInfoCard(title, rowsHtml) {
+    return `
+        <div style="
+            margin:22px 0;
+            background:#ffffff;
+            border:1px solid #fdba74;
+            border-radius:18px;
+            overflow:hidden;
+        ">
+            <div style="
+                background:#fff7ed;
+                padding:14px 18px;
+                border-bottom:1px solid #fed7aa;
+                font-size:14px;
+                font-weight:800;
+                letter-spacing:0.3px;
+                color:#9a3412;
+            ">
+                ${escapeHtml(title)}
+            </div>
+            <div style="padding:16px 18px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                    ${rowsHtml}
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+function createOtpCard(otp) {
+    return `
+        <div style="
+            margin:22px 0;
+            background:#fff7ed;
+            border:2px solid #f97316;
+            border-radius:20px;
+            padding:26px 20px;
+            text-align:center;
+        ">
+            <p style="
+                margin:0 0 10px;
+                font-size:13px;
+                color:#9a3412;
+                font-weight:700;
+                letter-spacing:0.4px;
+            ">
+                YOUR OTP CODE
+            </p>
+
+            <div style="
+                font-size:42px;
+                font-weight:800;
+                color:#ea580c;
+                letter-spacing:10px;
+                font-family:monospace;
+                line-height:1.2;
+            ">
+                ${escapeHtml(otp)}
+            </div>
+
+            <p style="
+                margin:12px 0 0;
+                font-size:13px;
+                color:#64748b;
+            ">
+                Valid for 10 minutes
+            </p>
+        </div>
+    `;
+}
+
+function createAlertBox(text, type = "warning") {
+    const styles =
+        type === "success"
+            ? {
+                bg: "#ecfdf5",
+                border: "#86efac",
+                color: "#166534",
+            }
+            : type === "danger"
+                ? {
+                    bg: "#fef2f2",
+                    border: "#fca5a5",
+                    color: "#991b1b",
+                }
+                : {
+                    bg: "#fff7ed",
+                    border: "#fdba74",
+                    color: "#9a3412",
+                };
+
+    return `
+        <div style="
+            margin:20px 0;
+            background:${styles.bg};
+            border:1px solid ${styles.border};
+            color:${styles.color};
+            border-radius:16px;
+            padding:16px 18px;
+            font-size:14px;
+            line-height:1.7;
+        ">
+            ${text}
+        </div>
+    `;
+}
+
+/* =========================================================
+   1) SIGNUP EMAIL
+========================================================= */
+export async function sendSignupEmail(email, name, generatedPassword) {
+    const loginUrl = `${APP_URL}/login`;
+
+    const credentialsCard = createInfoCard(
+        "Account Details",
+        `
+            ${infoRow("Passenger Name", name || "Passenger")}
+            ${infoRow("Registered Email", email)}
+        `
+    );
+
+    const passwordCard = `
+        <div style="
+            margin:22px 0;
+            background:#fff7ed;
+            border:1px solid #fdba74;
+            border-radius:18px;
+            padding:22px;
+            text-align:center;
+        ">
+            <p style="
+                margin:0 0 8px;
+                font-size:13px;
+                color:#9a3412;
+                font-weight:700;
+                letter-spacing:0.4px;
+            ">
+                TEMPORARY PASSWORD
+            </p>
+            <div style="
+                display:inline-block;
+                background:#ffffff;
+                border:2px dashed #f97316;
+                border-radius:14px;
+                padding:14px 22px;
+                font-size:28px;
+                font-weight:800;
+                color:#ea580c;
+                font-family:monospace;
+                letter-spacing:2px;
+                margin-top:8px;
+            ">
+                ${escapeHtml(generatedPassword)}
+            </div>
+        </div>
+    `;
+
+    const htmlContent = createEmailTemplate({
+        preheader: "Welcome to SA Tours - Your account is ready",
+        title: "Welcome to SA Tours",
+        subtitle: "Your travel account is now active",
+        badgeText: "NEW ACCOUNT",
+        introTitle: `Hello ${name || "Passenger"},`,
+        introText:
+            "Your SA Tours account has been created successfully. You can now log in, view available buses, select your seat, and manage your bookings with ease.",
+        bodyHtml: `
+            ${credentialsCard}
+            ${passwordCard}
+            ${createAlertBox(
+            "<strong>Important:</strong> Please keep this password secure. For better safety, change it after your first login."
+        )}
+        `,
+        buttonText: "Login to SA Tours",
+        buttonUrl: loginUrl,
+        footerNote: "Need help logging in? Contact SA Tours support.",
+    });
 
     try {
         const mailOptions = {
@@ -240,152 +405,25 @@ export async function sendSignupEmail(email, name, generatedPassword) {
     }
 }
 
-/**
- * Send forgot password OTP email
- * @param {string} email - User email
- * @param {string} otp - 6-digit OTP code
- */
+/* =========================================================
+   2) FORGOT PASSWORD OTP EMAIL
+========================================================= */
 export async function sendForgotPasswordEmail(email, otp) {
-    const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>SA Tours Password Reset OTP</title>
-            <style>
-                body {
-                    margin: 0;
-                    padding: 0;
-                    background-color: #f8fafc;
-                    font-family: Arial, sans-serif;
-                    line-height: 1.6;
-                    color: #334155;
-                }
-                .wrapper {
-                    width: 100%;
-                    background-color: #f8fafc;
-                    padding: 24px 0;
-                }
-                .container {
-                    max-width: 600px;
-                    margin: 0 auto;
-                    background: #ffffff;
-                    border-radius: 16px;
-                    overflow: hidden;
-                    border: 1px solid #fed7aa;
-                    box-shadow: 0 10px 30px rgba(249, 115, 22, 0.08);
-                }
-                .header {
-                    background: linear-gradient(135deg, #f97316, #ea580c);
-                    color: #ffffff;
-                    padding: 28px 24px;
-                    text-align: center;
-                }
-                .brand {
-                    font-size: 28px;
-                    font-weight: bold;
-                    margin: 0;
-                    letter-spacing: 0.5px;
-                }
-                .subtitle {
-                    margin: 8px 0 0 0;
-                    font-size: 14px;
-                    opacity: 0.95;
-                }
-                .content {
-                    padding: 28px 24px;
-                    background-color: #ffffff;
-                }
-                .message {
-                    margin: 0 0 18px 0;
-                    font-size: 15px;
-                    color: #475569;
-                }
-                .otp-box {
-                    background: #fff7ed;
-                    border: 2px solid #f97316;
-                    border-radius: 14px;
-                    padding: 22px;
-                    text-align: center;
-                    margin: 22px 0;
-                }
-                .otp-title {
-                    margin: 0 0 8px 0;
-                    font-size: 14px;
-                    color: #9a3412;
-                    font-weight: 600;
-                }
-                .otp-code {
-                    font-size: 42px;
-                    font-weight: bold;
-                    color: #ea580c;
-                    letter-spacing: 10px;
-                    font-family: monospace;
-                    margin: 8px 0;
-                }
-                .otp-expiry {
-                    font-size: 13px;
-                    color: #9ca3af;
-                    margin-top: 8px;
-                }
-                .note {
-                    background: #fff7ed;
-                    border: 1px solid #fdba74;
-                    color: #9a3412;
-                    border-radius: 12px;
-                    padding: 14px 16px;
-                    margin-top: 16px;
-                    font-size: 14px;
-                }
-                .footer {
-                    text-align: center;
-                    padding: 18px 24px 24px;
-                    font-size: 12px;
-                    color: #94a3b8;
-                    background: #fffaf5;
-                    border-top: 1px solid #ffedd5;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="wrapper">
-                <div class="container">
-                    <div class="header">
-                        <h1 class="brand">SA Tours</h1>
-                        <p class="subtitle">Password reset verification</p>
-                    </div>
-
-                    <div class="content">
-                        <p class="message">
-                            We received a request to reset the password for your <strong>SA Tours</strong> account:
-                            <br /><strong>${email}</strong>
-                        </p>
-
-                        <p class="message">
-                            Use the following 6-digit OTP to continue resetting your password:
-                        </p>
-
-                        <div class="otp-box">
-                            <p class="otp-title">Your OTP Code</p>
-                            <div class="otp-code">${otp}</div>
-                            <p class="otp-expiry">Valid for 10 minutes</p>
-                        </div>
-
-                        <div class="note">
-                            <strong>Security Note:</strong> Never share this OTP with anyone. 
-                            If you did not request a password reset, you can safely ignore this email.
-                        </div>
-                    </div>
-
-                    <div class="footer">
-                        <p>&copy; 2026 SA Tours. All rights reserved.</p>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-    `;
+    const htmlContent = createEmailTemplate({
+        preheader: "SA Tours password reset verification",
+        title: "Password Reset OTP",
+        subtitle: "Secure verification for your account",
+        badgeText: "SECURITY",
+        introTitle: "Password Reset Requested",
+        introText: `We received a request to reset the password for your SA Tours account associated with ${email}. Use the OTP below to continue.`,
+        bodyHtml: `
+            ${createOtpCard(otp)}
+            ${createAlertBox(
+            "<strong>Security Note:</strong> Never share this OTP with anyone. If you did not request this reset, you can safely ignore this email."
+        )}
+        `,
+        footerNote: "If this wasn't you, your account remains safe unless the OTP is shared.",
+    });
 
     try {
         const mailOptions = {
@@ -404,63 +442,57 @@ export async function sendForgotPasswordEmail(email, otp) {
     }
 }
 
-/**
- * Send booking confirmation email
- * @param {string} email - recipient email
- * @param {string} name - passenger name
- * @param {object} booking - booking details object (seatNo, busNumber, date, pickup, pickupTime, drop, dropTime, startTime, endTime, routeName)
- */
+/* =========================================================
+   3) BOOKING CONFIRMATION EMAIL
+========================================================= */
 export async function sendBookingConfirmation(email, name, booking = {}) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://sa-tours.vercel.app";
+    const bookingCard = createInfoCard(
+        "Booking Details",
+        `
+            ${infoRow("Passenger Name", name || "Passenger")}
+            ${infoRow(
+            "Bus",
+            `${booking.busNumber || "--"}${booking.routeName ? ` — ${booking.routeName}` : ""
+            }`
+        )}
+            ${infoRow(
+            "Travel Date & Time",
+            `${booking.date || "--"} • ${booking.startTime || "--:--"} → ${booking.endTime || "--:--"
+            }`
+        )}
+            ${infoRow("Seat Number", booking.seatNo || "--")}
+            ${infoRow(
+            "Pickup Point",
+            `${booking.pickup || "--"}${booking.pickupTime ? ` (${booking.pickupTime})` : ""
+            }`
+        )}
+            ${infoRow(
+            "Drop Point",
+            `${booking.drop || "--"}${booking.dropTime ? ` (${booking.dropTime})` : ""
+            }`
+        )}
+        `
+    );
 
-    const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>Booking Confirmed - SA Tours</title>
-            <style>
-                body { font-family: Arial, sans-serif; background: #f8fafc; color: #334155; margin:0; padding:24px; }
-                .card { max-width:600px; margin:0 auto; background:#fff; border-radius:12px; padding:20px; border:1px solid #fed7aa; }
-                .brand { background:linear-gradient(135deg,#f97316,#ea580c); color:#fff; padding:16px; border-radius:8px; text-align:center; font-size:20px; font-weight:700; }
-                .section { margin-top:16px; }
-                .label { font-size:13px; color:#64748b; }
-                .value { font-size:15px; color:#0f172a; font-weight:600; }
-                .cta { display:block; text-align:center; margin-top:18px; }
-                .button { display:inline-block; padding:10px 16px; border-radius:8px; background:linear-gradient(135deg,#f97316,#ea580c); color:#fff; text-decoration:none; font-weight:700; }
-            </style>
-        </head>
-        <body>
-            <div class="card">
-                <div class="brand">SA Tours — Booking Confirmed</div>
-                <div class="section">
-                    <p class="label">Hello <strong>${name || "Passenger"}</strong>,</p>
-                    <p class="label">Your booking has been confirmed. Below are the details:</p>
-                </div>
-
-                <div class="section">
-                    <div class="label">Bus</div>
-                    <div class="value">${booking.busNumber || "--"} ${booking.routeName ? `— ${booking.routeName}` : ""}</div>
-                    <div class="label">Date & Time</div>
-                    <div class="value">${booking.date || "--"} • ${booking.startTime || "--:--"} → ${booking.endTime || "--:--"}</div>
-                    <div class="label">Seat</div>
-                    <div class="value">${booking.seatNo || "--"}</div>
-                    <div class="label">Pickup</div>
-                    <div class="value">${booking.pickup || "--"} ${booking.pickupTime ? `(${booking.pickupTime})` : ""}</div>
-                    <div class="label">Drop</div>
-                    <div class="value">${booking.drop || "--"} ${booking.dropTime ? `(${booking.dropTime})` : ""}</div>
-                </div>
-
-                <div class="section cta">
-                    <a class="button" href="${appUrl}">View your bookings</a>
-                </div>
-
-                <div class="section" style="margin-top:10px; font-size:12px; color:#94a3b8">If you did not expect this email, please contact SA Tours support.</div>
-            </div>
-        </body>
-        </html>
-    `;
+    const htmlContent = createEmailTemplate({
+        preheader: "Your SA Tours booking is confirmed",
+        title: "Booking Confirmed",
+        subtitle: "Your seat has been reserved successfully",
+        badgeText: "CONFIRMED",
+        introTitle: `Hello ${name || "Passenger"},`,
+        introText:
+            "Great news! Your booking has been confirmed successfully. Please review your trip details below and keep this email for reference.",
+        bodyHtml: `
+            ${bookingCard}
+            ${createAlertBox(
+            "<strong>Travel Reminder:</strong> Please arrive at your pickup point at least 10–15 minutes before departure.",
+            "success"
+        )}
+        `,
+        buttonText: "View My Bookings",
+        buttonUrl: APP_URL,
+        footerNote: "Wishing you a safe and comfortable journey with SA Tours.",
+    });
 
     try {
         const mailOptions = {
@@ -470,69 +502,82 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
             html: htmlContent,
         };
 
-        // diagnostic log (avoid logging credentials)
-        console.log("sendBookingConfirmation: sending to", email, "subject:", mailOptions.subject);
+        console.log(
+            "sendBookingConfirmation: sending to",
+            email,
+            "subject:",
+            mailOptions.subject
+        );
 
         const info = await transporter.sendMail(mailOptions);
-        console.log("Booking confirmation email sent:", info && info.messageId ? info.messageId : info);
+        console.log(
+            "Booking confirmation email sent:",
+            info?.messageId || info
+        );
         return true;
     } catch (error) {
-        console.error("Error sending booking confirmation email:", error && error.message ? error.message : error);
-        throw new Error("Failed to send booking confirmation email: " + (error && error.message ? error.message : String(error)));
+        console.error(
+            "Error sending booking confirmation email:",
+            error?.message || error
+        );
+        throw new Error(
+            "Failed to send booking confirmation email: " +
+            (error?.message || String(error))
+        );
     }
 }
 
-/**
- * Send booking cancellation email
- * @param {string} email - recipient email
- * @param {string} name - passenger name
- * @param {object} booking - booking details object (seatNo, busNumber, date, pickup, pickupTime, drop, dropTime, startTime, endTime, routeName)
- */
+/* =========================================================
+   4) BOOKING CANCELLATION EMAIL
+========================================================= */
 export async function sendBookingCancellation(email, name, booking = {}) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://sa-tours.vercel.app";
+    const bookingCard = createInfoCard(
+        "Cancelled Booking Details",
+        `
+            ${infoRow("Passenger Name", name || "Passenger")}
+            ${infoRow(
+            "Bus",
+            `${booking.busNumber || "--"}${booking.routeName ? ` — ${booking.routeName}` : ""
+            }`
+        )}
+            ${infoRow(
+            "Travel Date & Time",
+            `${booking.date || "--"} • ${booking.startTime || "--:--"} → ${booking.endTime || "--:--"
+            }`
+        )}
+            ${infoRow("Seat Number", booking.seatNo || "--")}
+            ${infoRow(
+            "Pickup Point",
+            `${booking.pickup || "--"}${booking.pickupTime ? ` (${booking.pickupTime})` : ""
+            }`
+        )}
+            ${infoRow(
+            "Drop Point",
+            `${booking.drop || "--"}${booking.dropTime ? ` (${booking.dropTime})` : ""
+            }`
+        )}
+        `
+    );
 
-    const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>Booking Cancelled - SA Tours</title>
-            <style>
-                body { font-family: Arial, sans-serif; background: #f8fafc; color: #334155; margin:0; padding:24px; }
-                .card { max-width:600px; margin:0 auto; background:#fff; border-radius:12px; padding:20px; border:1px solid #fed7aa; }
-                .brand { background:linear-gradient(135deg,#f97316,#ea580c); color:#fff; padding:16px; border-radius:8px; text-align:center; font-size:20px; font-weight:700; }
-                .section { margin-top:16px; }
-                .label { font-size:13px; color:#64748b; }
-                .value { font-size:15px; color:#0f172a; font-weight:600; }
-            </style>
-        </head>
-        <body>
-            <div class="card">
-                <div class="brand">SA Tours — Booking Cancelled</div>
-                <div class="section">
-                    <p class="label">Hello <strong>${name || "Passenger"}</strong>,</p>
-                    <p class="label">Your booking has been cancelled. Details below:</p>
-                </div>
-
-                <div class="section">
-                    <div class="label">Bus</div>
-                    <div class="value">${booking.busNumber || "--"} ${booking.routeName ? `— ${booking.routeName}` : ""}</div>
-                    <div class="label">Date & Time</div>
-                    <div class="value">${booking.date || "--"} • ${booking.startTime || "--:--"} → ${booking.endTime || "--:--"}</div>
-                    <div class="label">Seat</div>
-                    <div class="value">${booking.seatNo || "--"}</div>
-                    <div class="label">Pickup</div>
-                    <div class="value">${booking.pickup || "--"} ${booking.pickupTime ? `(${booking.pickupTime})` : ""}</div>
-                    <div class="label">Drop</div>
-                    <div class="value">${booking.drop || "--"} ${booking.dropTime ? `(${booking.dropTime})` : ""}</div>
-                </div>
-
-                <div class="section" style="margin-top:10px; font-size:12px; color:#94a3b8">If you think this was a mistake, please contact SA Tours support.</div>
-            </div>
-        </body>
-        </html>
-    `;
+    const htmlContent = createEmailTemplate({
+        preheader: "Your SA Tours booking has been cancelled",
+        title: "Booking Cancelled",
+        subtitle: "Your reservation has been cancelled",
+        badgeText: "CANCELLED",
+        introTitle: `Hello ${name || "Passenger"},`,
+        introText:
+            "Your booking has been cancelled successfully. Please review the cancelled booking details below.",
+        bodyHtml: `
+            ${bookingCard}
+            ${createAlertBox(
+            "<strong>Need help?</strong> If you think this cancellation was a mistake, please contact SA Tours support immediately.",
+            "danger"
+        )}
+        `,
+        buttonText: "Browse Available Buses",
+        buttonUrl: APP_URL,
+        footerNote: "We hope to serve you again soon with SA Tours.",
+    });
 
     try {
         const mailOptions = {
@@ -542,12 +587,27 @@ export async function sendBookingCancellation(email, name, booking = {}) {
             html: htmlContent,
         };
 
-        console.log("sendBookingCancellation: sending to", email, "subject:", mailOptions.subject);
+        console.log(
+            "sendBookingCancellation: sending to",
+            email,
+            "subject:",
+            mailOptions.subject
+        );
+
         const info = await transporter.sendMail(mailOptions);
-        console.log("Booking cancellation email sent:", info && info.messageId ? info.messageId : info);
+        console.log(
+            "Booking cancellation email sent:",
+            info?.messageId || info
+        );
         return true;
     } catch (error) {
-        console.error("Error sending booking cancellation email:", error && error.message ? error.message : error);
-        throw new Error("Failed to send booking cancellation email: " + (error && error.message ? error.message : String(error)));
+        console.error(
+            "Error sending booking cancellation email:",
+            error?.message || error
+        );
+        throw new Error(
+            "Failed to send booking cancellation email: " +
+            (error?.message || String(error))
+        );
     }
 }

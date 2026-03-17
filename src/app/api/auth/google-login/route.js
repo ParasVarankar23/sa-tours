@@ -13,7 +13,7 @@ async function findUserByEmail(adminAuth, db, email) {
 }
 
 function normalizeRole(role) {
-    if (!role) return "user";
+    if (!role) return null;
     return String(role).trim().toLowerCase();
 }
 
@@ -36,10 +36,22 @@ export async function POST(request) {
             );
         }
 
-        const adminAuth = getAdminAuth();
-        const db = getAdminDb();
+        let adminAuth, db;
+        try {
+            adminAuth = getAdminAuth();
+            db = getAdminDb();
+        } catch (e) {
+            console.error("google-login: failed to initialize firebase admin:", e && e.message ? e.message : e);
+            return Response.json({ error: "Server misconfiguration: firebase admin init failed" }, { status: 500 });
+        }
 
-        const decoded = await adminAuth.verifyIdToken(idToken);
+        let decoded;
+        try {
+            decoded = await adminAuth.verifyIdToken(idToken);
+        } catch (e) {
+            console.error("google-login: failed to verify idToken:", e && e.message ? e.message : e);
+            return Response.json({ error: "Invalid or expired Google ID token" }, { status: 401 });
+        }
         const uid = decoded.uid;
         const email = (decoded.email || "").toLowerCase();
         const name = decoded.name || "";
@@ -56,21 +68,34 @@ export async function POST(request) {
         const existingByUid = snapshot.exists() ? snapshot.val() : null;
         const existingByEmail = await findUserByEmail(adminAuth, db, email);
 
-        const roleByUid = normalizeRole(existingByUid?.role);
-        const roleByEmail = normalizeRole(existingByEmail?.data?.role);
-
-        let resolvedRole = roleByUid || roleByEmail || "user";
-        if (roleByUid !== "admin" && roleByEmail === "admin") {
-            resolvedRole = "admin";
+        // Check if this uid exists under staff collection
+        let staffData = null;
+        try {
+            const staffSnap = await db.ref(`staff/${uid}`).get();
+            if (staffSnap.exists()) staffData = staffSnap.val();
+        } catch (e) {
+            // ignore
         }
+
+        const roleByUid = existingByUid?.role ? normalizeRole(existingByUid.role) : null;
+        const roleByEmail = existingByEmail?.data?.role ? normalizeRole(existingByEmail.data.role) : null;
+
+        // Role precedence: admin > staff > user
+        let resolvedRole = "user";
+        if (roleByUid === "admin" || roleByEmail === "admin") resolvedRole = "admin";
+        else if (staffData || roleByUid === "staff" || roleByEmail === "staff") resolvedRole = "staff";
+        else if (roleByUid === "user" || roleByEmail === "user") resolvedRole = "user";
 
         const resolvedUser = existingByUid || existingByEmail?.data || null;
 
-        if (expectedRole === "admin" && resolvedRole !== "admin") {
-            return Response.json(
-                { error: "Admin is not found" },
-                { status: 404 }
-            );
+        if (expectedRole) {
+            const exp = normalizeRole(expectedRole) || "user";
+            if (exp !== resolvedRole) {
+                return Response.json(
+                    { error: `${exp.charAt(0).toUpperCase() + exp.slice(1)} is not found` },
+                    { status: 404 }
+                );
+            }
         }
 
         const nowIso = new Date().toISOString();
@@ -108,6 +133,7 @@ export async function POST(request) {
                     email,
                     name,
                     role: userRole,
+                    position: staffData?.position || null,
                 },
                 authToken,
             },

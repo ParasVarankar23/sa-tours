@@ -26,15 +26,50 @@ export async function GET(request) {
         const db = getFirebaseDb();
         const userRef = ref(db, `users/${decoded.user_id}`);
         const snapshot = await get(userRef);
-        if (!snapshot.exists()) {
-            return Response.json({ error: "User not found" }, { status: 404 });
+
+        // If users/{uid} exists, use that. Otherwise try staff/{uid} as a fallback
+        if (snapshot.exists()) {
+            const user = snapshot.val();
+
+            // Also check staff collection for position (if this uid is a staff member)
+            let position = null;
+            try {
+                const staffRef = ref(db, `staff/${decoded.user_id}`);
+                const staffSnap = await get(staffRef);
+                if (staffSnap.exists()) {
+                    const s = staffSnap.val();
+                    position = s.position || null;
+                }
+            } catch (e) {
+                // ignore lookup failure
+            }
+
+            return Response.json({
+                fullName: user.name || "",
+                email: user.email || "",
+                role: user.role || "user",
+                position,
+            });
         }
-        const user = snapshot.val();
-        return Response.json({
-            fullName: user.name || "",
-            email: user.email || "",
-            role: user.role || "user"
-        });
+
+        // users/{uid} missing — try staff/{uid}
+        try {
+            const staffRef = ref(db, `staff/${decoded.user_id}`);
+            const staffSnap = await get(staffRef);
+            if (staffSnap.exists()) {
+                const s = staffSnap.val();
+                return Response.json({
+                    fullName: s.name || "",
+                    email: s.email || "",
+                    role: "staff",
+                    position: s.position || null,
+                });
+            }
+        } catch (e) {
+            // ignore
+        }
+
+        return Response.json({ error: "User not found" }, { status: 404 });
     } catch (error) {
         return Response.json({ error: error.message || "Failed to fetch profile" }, { status: 500 });
     }

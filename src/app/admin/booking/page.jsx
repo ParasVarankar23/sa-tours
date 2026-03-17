@@ -24,6 +24,11 @@ export default function BookingPage() {
   const [bookings, setBookings] = useState({});
   const [bookingForm, setBookingForm] = useState({ name: "", phone: "", email: "", pickup: "", pickupTime: "", drop: "", dropTime: "" });
   const [editingSeat, setEditingSeat] = useState(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState(null);
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(() => async () => { });
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -508,23 +513,30 @@ export default function BookingPage() {
 
                         {editingSeat && (
                           <button
-                            onClick={async () => {
-                              // confirm cancel booking
-                              if (!confirm(`Are you sure you want to cancel booking for seat ${editingSeat}? This will delete the booking record and notify the passenger via email.`)) return;
-                              try {
-                                const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${editingSeat}`, { method: "DELETE" });
-                                const data = await res.json();
-                                if (!res.ok) throw new Error(data.error || "Cancel failed");
-                                showAppToast("success", data.message || "Booking cancelled and notification sent");
-                                setSelectedSeats([]);
-                                setBookingForm({ name: "", phone: "", email: "", pickup: "", pickupTime: "", drop: "", dropTime: "" });
-                                setEditingSeat(null);
-                                await fetchBookings();
-                              } catch (err) {
-                                console.error(err);
-                                showAppToast("error", err.message || "Cancel failed");
-                              }
+                            onClick={() => {
+                              // open confirm modal and set the action
+                              const seat = editingSeat;
+                              setConfirmMessage(`Are you sure you want to cancel booking for seat ${seat}? This will delete the booking record and notify the passenger via email.`);
+                              setConfirmTarget(seat);
+                              setConfirmAction(() => async () => {
+                                try {
+                                  const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${seat}`, { method: "DELETE" });
+                                  const data = await res.json();
+                                  if (!res.ok) throw new Error(data.error || "Cancel failed");
+                                  showAppToast("success", data.message || "Booking cancelled and notification sent");
+                                  setSelectedSeats([]);
+                                  setBookingForm({ name: "", phone: "", email: "", pickup: "", pickupTime: "", drop: "", dropTime: "" });
+                                  setEditingSeat(null);
+                                  await fetchBookings();
+                                } catch (err) {
+                                  console.error(err);
+                                  showAppToast("error", err.message || "Cancel failed");
+                                  throw err;
+                                }
+                              });
+                              setConfirmOpen(true);
                             }}
+                            disabled={confirmOpen}
                             className="rounded-xl border border-red-200 px-4 py-2 text-red-600"
                           >
                             Cancel Booking
@@ -559,19 +571,26 @@ export default function BookingPage() {
                                 Edit
                               </button>
                               <button
-                                onClick={async () => {
-                                  if (!confirm(`Are you sure you want to cancel booking for seat ${seat}? This will delete the booking record and notify the passenger via email.`)) return;
-                                  try {
-                                    const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${seat}`, { method: "DELETE" });
-                                    const data = await res.json();
-                                    if (!res.ok) throw new Error(data.error || "Cancel failed");
-                                    showAppToast("success", data.message || "Booking cancelled and notification sent");
-                                    await fetchBookings();
-                                  } catch (err) {
-                                    console.error(err);
-                                    showAppToast("error", err.message || "Cancel failed");
-                                  }
+                                onClick={() => {
+                                  const s = seat;
+                                  setConfirmMessage(`Are you sure you want to cancel booking for seat ${s}? This will delete the booking record and notify the passenger via email.`);
+                                  setConfirmTarget(s);
+                                  setConfirmAction(() => async () => {
+                                    try {
+                                      const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`, { method: "DELETE" });
+                                      const data = await res.json();
+                                      if (!res.ok) throw new Error(data.error || "Cancel failed");
+                                      showAppToast("success", data.message || "Booking cancelled and notification sent");
+                                      await fetchBookings();
+                                    } catch (err) {
+                                      console.error(err);
+                                      showAppToast("error", err.message || "Cancel failed");
+                                      throw err;
+                                    }
+                                  });
+                                  setConfirmOpen(true);
                                 }}
+                                disabled={confirmOpen}
                                 className="rounded-xl border border-red-200 px-3 py-1 text-sm text-red-600"
                               >
                                 Cancel
@@ -587,6 +606,31 @@ export default function BookingPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* Confirm modal for cancel actions */}
+      {confirmOpen && (
+        <ConfirmModal
+          message={confirmMessage}
+          loading={confirmLoading}
+          onCancel={() => {
+            if (confirmLoading) return;
+            setConfirmOpen(false);
+            setConfirmTarget(null);
+          }}
+          onConfirm={async () => {
+            if (confirmLoading) return;
+            setConfirmLoading(true);
+            try {
+              await confirmAction();
+            } catch (e) {
+              // confirmAction already handled toasts/logs
+            } finally {
+              setConfirmLoading(false);
+              setConfirmOpen(false);
+              setConfirmTarget(null);
+            }
+          }}
+        />
       )}
     </div>
   );
@@ -623,6 +667,40 @@ function InfoCard({ icon, label, value }) {
         </p>
       </div>
       <p className="text-sm font-medium text-slate-800">{value}</p>
+    </div>
+  );
+}
+
+function ConfirmModal({ message, onCancel, onConfirm, loading }) {
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+        <h3 className="text-lg font-bold text-slate-900">Confirm action</h3>
+        <p className="mt-3 text-sm text-slate-600">{message}</p>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="rounded-xl border px-4 py-2 text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            {loading ? (
+              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            ) : null}
+            Confirm
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
