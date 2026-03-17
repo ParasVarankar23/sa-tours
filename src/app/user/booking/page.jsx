@@ -25,7 +25,11 @@ export default function UserBookingPage() {
         async function load() {
             try {
                 setLoading(true);
-                if (!busId) return setBus(null);
+                if (!busId) {
+                    // no bus selected — redirect user to buses listing
+                    router.push("/user/buses");
+                    return;
+                }
                 const res = await fetch(`/api/bus`);
                 const json = await res.json();
                 const found = (json.buses || []).find((b) => b.busId === busId);

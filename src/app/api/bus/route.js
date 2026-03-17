@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebaseAdmin";
+import { getAdminDb } from "../../../lib/firebaseAdmin";
 
 function generateBusId() {
     return `BUS_${Date.now()}`;

@@ -48,6 +48,8 @@ export default function AdminBookingPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState("All");
     const [cancelledFirst, setCancelledFirst] = useState(false);
+    const [selectedBusId, setSelectedBusId] = useState("");
+    const [travelDateFilter, setTravelDateFilter] = useState(new Date().toISOString().slice(0, 10));
     const [currentPage, setCurrentPage] = useState(1);
 
     const [showAddModal, setShowAddModal] = useState(false);
@@ -100,8 +102,10 @@ export default function AdminBookingPage() {
                     .includes(term);
 
             const matchesStatus = statusFilter === "All" || booking.status === statusFilter;
+            const matchesBus = !selectedBusId || booking.busId === selectedBusId;
+            const matchesDate = !travelDateFilter || String(booking.travelDate) === String(travelDateFilter);
 
-            return matchesSearch && matchesStatus;
+            return matchesSearch && matchesStatus && matchesBus && matchesDate;
         });
 
         if (cancelledFirst) {
@@ -113,7 +117,7 @@ export default function AdminBookingPage() {
         }
 
         return list;
-    }, [bookingList, searchTerm, statusFilter, cancelledFirst]);
+    }, [bookingList, searchTerm, statusFilter, cancelledFirst, selectedBusId, travelDateFilter]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -125,6 +129,32 @@ export default function AdminBookingPage() {
         const start = (currentPage - 1) * ITEMS_PER_PAGE;
         return filteredBookings.slice(start, start + ITEMS_PER_PAGE);
     }, [filteredBookings, currentPage]);
+
+    const selectedBus = useMemo(() => busList.find((b) => b.busId === selectedBusId) || null, [busList, selectedBusId]);
+
+    const bookedSeatsForSelected = useMemo(() => {
+        if (!selectedBusId || !travelDateFilter) return [];
+        return bookingList
+            .filter((b) => b.busId === selectedBusId && String(b.travelDate) === String(travelDateFilter))
+            .map((b) => String(b.seatNumber));
+    }, [bookingList, selectedBusId, travelDateFilter]);
+
+    const adminHandleSeatSelect = (seat) => {
+        // prefill add booking form and open modal
+        if (!selectedBus) return showAppToast("error", "Select a bus first");
+        setFormData((prev) => ({
+            ...prev,
+            busId: selectedBus.busId,
+            busNumber: selectedBus.busNumber,
+            busName: selectedBus.busName,
+            routeName: selectedBus.routeName,
+            travelDate: travelDateFilter || selectedBus.travelDate,
+            startTime: selectedBus.startTime,
+            endTime: selectedBus.endTime,
+            seatNumber: seat,
+        }));
+        setShowAddModal(true);
+    };
 
     const stats = useMemo(() => {
         return {
@@ -427,6 +457,25 @@ export default function AdminBookingPage() {
                                 />
                             </div>
 
+                            <div className="relative w-full sm:w-[220px]">
+                                <BusFront className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <select
+                                    value={selectedBusId}
+                                    onChange={(e) => setSelectedBusId(e.target.value)}
+                                    className="w-full appearance-none rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm outline-none transition focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
+                                >
+                                    <option value="">All Buses</option>
+                                    {busList.map((b) => (
+                                        <option key={b.busId} value={b.busId}>{`${b.busNumber} | ${b.routeName} | ${b.travelDate || ''}`}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="relative w-full sm:w-[160px]">
+                                <label className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">📅</label>
+                                <input type="date" value={travelDateFilter} onChange={(e) => setTravelDateFilter(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm outline-none" />
+                            </div>
+
                             <div className="relative w-full sm:w-[180px]">
                                 <Filter className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                                 <div className="flex items-center gap-3">
@@ -457,6 +506,23 @@ export default function AdminBookingPage() {
                 </div>
 
                 <div className="overflow-x-auto">
+                    <div className="p-4 border-b border-slate-100 bg-white">
+                        {selectedBus ? (
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <h4 className="text-lg font-semibold">{selectedBus.busNumber} • {selectedBus.busName}</h4>
+                                    <p className="text-sm text-slate-500">{selectedBus.routeName} • {selectedBus.startTime} → {selectedBus.endTime}</p>
+                                    <p className="text-sm text-slate-500 mt-2">Showing layout for {travelDateFilter}</p>
+                                </div>
+
+                                <div className="w-1/3">
+                                    <SeatLayout layout={selectedBus.seatLayout || 32} bookedSeats={bookedSeatsForSelected} selectedSeat={""} onSelect={adminHandleSeatSelect} />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-sm text-slate-500">Select a bus and date to view seat layout and quick book seats.</div>
+                        )}
+                    </div>
                     <table className="min-w-full">
                         <thead className="bg-slate-50">
                             <tr>
