@@ -2,39 +2,57 @@
 "use client";
 
 import {
-    BookOpen,
     CalendarDays,
-    CreditCard,
     GraduationCap,
     LayoutDashboard,
     Settings,
     ShieldCheck,
-    Users,
     Bus,
     X,
-} from "lucide-react";
+    BusFront,
+    Ticket,
+    ReceiptText,
+    UserCog,
+    Route,
+    UserCircle2,
+    Bell,
+} from "lucide-react";;
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const roleLinks = {
     admin: [
         { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-        { href: "/admin/staff", label: "Staff Access", icon: Users },
+        { href: "/admin/staff", label: "Staff Access", icon: UserCog },
+        { href: "/admin/bus", label: "Buses", icon: BusFront },
+        { href: "/admin/booking", label: "Booking", icon: Ticket },
+        { href: "/admin/payment", label: "Payment History", icon: ReceiptText },
+        { href: "/admin/notifications", label: "Notifications", icon: Bell },
         { href: "/schedule", label: "Schedule", icon: CalendarDays },
-        { href: "/routes", label: "Routes", icon: BookOpen },
+        { href: "/routes", label: "Routes", icon: Route },
         { href: "/settings", label: "Settings", icon: Settings },
     ],
+
     staff: [
         { href: "/staff-portal", label: "Staff Panel", icon: ShieldCheck },
+        { href: "/staff/bus", label: "View Bus", icon: BusFront },
+        { href: "/staff/booking", label: "View Booking", icon: Ticket },
+        { href: "/staff/payment", label: "View Payment History", icon: ReceiptText },
+        { href: "/staff/notifications", label: "Notifications", icon: Bell },
         { href: "/schedule", label: "Schedule", icon: CalendarDays },
-        { href: "/routes", label: "Routes", icon: BookOpen },
+        { href: "/routes", label: "Routes", icon: Route },
         { href: "/settings", label: "Settings", icon: Settings },
     ],
+
     user: [
         { href: "/user", label: "User Home", icon: GraduationCap },
+        { href: "/user/bus", label: "View Bus", icon: BusFront },
+        { href: "/user/booking", label: "View Booking", icon: Ticket },
+        { href: "/user/payment", label: "View Payment History", icon: ReceiptText },
+        { href: "/user/notifications", label: "Notifications", icon: Bell },
         { href: "/schedule", label: "Schedule", icon: CalendarDays },
-        { href: "/routes", label: "Routes", icon: BookOpen },
-        { href: "/profile", label: "Profile", icon: CreditCard },
+        { href: "/routes", label: "Routes", icon: Route },
+        { href: "/profile", label: "Profile", icon: UserCircle2 },
         { href: "/settings", label: "Settings", icon: Settings },
     ],
 };
@@ -49,6 +67,17 @@ function formatRole(role) {
 function SidebarContent({ role, pathname, onClose }) {
     const links = roleLinks[role] || roleLinks.user;
 
+    // Find most specific active match
+    const matching = links.filter((item) => {
+        if (pathname === item.href) return true;
+        if (item.href !== "/" && pathname.startsWith(item.href + "/")) return true;
+        return false;
+    });
+
+    const mostSpecificHref = matching.length
+        ? matching.reduce((a, b) => (b.href.length > a.href.length ? b : a)).href
+        : null;
+
     return (
         <div className="flex h-full flex-col">
             {/* Header */}
@@ -60,8 +89,12 @@ function SidebarContent({ role, pathname, onClose }) {
                         </div>
 
                         <div className="min-w-0">
-                            <h2 className="truncate text-lg font-bold text-slate-900">SA Tours</h2>
-                            <p className="truncate text-xs text-slate-500">SA Tours & Travels</p>
+                            <h2 className="truncate text-lg font-bold text-slate-900">
+                                SA Tours
+                            </h2>
+                            <p className="truncate text-xs text-slate-500">
+                                SA Tours & Travels
+                            </p>
                         </div>
                     </div>
 
@@ -72,6 +105,14 @@ function SidebarContent({ role, pathname, onClose }) {
                     >
                         <X size={18} />
                     </button>
+                </div>
+            </div>
+
+            {/* Role Badge */}
+            <div className="px-4 pt-4">
+                <div className="inline-flex items-center gap-2 rounded-2xl bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-600 ring-1 ring-orange-100">
+                    <ShieldCheck size={14} />
+                    {formatRole(role)} Access
                 </div>
             </div>
 
@@ -86,9 +127,7 @@ function SidebarContent({ role, pathname, onClose }) {
                 <nav className="space-y-1.5">
                     {links.map((item) => {
                         const Icon = item.icon;
-                        const active =
-                            pathname === item.href ||
-                            (item.href !== "/" && pathname.startsWith(item.href + "/"));
+                        const active = mostSpecificHref === item.href;
 
                         return (
                             <Link
@@ -121,8 +160,11 @@ function SidebarContent({ role, pathname, onClose }) {
             </div>
 
             {/* Footer */}
-            <div className="border-t border-slate-200 p-4 text-xs text-slate-500">
-                © 2026 SA Tours
+            <div className="border-t border-slate-200 p-4">
+                <div className="rounded-2xl bg-slate-50 px-3 py-3 text-xs text-slate-500">
+                    <p className="font-medium text-slate-700">© 2026 SA Tours</p>
+                    <p className="mt-1">Travel dashboard management system</p>
+                </div>
             </div>
         </div>
     );

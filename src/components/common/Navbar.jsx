@@ -197,7 +197,7 @@ export default function Navbar({
 
                                 <div className="min-w-0">
                                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-500 sm:text-xs">
-                                        SA Tours Dashboard
+                                        SA Tours & Travels
                                     </p>
 
                                     <p className="mt-1 truncate text-sm font-medium text-slate-600 sm:text-base">
