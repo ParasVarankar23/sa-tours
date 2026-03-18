@@ -55,6 +55,7 @@ export async function POST(req) {
         if (!schedSnap.exists() || !schedSnap.val().available) {
             return NextResponse.json({ success: false, error: "Bus is not scheduled/available on this date" }, { status: 400 });
         }
+        const schedVal = schedSnap.exists() ? schedSnap.val() || {} : {};
 
         // if pickupTime or dropTime missing, try to fetch from bus stops
         let resolvedPickupTime = pickupTime;
@@ -75,6 +76,53 @@ export async function POST(req) {
             }
         } catch (err) {
             console.warn("Failed to resolve pickup/drop times from bus record:", err.message || err);
+        }
+
+        // Enforce terminal-based booking restrictions if schedule has pricingOverride.terminals
+        try {
+            const scheduleTerminals = (schedVal && schedVal.pricingOverride && schedVal.pricingOverride.terminals) || null;
+            if (scheduleTerminals && (pickup || drop)) {
+                // load bus stops order (prefer schedule.stops if present)
+                let busSnap2 = await db.ref(`schedules/${busId}/${date}/stops`).once("value");
+                let stops = null;
+                if (busSnap2.exists()) {
+                    stops = busSnap2.val() || [];
+                } else {
+                    const busSnap = await db.ref(`buses/${busId}/stops`).once("value");
+                    stops = busSnap.exists() ? busSnap.val() : [];
+                }
+
+                const stopNames = Array.isArray(stops) ? stops.map((s) => (typeof s === "string" ? s : s.stopName)) : [];
+                const idxPickup = pickup ? stopNames.indexOf(pickup) : -1;
+                const idxDrop = drop ? stopNames.indexOf(drop) : -1;
+
+                if ((pickup && idxPickup === -1) || (drop && idxDrop === -1)) {
+                    // if stops are not found, skip terminal enforcement (conservative)
+                } else if (idxPickup !== -1 && idxDrop !== -1) {
+                    // determine direction
+                    if (idxDrop > idxPickup) {
+                        // forward direction: drop must be <= forward terminal index
+                        const f = scheduleTerminals.forward || null;
+                        if (f) {
+                            const fIdx = stopNames.indexOf(f);
+                            if (fIdx !== -1 && idxDrop > fIdx) {
+                                return NextResponse.json({ success: false, error: `Invalid drop: exceeds forward terminal (${f})` }, { status: 400 });
+                            }
+                        }
+                    } else if (idxDrop < idxPickup) {
+                        // reverse direction: drop must be >= return terminal index
+                        const r = scheduleTerminals.return || null;
+                        if (r) {
+                            const rIdx = stopNames.indexOf(r);
+                            if (rIdx !== -1 && idxDrop < rIdx) {
+                                return NextResponse.json({ success: false, error: `Invalid drop: before return terminal (${r})` }, { status: 400 });
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("Terminal enforcement check failed:", e && e.message ? e.message : e);
         }
 
         const seatRef = db.ref(`bookings/${date}/${busId}/${seatNo}`);
@@ -99,6 +147,17 @@ export async function POST(req) {
             updatedAt: now,
             status: "booked",
         };
+        // optional fare field
+        if (body.fare !== undefined && body.fare !== null) {
+            payload.fare = Number(body.fare) || 0;
+        }
+        // optional payment fields
+        if (body.payment !== undefined && body.payment !== null) {
+            payload.payment = String(body.payment || "").trim();
+        }
+        if (body.paymentMethod !== undefined && body.paymentMethod !== null) {
+            payload.paymentMethod = String(body.paymentMethod || "").trim();
+        }
 
         await seatRef.set(payload);
 

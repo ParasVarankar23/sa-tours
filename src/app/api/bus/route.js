@@ -163,6 +163,18 @@ export async function POST(req) {
             seatLayout: String(body.seatLayout).trim(),
             stops: sanitizeStops(body.stops),
             cabins: sanitizeCabins(body.cabins),
+            pricingRules: (function () {
+                try {
+                    const pr = body.pricingRules || null;
+                    if (!pr) return null;
+                    const exact = pr.exactFareMap && typeof pr.exactFareMap === 'object' ? pr.exactFareMap : {};
+                    const seasonInc = pr.seasonIncrement !== undefined && pr.seasonIncrement !== null ? Number(pr.seasonIncrement) : undefined;
+                    const out = {};
+                    if (Object.keys(exact).length) out.exactFareMap = exact;
+                    if (!Number.isNaN(seasonInc) && seasonInc !== undefined) out.seasonIncrement = seasonInc;
+                    return Object.keys(out).length ? out : null;
+                } catch (e) { return null; }
+            })(),
             createdAt: now,
             updatedAt: now,
         };
@@ -259,6 +271,18 @@ export async function PUT(req) {
             seatLayout: String(body.seatLayout).trim(),
             stops: sanitizeStops(body.stops),
             cabins: sanitizeCabins(body.cabins),
+            pricingRules: (function () {
+                try {
+                    const pr = body.pricingRules || null;
+                    if (!pr) return null;
+                    const exact = pr.exactFareMap && typeof pr.exactFareMap === 'object' ? pr.exactFareMap : {};
+                    const seasonInc = pr.seasonIncrement !== undefined && pr.seasonIncrement !== null ? Number(pr.seasonIncrement) : undefined;
+                    const out = {};
+                    if (Object.keys(exact).length) out.exactFareMap = exact;
+                    if (!Number.isNaN(seasonInc) && seasonInc !== undefined) out.seasonIncrement = seasonInc;
+                    return Object.keys(out).length ? out : null;
+                } catch (e) { return null; }
+            })(),
             updatedAt: new Date().toISOString(),
         };
 

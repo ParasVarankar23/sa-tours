@@ -38,3 +38,31 @@ export function getAdminAuth() {
 export function getAdminDb() {
     return admin.database(getAdminApp());
 }
+
+// Verify an incoming bearer token. Supports either a Firebase ID token
+// (verified using Admin SDK) or the server JWT (signed with JWT_SECRET).
+// Returns an object with at least { uid, role } on success, or throws on failure.
+export async function verifyAuthToken(token) {
+    if (!token) throw new Error('no-token');
+
+    // Try Firebase ID token first
+    try {
+        const decoded = await getAdminAuth().verifyIdToken(token);
+        // decoded may include uid and role (if custom claims); normalize
+        return { uid: decoded.uid || decoded.user_id || null, role: decoded.role || decoded.roles || null, raw: decoded };
+    } catch (e) {
+        // ignore and try JWT
+    }
+
+    // Try server JWT (signed with JWT_SECRET)
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) throw new Error('no-jwt-secret');
+    try {
+        const jwt = await import('jsonwebtoken');
+        const decoded = jwt.verify(token, jwtSecret);
+        // server tokens use `user_id` and `role`
+        return { uid: decoded.user_id || decoded.uid || null, role: decoded.role || null, raw: decoded };
+    } catch (e) {
+        throw new Error('invalid-token');
+    }
+}

@@ -2,6 +2,7 @@
 
 import SeatLayout from "@/components/SeatLayout";
 import { showAppToast } from "@/lib/client/toast";
+import { calculateFare } from "@/lib/pricing";
 import {
   BusFront,
   CalendarDays,
@@ -12,7 +13,9 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../../../hooks/useAuth";
 
 export default function BookingPage() {
   const [date, setDate] = useState("");
@@ -30,6 +33,11 @@ export default function BookingPage() {
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState(() => async () => { });
+  const { user } = useAuth();
+  const router = useRouter();
+  const [computedFare, setComputedFare] = useState(null);
+  const [blockModalOpen, setBlockModalOpen] = useState(false);
+  const [blockDetails, setBlockDetails] = useState({ name: "", phone: "", email: "", note: "" });
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -75,14 +83,26 @@ export default function BookingPage() {
       if (!res.ok) throw new Error(data.error || "Failed to load bookings");
       // sanitize bookings: ensure each seat entry is an object and ignore invalid seat keys (e.g. "0")
       const raw = data.bookings || {};
-      const entries = Object.entries(raw).filter(([k]) => {
+      const entries = Object.entries(raw).filter(([k, v]) => {
         if (!/^[0-9]+$/.test(k)) return false;
         const n = Number(k);
         if (n < 1) {
           console.warn(`Ignoring invalid booking seat key: ${k}`);
           return false;
         }
-        return true;
+        if (!v || typeof v !== "object") return false;
+
+        // Ignore empty booking nodes that have no meaningful data
+        const hasMeaningful = Boolean(
+          (v.name && String(v.name).trim()) ||
+          (v.phone && String(v.phone).trim()) ||
+          (v.email && String(v.email).trim()) ||
+          v.status ||
+          v.blockedInfo ||
+          v.payment ||
+          v.fare
+        );
+        return hasMeaningful;
       });
       const safe = Object.fromEntries(
         entries.map(([k, v]) => [k, v && typeof v === "object" ? v : {}])
@@ -98,6 +118,32 @@ export default function BookingPage() {
     fetchBookings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBus, date]);
+
+  useEffect(() => {
+    if (!selectedBus || !bookingForm.pickup || !bookingForm.drop) {
+      setComputedFare(null);
+      return;
+    }
+    try {
+      const busForPricing = { ...(selectedBus || {}) };
+      const sched = (schedules && schedules[selectedBus.busId] && schedules[selectedBus.busId][date]) || null;
+      if (sched && sched.pricingOverride) {
+        busForPricing.pricingRules = { ...(selectedBus.pricingRules || {}), ...(sched.pricingOverride || {}) };
+      }
+      const season = !!(sched && sched.season);
+      const res = calculateFare({ bus: busForPricing, fromStop: bookingForm.pickup, toStop: bookingForm.drop, busType: selectedBus.busType || "AC", season });
+      setComputedFare(res && res.fare ? res.fare : 0);
+    } catch (e) {
+      setComputedFare(null);
+    }
+  }, [bookingForm.pickup, bookingForm.drop, selectedBus, date, schedules]);
+
+  // helper: get schedule terminals for selected bus/date
+  const scheduleTerminals = useMemo(() => {
+    if (!selectedBus || !date) return null;
+    const sched = (schedules && schedules[selectedBus.busId] && schedules[selectedBus.busId][date]) || null;
+    return (sched && sched.pricingOverride && sched.pricingOverride.terminals) || null;
+  }, [selectedBus, date, schedules]);
 
   const availableBuses = useMemo(() => {
     if (!date) return [];
@@ -281,16 +327,29 @@ export default function BookingPage() {
           <div className="max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
             {/* Modal Header */}
             <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-3xl border-b border-slate-200 bg-white px-6 py-4">
-              <div>
+              <div className="flex items-center gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#f97316]">
                   SEAT LAYOUT VIEW
                 </p>
-                <h2 className="mt-1 text-xl font-bold text-slate-900">
-                  {selectedBus.busNumber} — {selectedBus.routeName}
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {selectedBus.startPoint} → {selectedBus.endPoint} • {selectedBus.startTime} → {selectedBus.endTime}
-                </p>
+                <div>
+                  <h2 className="mt-1 text-xl font-bold text-slate-900">
+                    {selectedBus.busNumber} — {selectedBus.routeName}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {selectedBus.startPoint} → {selectedBus.endPoint} • {selectedBus.startTime} → {selectedBus.endTime}
+                  </p>
+                </div>
+                <div>
+                  <button
+                    onClick={() => {
+                      // navigate to schedule admin for quick fare edits
+                      router.push(`/admin/schedule?busId=${encodeURIComponent(selectedBus.busId)}&date=${encodeURIComponent(date)}`);
+                    }}
+                    className="ml-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Manage Route / Edit Fare
+                  </button>
+                </div>
               </div>
 
               <button
@@ -355,6 +414,56 @@ export default function BookingPage() {
                       });
                     }}
                   />
+                  {/* Admin controls: block/unblock seats and mark offline payment */}
+                  {user && (user.role === "admin" || user.role === "owner") && (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const seats = editingSeat ? [editingSeat] : selectedSeats;
+                          if (!seats || seats.length === 0) return showAppToast("error", "Select seats to block");
+                          setBlockDetails({ name: "", phone: "", email: "", note: "" });
+                          setBlockModalOpen(true);
+                        }}
+                        className="rounded-xl bg-yellow-500 px-3 py-2 text-white text-sm"
+                      >
+                        Block Selected Seats
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          const seats = editingSeat ? [editingSeat] : selectedSeats;
+                          if (!seats || seats.length === 0) return showAppToast("error", "Select seats to unblock");
+                          try {
+                            const token = localStorage.getItem('authToken');
+                            if (!token) return showAppToast('error', 'Unauthorized — please login as admin');
+
+                            const res = await fetch(`/api/admin/block-seats`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ busId: selectedBus.busId, date, seats, action: "unblock" }),
+                            });
+                            const data = await res.json();
+                            if (!res.ok) {
+                              if (res.status === 401) return showAppToast('error', 'Unauthorized — invalid/expired token. Please login again.');
+                              if (res.status === 403) return showAppToast('error', 'Forbidden — admin access required');
+                              throw new Error(data.error || "Unblock failed");
+                            }
+                            showAppToast("success", "Seats unblocked");
+                            await fetchBookings();
+                            setSelectedSeats([]);
+                          } catch (e) {
+                            console.error(e);
+                            showAppToast("error", e.message || "Unblock failed");
+                          }
+                        }}
+                        className="rounded-xl border px-3 py-2 text-sm"
+                      >
+                        Unblock Selected Seats
+                      </button>
+
+                      {/* Removed unused 'Mark Selected as Paid (Offline)' button per request */}
+                    </div>
+                  )}
                 </div>
 
                 {/* Booking form & existing bookings */}
@@ -441,9 +550,30 @@ export default function BookingPage() {
                             disabled={!editingSeat && selectedSeats.length === 0}
                           >
                             <option value="">Select drop</option>
-                            {(selectedBus.stops || []).map((s, i) => (
-                              <option key={i} value={s.stopName || s}>{s.stopName || s}</option>
-                            ))}
+                            {(() => {
+                              const stops = selectedBus.stops || [];
+                              const stopNames = stops.map((s) => (s.stopName || s));
+                              const pickupIdx = bookingForm.pickup ? stopNames.indexOf(bookingForm.pickup) : -1;
+                              const forward = scheduleTerminals ? scheduleTerminals.forward : null;
+                              const ret = scheduleTerminals ? scheduleTerminals.return : null;
+                              const forwardIdx = forward ? stopNames.indexOf(forward) : -1;
+                              const returnIdx = ret ? stopNames.indexOf(ret) : -1;
+
+                              return stopNames.map((name, i) => {
+                                let allowed = true;
+                                if (pickupIdx !== -1) {
+                                  if (i > pickupIdx) {
+                                    // forward direction: ensure not beyond forward terminal
+                                    if (forwardIdx !== -1 && i > forwardIdx) allowed = false;
+                                  } else if (i < pickupIdx) {
+                                    // reverse direction: ensure not before return terminal
+                                    if (returnIdx !== -1 && i < returnIdx) allowed = false;
+                                  }
+                                }
+                                if (!allowed) return null;
+                                return <option key={i} value={name}>{name}</option>;
+                              });
+                            })()}
                           </select>
 
                           <input
@@ -461,6 +591,14 @@ export default function BookingPage() {
                         <div className="text-sm text-slate-500">Selected Seat(s):</div>
                         <div className="font-semibold">{(editingSeat ? [editingSeat] : selectedSeats).length ? (editingSeat ? editingSeat : selectedSeats.join(", ")) : "—"}</div>
                       </div>
+
+                      {/* Fare summary: show per-seat fare and total when pickup/drop selected */}
+                      {(computedFare !== null && (Number(computedFare) || 0) >= 0) && ((editingSeat ? 1 : selectedSeats.length) > 0) && (
+                        <div className="mt-2 flex items-center gap-6">
+                          <div className="text-sm text-slate-600">Fare <span className="font-semibold">₹{(Number(computedFare) || 0).toFixed(2)}</span></div>
+                          <div className="text-sm text-slate-700">Total: <span className="text-lg font-bold">₹{((Number(computedFare) || 0) * (editingSeat ? 1 : selectedSeats.length)).toFixed(2)}</span></div>
+                        </div>
+                      )}
 
                       <div className="flex gap-2">
                         <button
@@ -488,6 +626,7 @@ export default function BookingPage() {
                                   drop: bookingForm.drop,
                                   dropTime: bookingForm.dropTime || "",
                                 };
+                                if (computedFare !== null) payload.fare = Number(computedFare) || 0;
 
                                 const method = editingSeat ? "PUT" : "POST";
                                 const res = await fetch("/api/booking", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -509,10 +648,174 @@ export default function BookingPage() {
                               showAppToast("error", err.message || "Booking failed");
                             }
                           }}
-                          className="rounded-xl bg-[#059669] px-4 py-2 text-white"
+                          className={editingSeat ? "rounded-xl bg-[#059669] px-4 py-2 text-white" : "hidden"}
                         >
                           {editingSeat ? "Update Booking" : "Create Booking"}
                         </button>
+
+                        {/* When not editing, show Online and Offline booking actions */}
+                        {!editingSeat && (
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={async () => {
+                                // Online booking via Razorpay (admin)
+                                const seats = selectedSeats;
+                                if (!seats || seats.length === 0) return showAppToast('error', 'Select at least one seat to book');
+                                if (!bookingForm.name || !bookingForm.phone) return showAppToast('error', 'Provide name and phone');
+
+                                try {
+                                  const bookingsPayload = seats.map((seatNo) => {
+                                    const payload = {
+                                      busId: selectedBus.busId,
+                                      busNumber: selectedBus.busNumber || "",
+                                      startTime: selectedBus.startTime || "",
+                                      endTime: selectedBus.endTime || "",
+                                      date,
+                                      seatNo,
+                                      name: bookingForm.name,
+                                      phone: bookingForm.phone,
+                                      email: bookingForm.email,
+                                      pickup: bookingForm.pickup,
+                                      pickupTime: bookingForm.pickupTime || "",
+                                      drop: bookingForm.drop,
+                                      dropTime: bookingForm.dropTime || "",
+                                    };
+                                    if (computedFare !== null) payload.fare = Number(computedFare) || 0;
+                                    return payload;
+                                  });
+
+                                  const totalAmount = bookingsPayload.reduce((s, b) => s + (Number(b.fare) || 0), 0);
+                                  if (!totalAmount || totalAmount <= 0) return showAppToast('error', 'Invalid fare amount');
+
+                                  const orderRes = await fetch('/api/public/create-razorpay-order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: totalAmount, currency: 'INR' }) });
+                                  const orderData = await orderRes.json();
+                                  if (!orderRes.ok) throw new Error(orderData.error || 'Failed to create payment order');
+                                  const order = orderData.order;
+                                  const publicKey = orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
+                                  if (!publicKey) {
+                                    console.error('Razorpay public key missing from create-order response', orderData);
+                                    showAppToast('error', 'Payment initialization failed: missing Razorpay key. Set NEXT_PUBLIC_RAZORPAY_KEY_ID or configure server to return it.');
+                                    return;
+                                  }
+
+                                  const loaded = await new Promise((resolve) => {
+                                    if (typeof window === 'undefined') return resolve(false);
+                                    if (window.Razorpay) return resolve(true);
+                                    const s = document.createElement('script');
+                                    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+                                    s.onload = () => resolve(true);
+                                    s.onerror = () => resolve(false);
+                                    document.body.appendChild(s);
+                                  });
+                                  if (!loaded) throw new Error('Failed to load payment gateway');
+
+                                  const options = {
+                                    key: publicKey,
+                                    amount: order.amount,
+                                    currency: order.currency || 'INR',
+                                    name: 'SA Tours',
+                                    description: 'Booking payment',
+                                    order_id: order.id,
+                                    handler: async function (resp) {
+                                      try {
+                                        const vRes = await fetch('/api/public/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId: resp.razorpay_payment_id, orderId: resp.razorpay_order_id, signature: resp.razorpay_signature, amount: totalAmount, currency: 'INR' }) });
+                                        const vData = await vRes.json();
+                                        if (!vRes.ok) throw new Error(vData.error || 'Payment verification failed');
+                                        const paymentRecord = vData.payment || {};
+                                        const paymentId = paymentRecord.id || paymentRecord.paymentId || resp.razorpay_payment_id;
+
+                                        // create bookings attaching payment
+                                        const results = [];
+                                        for (const payload of bookingsPayload) {
+                                          const withPayment = { ...payload, payment: paymentId, paymentMethod: 'razorpay' };
+                                          const bRes = await fetch('/api/booking', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withPayment) });
+                                          const bData = await bRes.json();
+                                          results.push({ ok: bRes.ok, data: bData });
+                                        }
+                                        const failed = results.find((r) => !r.ok);
+                                        if (failed) throw new Error(failed.data?.error || 'Failed to create booking after payment');
+
+                                        showAppToast('success', 'Payment successful and bookings created');
+                                        await fetchBookings();
+                                        setSelectedSeats([]);
+                                        setBookingForm({ name: '', phone: '', email: '', pickup: '', pickupTime: '', drop: '', dropTime: '' });
+                                      } catch (err) {
+                                        console.error(err);
+                                        showAppToast('error', err.message || 'Payment succeeded but booking failed');
+                                      }
+                                    },
+                                    modal: { ondismiss: function () { showAppToast('info', 'Payment cancelled'); } }
+                                  };
+
+                                  const rzp = new window.Razorpay(options);
+                                  rzp.open();
+                                } catch (err) {
+                                  console.error(err);
+                                  showAppToast('error', err.message || 'Online booking failed');
+                                }
+                              }}
+                              className="rounded-xl bg-[#0ea5a4] px-4 py-2 text-white"
+                            >
+                              Online Booking
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                // Offline (cash) booking: create bookings then record offline payment
+                                const seats = selectedSeats;
+                                if (!seats || seats.length === 0) return showAppToast('error', 'Select at least one seat to book');
+                                if (!bookingForm.name || !bookingForm.phone) return showAppToast('error', 'Provide name and phone');
+                                try {
+                                  const created = [];
+                                  for (const seatNo of seats) {
+                                    const payload = {
+                                      busId: selectedBus.busId,
+                                      busNumber: selectedBus.busNumber || "",
+                                      startTime: selectedBus.startTime || "",
+                                      endTime: selectedBus.endTime || "",
+                                      date,
+                                      seatNo,
+                                      name: bookingForm.name,
+                                      phone: bookingForm.phone,
+                                      email: bookingForm.email,
+                                      pickup: bookingForm.pickup,
+                                      pickupTime: bookingForm.pickupTime || "",
+                                      drop: bookingForm.drop,
+                                      dropTime: bookingForm.dropTime || "",
+                                    };
+                                    if (computedFare !== null) payload.fare = Number(computedFare) || 0;
+
+                                    const res = await fetch('/api/booking', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                                    const data = await res.json();
+                                    if (!res.ok) throw new Error(data.error || 'Failed to create booking');
+                                    created.push({ seat: seatNo, booking: data.booking || null });
+                                  }
+
+                                  // Now create offline payment and attach for each created booking
+                                  const token = localStorage.getItem('authToken');
+                                  for (const c of created) {
+                                    const bookingMeta = { booking: { date, busId: selectedBus.busId, seatNo: c.seat } };
+                                    const payload = { amount: Number(computedFare) || 0, currency: 'INR', userId: null, metadata: bookingMeta, note: 'Cash collected by admin' };
+                                    const pRes = await fetch('/api/admin/offline-payment', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) });
+                                    const pData = await pRes.json();
+                                    if (!pRes.ok) console.warn('offline payment attach failed', pData);
+                                  }
+
+                                  showAppToast('success', 'Offline bookings created');
+                                  await fetchBookings();
+                                  setSelectedSeats([]);
+                                  setBookingForm({ name: '', phone: '', email: '', pickup: '', pickupTime: '', drop: '', dropTime: '' });
+                                } catch (err) {
+                                  console.error(err);
+                                  showAppToast('error', err.message || 'Offline booking failed');
+                                }
+                              }}
+                              className="rounded-xl border px-4 py-2 text-sm"
+                            >
+                              Offline Booking (Cash)
+                            </button>
+                          </div>
+                        )}
 
                         {editingSeat && (
                           <button
@@ -640,6 +943,55 @@ export default function BookingPage() {
         />
       )}
 
+      {/* Block seats modal (admin) */}
+      {blockModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <h3 className="text-lg font-bold mb-3">Block Seat(s) — Add details</h3>
+              <div className="space-y-3">
+                <input placeholder="Name" value={blockDetails.name} onChange={(e) => setBlockDetails((p) => ({ ...p, name: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+                <input placeholder="Phone" value={blockDetails.phone} onChange={(e) => setBlockDetails((p) => ({ ...p, phone: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+                <input placeholder="Email" value={blockDetails.email} onChange={(e) => setBlockDetails((p) => ({ ...p, email: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+                <textarea placeholder="Note (optional)" value={blockDetails.note} onChange={(e) => setBlockDetails((p) => ({ ...p, note: e.target.value }))} className="w-full rounded-lg border px-3 py-2" rows={3} />
+              </div>
+
+              <div className="mt-4 flex justify-end gap-3">
+                <button onClick={() => setBlockModalOpen(false)} className="rounded-2xl border px-4 py-2 text-sm">Cancel</button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const seats = editingSeat ? [editingSeat] : selectedSeats;
+                      if (!seats || seats.length === 0) return showAppToast('error', 'Select seats to block');
+                      const token = localStorage.getItem('authToken');
+                      if (!token) return showAppToast('error', 'Unauthorized — please login as admin');
+
+                      const res = await fetch('/api/admin/block-seats', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ busId: selectedBus.busId, date, seats, action: 'block', note: blockDetails.note || null, details: { name: blockDetails.name || null, phone: blockDetails.phone || null, email: blockDetails.email || null } }) });
+                      const data = await res.json();
+                      if (!res.ok) {
+                        if (res.status === 401) return showAppToast('error', 'Unauthorized — invalid/expired token. Please login again.');
+                        if (res.status === 403) return showAppToast('error', 'Forbidden — admin access required');
+                        throw new Error(data.error || 'Block failed');
+                      }
+                      showAppToast('success', 'Seats blocked for admin');
+                      setBlockModalOpen(false);
+                      setSelectedSeats([]);
+                      await fetchBookings();
+                    } catch (err) {
+                      console.error(err);
+                      showAppToast('error', err.message || 'Block failed');
+                    }
+                  }}
+                  className="rounded-2xl bg-yellow-500 px-4 py-2 text-sm text-white"
+                >
+                  Confirm Block
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* View booked seat modal (admin) */}
       {viewBooking && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 px-4">
@@ -660,6 +1012,39 @@ export default function BookingPage() {
                   >
                     Close
                   </button>
+
+                  {viewBooking.booking && viewBooking.booking.status === "blocked" && (user && (user.role === "admin" || user.role === "owner")) && (
+                    <button
+                      onClick={async () => {
+                        const s = String(viewBooking.seat);
+                        try {
+                          const token = localStorage.getItem('authToken');
+                          if (!token) return showAppToast('error', 'Unauthorized — please login as admin');
+
+                          const res = await fetch(`/api/admin/block-seats`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ busId: selectedBus.busId, date, seats: [s], action: 'unblock' }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) {
+                            if (res.status === 401) return showAppToast('error', 'Unauthorized — invalid/expired token. Please login again.');
+                            if (res.status === 403) return showAppToast('error', 'Forbidden — admin access required');
+                            throw new Error(data.error || 'Unblock failed');
+                          }
+                          showAppToast('success', `Seat ${s} unblocked`);
+                          setViewBooking(null);
+                          await fetchBookings();
+                        } catch (err) {
+                          console.error(err);
+                          showAppToast('error', err.message || 'Unblock failed');
+                        }
+                      }}
+                      className="rounded-full bg-yellow-500 px-4 py-2 text-sm text-white"
+                    >
+                      Unblock Seat
+                    </button>
+                  )}
 
                   <button
                     onClick={() => {

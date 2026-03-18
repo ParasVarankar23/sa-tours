@@ -21,16 +21,26 @@ export default function SchedulePage() {
     const [busId, setBusId] = useState("");
     const [date, setDate] = useState("");
     const [saving, setSaving] = useState(false);
+    const [seasonFlag, setSeasonFlag] = useState(false);
+    const [pricingOverrideText, setPricingOverrideText] = useState("");
+    const [exactFareMap, setExactFareMap] = useState({});
+    const [pricingTerminals, setPricingTerminals] = useState({ forward: null, return: null });
     const [schedules, setSchedules] = useState({});
     const [searchTerm, setSearchTerm] = useState("");
     const [filterType, setFilterType] = useState("all");
     const [selectedDate, setSelectedDate] = useState("");
-    const today = new Date();
+    const [currentPage, setCurrentPage] = useState(1);
 
-    const formatDate = (dateStr) => {
-        const d = new Date(dateStr);
-        return d;
-    };
+    const ROWS_PER_PAGE = 10;
+    const today = new Date();
+    const router = useRouter();
+    const { user } = useAuth();
+
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [confirmMessage, setConfirmMessage] = useState("");
+    const [confirmAction, setConfirmAction] = useState(() => () => { });
+
+    const formatDate = (dateStr) => new Date(dateStr);
 
     const isSameDay = (d1, d2) =>
         d1.getFullYear() === d2.getFullYear() &&
@@ -51,67 +61,33 @@ export default function SchedulePage() {
         return end;
     };
 
-    const allSchedules = buses.flatMap((b) => {
-        const dates = schedules[b.busId] ? Object.keys(schedules[b.busId]) : [];
-        return dates.map((d) => ({
-            busId: b.busId,
-            busNumber: b.busNumber,
-            routeName: b.routeName,
-            date: d,
-        }));
-    });
+    const openConfirm = (message, action) => {
+        setConfirmMessage(message);
+        setConfirmAction(() => action);
+        setConfirmOpen(true);
+    };
 
-    // Pagination
-    const [currentPage, setCurrentPage] = useState(1);
-    const ROWS_PER_PAGE = 10;
+    const closeConfirm = () => {
+        setConfirmOpen(false);
+        setConfirmMessage("");
+        setConfirmAction(() => () => { });
+    };
 
-    const filteredSchedules = allSchedules.filter((item) => {
-        const scheduleDate = formatDate(item.date);
+    const fetchSchedules = async () => {
+        try {
+            const res = await fetch("/api/schedule");
+            const data = await res.json();
 
-        // Search filter
-        const matchesSearch =
-            item.busNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.routeName.toLowerCase().includes(searchTerm.toLowerCase());
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to load schedules");
+            }
 
-        if (!matchesSearch) return false;
-
-        // Date filters
-        if (filterType === "today") {
-            return isSameDay(scheduleDate, today);
+            setSchedules(data.schedules || {});
+        } catch (err) {
+            console.error(err);
+            showAppToast("error", err.message || "Failed to load schedules");
         }
-
-        if (filterType === "date") {
-            return selectedDate ? isSameDay(scheduleDate, new Date(selectedDate)) : true;
-        }
-
-        if (filterType === "week") {
-            const start = startOfWeek(today);
-            const end = endOfWeek(today);
-            return scheduleDate >= start && scheduleDate <= end;
-        }
-
-        if (filterType === "month") {
-            return (
-                scheduleDate.getMonth() === today.getMonth() &&
-                scheduleDate.getFullYear() === today.getFullYear()
-            );
-        }
-
-        if (filterType === "year") {
-            return scheduleDate.getFullYear() === today.getFullYear();
-        }
-
-        return true; // all
-    });
-
-    const totalPages = Math.max(1, Math.ceil(filteredSchedules.length / ROWS_PER_PAGE));
-
-    // reset page when filters/search change
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm, filterType, selectedDate, buses, schedules]);
-
-    const paginatedSchedules = filteredSchedules.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE);
+    };
 
     useEffect(() => {
         const fetchBuses = async () => {
@@ -144,23 +120,110 @@ export default function SchedulePage() {
         return buses.find((b) => b.busId === busId) || null;
     }, [buses, busId]);
 
-    const router = useRouter();
-    const { user } = useAuth();
-    const [confirmOpen, setConfirmOpen] = useState(false);
-    const [confirmMessage, setConfirmMessage] = useState("");
-    const [confirmAction, setConfirmAction] = useState(() => () => { });
+    // initialize exactFareMap from pricingOverrideText or selectedBus pricingRules
+    useEffect(() => {
+        let map = {};
+        let terminals = { forward: null, return: null };
 
-    const openConfirm = (message, action) => {
-        setConfirmMessage(message);
-        setConfirmAction(() => action);
-        setConfirmOpen(true);
-    };
+        if (pricingOverrideText && pricingOverrideText.trim()) {
+            try {
+                const parsed = JSON.parse(pricingOverrideText);
+                map = (parsed && parsed.exactFareMap) || {};
+                if (parsed && parsed.terminals) terminals = parsed.terminals;
+            } catch {
+                // ignore invalid JSON
+            }
+        } else if (
+            selectedBus &&
+            selectedBus.pricingRules &&
+            selectedBus.pricingRules.exactFareMap
+        ) {
+            map = { ...(selectedBus.pricingRules.exactFareMap || {}) };
+        }
 
-    const closeConfirm = () => {
-        setConfirmOpen(false);
-        setConfirmMessage("");
-        setConfirmAction(() => () => { });
-    };
+        setExactFareMap(map);
+        setPricingTerminals(terminals);
+    }, [pricingOverrideText, selectedBus]);
+
+    // read pricing saved by fare-editor (localStorage) when busId/date change
+    useEffect(() => {
+        if (!busId || !date) return;
+
+        try {
+            const key = `schedule_pricing_override:${busId}:${date}`;
+            const raw =
+                typeof window !== "undefined" ? localStorage.getItem(key) : null;
+
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.exactFareMap) {
+                    setExactFareMap(parsed.exactFareMap || {});
+                    setPricingOverrideText(JSON.stringify(parsed));
+                    if (parsed.terminals) setPricingTerminals(parsed.terminals || { forward: null, return: null });
+                }
+            }
+        } catch {
+            // ignore
+        }
+    }, [busId, date]);
+
+    const allSchedules = buses.flatMap((b) => {
+        const dates = schedules[b.busId] ? Object.keys(schedules[b.busId]) : [];
+        return dates.map((d) => ({
+            busId: b.busId,
+            busNumber: b.busNumber,
+            routeName: b.routeName,
+            date: d,
+        }));
+    });
+
+    const filteredSchedules = allSchedules.filter((item) => {
+        const scheduleDate = formatDate(item.date);
+
+        const matchesSearch =
+            item.busNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.routeName.toLowerCase().includes(searchTerm.toLowerCase());
+
+        if (!matchesSearch) return false;
+
+        if (filterType === "today") {
+            return isSameDay(scheduleDate, today);
+        }
+
+        if (filterType === "date") {
+            return selectedDate ? isSameDay(scheduleDate, new Date(selectedDate)) : true;
+        }
+
+        if (filterType === "week") {
+            const start = startOfWeek(today);
+            const end = endOfWeek(today);
+            return scheduleDate >= start && scheduleDate <= end;
+        }
+
+        if (filterType === "month") {
+            return (
+                scheduleDate.getMonth() === today.getMonth() &&
+                scheduleDate.getFullYear() === today.getFullYear()
+            );
+        }
+
+        if (filterType === "year") {
+            return scheduleDate.getFullYear() === today.getFullYear();
+        }
+
+        return true;
+    });
+
+    const totalPages = Math.max(1, Math.ceil(filteredSchedules.length / ROWS_PER_PAGE));
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, filterType, selectedDate, buses, schedules]);
+
+    const paginatedSchedules = filteredSchedules.slice(
+        (currentPage - 1) * ROWS_PER_PAGE,
+        currentPage * ROWS_PER_PAGE
+    );
 
     const handleSetAvailable = async () => {
         if (!busId) return showAppToast("error", "Select a bus");
@@ -168,10 +231,37 @@ export default function SchedulePage() {
 
         setSaving(true);
         try {
+            let pricingOverride = null;
+
+            const hasExact = Object.keys(exactFareMap || {}).some(
+                (k) =>
+                    exactFareMap[k] !== "" &&
+                    exactFareMap[k] !== undefined &&
+                    exactFareMap[k] !== null
+            );
+
+            if (hasExact) {
+                const filtered = {};
+                Object.keys(exactFareMap).forEach((k) => {
+                    const v = exactFareMap[k];
+                    if (v !== "" && v !== undefined && v !== null) {
+                        filtered[k] = Number(v);
+                    }
+                });
+                pricingOverride = { exactFareMap: filtered, terminals: pricingTerminals };
+            } else if (pricingOverrideText && pricingOverrideText.trim()) {
+                try {
+                    pricingOverride = JSON.parse(pricingOverrideText);
+                } catch {
+                    setSaving(false);
+                    return showAppToast("error", "Pricing override JSON is invalid");
+                }
+            }
+
             const res = await fetch("/api/schedule", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ busId, date }),
+                body: JSON.stringify({ busId, date, season: seasonFlag, pricingOverride }),
             });
 
             const data = await res.json();
@@ -183,6 +273,10 @@ export default function SchedulePage() {
             showAppToast("success", "Bus marked available on selected date");
             setBusId("");
             setDate("");
+            setPricingOverrideText("");
+            setExactFareMap({});
+            setSeasonFlag(false);
+            setPricingTerminals({ forward: null, return: null });
             fetchSchedules();
         } catch (err) {
             console.error(err);
@@ -192,34 +286,24 @@ export default function SchedulePage() {
         }
     };
 
-    const fetchSchedules = async () => {
-        try {
-            const res = await fetch("/api/schedule");
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.error || "Failed to load schedules");
-            }
-
-            setSchedules(data.schedules || {});
-        } catch (err) {
-            console.error(err);
-            showAppToast("error", err.message || "Failed to load schedules");
-        }
-    };
-
     const handleDeleteAvailability = async () => {
         if (!busId) return showAppToast("error", "Select a bus");
         if (!date) return showAppToast("error", "Select a date");
 
         openConfirm(
-            `Are you sure you want to remove availability for ${selectedBus?.busNumber || busId} on ${date}?`,
+            `Are you sure you want to remove availability for ${selectedBus?.busNumber || busId
+            } on ${date}?`,
             async () => {
                 setSaving(true);
                 try {
-                    const res = await fetch(`/api/schedule?busId=${encodeURIComponent(busId)}&date=${encodeURIComponent(date)}`, {
-                        method: "DELETE",
-                    });
+                    const res = await fetch(
+                        `/api/schedule?busId=${encodeURIComponent(busId)}&date=${encodeURIComponent(
+                            date
+                        )}`,
+                        {
+                            method: "DELETE",
+                        }
+                    );
 
                     const data = await res.json();
 
@@ -243,13 +327,20 @@ export default function SchedulePage() {
 
     const handleDeleteFor = async (targetBusId, targetDate) => {
         const bus = buses.find((b) => b.busId === targetBusId);
+
         openConfirm(
-            `Are you sure you want to remove availability for ${bus?.busNumber || targetBusId} on ${targetDate}?`,
+            `Are you sure you want to remove availability for ${bus?.busNumber || targetBusId
+            } on ${targetDate}?`,
             async () => {
                 try {
-                    const res = await fetch(`/api/schedule?busId=${encodeURIComponent(targetBusId)}&date=${encodeURIComponent(targetDate)}`, {
-                        method: "DELETE",
-                    });
+                    const res = await fetch(
+                        `/api/schedule?busId=${encodeURIComponent(
+                            targetBusId
+                        )}&date=${encodeURIComponent(targetDate)}`,
+                        {
+                            method: "DELETE",
+                        }
+                    );
 
                     const data = await res.json();
 
@@ -266,15 +357,22 @@ export default function SchedulePage() {
     };
 
     const handleEditFor = (targetBusId, targetDate) => {
-        router.push(`/admin/schedule/edit?busId=${encodeURIComponent(targetBusId)}&date=${encodeURIComponent(targetDate)}`);
+        router.push(
+            `/admin/schedule/edit?busId=${encodeURIComponent(
+                targetBusId
+            )}&date=${encodeURIComponent(targetDate)}`
+        );
     };
 
     const handleEdit = () => {
         if (!busId) return showAppToast("error", "Select a bus");
         if (!date) return showAppToast("error", "Select a date");
 
-        // Navigate to an edit page (implement page separately if needed)
-        router.push(`/admin/schedule/edit?busId=${encodeURIComponent(busId)}&date=${encodeURIComponent(date)}`);
+        router.push(
+            `/admin/schedule/edit?busId=${encodeURIComponent(busId)}&date=${encodeURIComponent(
+                date
+            )}`
+        );
     };
 
     return (
@@ -310,9 +408,7 @@ export default function SchedulePage() {
 
                         <div className="mt-6 flex items-center justify-end gap-3">
                             <button
-                                onClick={() => {
-                                    closeConfirm();
-                                }}
+                                onClick={closeConfirm}
                                 className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                             >
                                 Cancel
@@ -433,7 +529,117 @@ export default function SchedulePage() {
                             </div>
                         </div>
 
-                        {/* Action Button */}
+                        {/* Season Toggle */}
+                        <div className="mt-5 flex items-center gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+                            <input
+                                id="seasonFlag"
+                                type="checkbox"
+                                checked={seasonFlag}
+                                onChange={(e) => setSeasonFlag(e.target.checked)}
+                                className="h-4 w-4 accent-[#f97316]"
+                            />
+                            <label htmlFor="seasonFlag" className="text-sm font-medium text-slate-700">
+                                Apply Season Pricing (+₹100)
+                            </label>
+                        </div>
+
+                        {/* Pricing Override */}
+                        <div className="mt-6">
+                            <div className="mb-2 flex items-start justify-between gap-3">
+                                <label className="text-sm font-medium text-slate-700">
+                                    Pricing Override (Route-wise)
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (!busId || !date) {
+                                            return showAppToast(
+                                                "error",
+                                                "Select bus and date first to open editor"
+                                            );
+                                        }
+                                        router.push(
+                                            `/admin/schedule/fare-editor?busId=${encodeURIComponent(
+                                                busId
+                                            )}&date=${encodeURIComponent(date)}`
+                                        );
+                                    }}
+                                    className="rounded-2xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    Open Route Editor
+                                </button>
+                            </div>
+
+                            {selectedBus &&
+                                Array.isArray(selectedBus.stops) &&
+                                selectedBus.stops.length > 0 ? (
+                                <div className="max-h-72 overflow-auto rounded-lg border bg-white p-2">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="text-left text-xs text-slate-500">
+                                                <th className="px-2 py-1">From</th>
+                                                <th className="px-2 py-1">To</th>
+                                                <th className="px-2 py-1">Fare (₹)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {(() => {
+                                                const stops = (selectedBus.stops || []).map((s) =>
+                                                    typeof s === "string" ? s : s.stopName
+                                                );
+
+                                                const rows = [];
+                                                for (let i = 0; i < stops.length; i++) {
+                                                    for (let j = i + 1; j < stops.length; j++) {
+                                                        const from = stops[i];
+                                                        const to = stops[j];
+                                                        const key = `${from}|${to}`;
+
+                                                        rows.push(
+                                                            <tr key={key} className="border-t">
+                                                                <td className="px-2 py-2 text-slate-700">{from}</td>
+                                                                <td className="px-2 py-2 text-slate-700">{to}</td>
+                                                                <td className="px-2 py-2">
+                                                                    <input
+                                                                        type="number"
+                                                                        min={0}
+                                                                        value={exactFareMap[key] ?? ""}
+                                                                        onChange={(e) =>
+                                                                            setExactFareMap((prev) => ({
+                                                                                ...prev,
+                                                                                [key]: e.target.value,
+                                                                            }))
+                                                                        }
+                                                                        className="w-28 rounded-md border px-2 py-1 text-sm"
+                                                                        placeholder="e.g. 500"
+                                                                    />
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    }
+                                                }
+                                                return rows;
+                                            })()}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <textarea
+                                    value={pricingOverrideText}
+                                    onChange={(e) => setPricingOverrideText(e.target.value)}
+                                    rows={3}
+                                    className="w-full rounded-lg border px-3 py-2 font-mono text-xs"
+                                    placeholder='{"exactFareMap":{"Borli|Dighi":500}}'
+                                />
+                            )}
+
+                            <p className="mt-2 text-xs text-slate-500">
+                                Enter fares for specific From → To pairs. Values left empty will not
+                                be included.
+                            </p>
+                        </div>
+
+                        {/* Action Buttons */}
                         <div className="mt-6 flex flex-wrap items-center gap-3">
                             <button
                                 disabled={saving || loading}
@@ -449,6 +655,9 @@ export default function SchedulePage() {
                                 onClick={() => {
                                     setBusId("");
                                     setDate("");
+                                    setPricingOverrideText("");
+                                    setExactFareMap({});
+                                    setSeasonFlag(false);
                                 }}
                                 className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                             >
@@ -496,13 +705,15 @@ export default function SchedulePage() {
                                     <InfoRow
                                         icon={<MapPin className="h-4 w-4 text-[#f97316]" />}
                                         label="Path"
-                                        value={`${selectedBus.startPoint || "--"} → ${selectedBus.endPoint || "--"}`}
+                                        value={`${selectedBus.startPoint || "--"} → ${selectedBus.endPoint || "--"
+                                            }`}
                                     />
 
                                     <InfoRow
                                         icon={<Clock3 className="h-4 w-4 text-[#f97316]" />}
                                         label="Timing"
-                                        value={`${selectedBus.startTime || "--:--"} → ${selectedBus.endTime || "--:--"}`}
+                                        value={`${selectedBus.startTime || "--:--"} → ${selectedBus.endTime || "--:--"
+                                            }`}
                                     />
 
                                     <InfoRow
@@ -544,9 +755,7 @@ export default function SchedulePage() {
                             </div>
                         ) : (
                             <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center">
-                                <p className="text-sm font-medium text-slate-700">
-                                    No bus selected
-                                </p>
+                                <p className="text-sm font-medium text-slate-700">No bus selected</p>
                                 <p className="mt-1 text-xs text-slate-500">
                                     Select a bus to preview its route and details.
                                 </p>
@@ -561,9 +770,8 @@ export default function SchedulePage() {
                 <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <h2 className="text-lg font-bold text-slate-900">Schedules</h2>
 
-                    {/* Search + Filters */}
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        {/* Search Bar */}
+                        {/* Search */}
                         <div className="relative">
                             <input
                                 type="text"
@@ -580,11 +788,15 @@ export default function SchedulePage() {
                                 stroke="currentColor"
                                 strokeWidth={2}
                             >
-                                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
+                                />
                             </svg>
                         </div>
 
-                        {/* Filter Select */}
+                        {/* Filter */}
                         <select
                             value={filterType}
                             onChange={(e) => setFilterType(e.target.value)}
@@ -598,7 +810,7 @@ export default function SchedulePage() {
                             <option value="year">This Year</option>
                         </select>
 
-                        {/* Specific Date Picker */}
+                        {/* Specific Date */}
                         {filterType === "date" && (
                             <input
                                 type="date"
@@ -623,7 +835,10 @@ export default function SchedulePage() {
                         <tbody>
                             {filteredSchedules.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-500">
+                                    <td
+                                        colSpan={4}
+                                        className="px-3 py-8 text-center text-sm text-slate-500"
+                                    >
                                         No schedules found
                                     </td>
                                 </tr>
@@ -633,7 +848,9 @@ export default function SchedulePage() {
                                         key={`${item.busId}-${item.date}`}
                                         className="border-b last:border-b-0 transition hover:bg-slate-50"
                                     >
-                                        <td className="px-3 py-3 font-medium text-slate-800">{item.busNumber}</td>
+                                        <td className="px-3 py-3 font-medium text-slate-800">
+                                            {item.busNumber}
+                                        </td>
                                         <td className="px-3 py-3 text-slate-700">{item.routeName}</td>
                                         <td className="px-3 py-3 text-slate-700">{item.date}</td>
                                         <td className="px-3 py-3">
@@ -663,9 +880,20 @@ export default function SchedulePage() {
                         </tbody>
                     </table>
 
-                    {/* Pagination controls */}
+                    {/* Pagination */}
                     <div className="mt-4 flex items-center justify-between">
-                        <div className="text-sm text-slate-500">Showing {filteredSchedules.length === 0 ? 0 : (currentPage - 1) * ROWS_PER_PAGE + 1} - {filteredSchedules.length === 0 ? 0 : Math.min(currentPage * ROWS_PER_PAGE, filteredSchedules.length)} of {filteredSchedules.length}</div>
+                        <div className="text-sm text-slate-500">
+                            Showing{" "}
+                            {filteredSchedules.length === 0
+                                ? 0
+                                : (currentPage - 1) * ROWS_PER_PAGE + 1}{" "}
+                            -{" "}
+                            {filteredSchedules.length === 0
+                                ? 0
+                                : Math.min(currentPage * ROWS_PER_PAGE, filteredSchedules.length)}{" "}
+                            of {filteredSchedules.length}
+                        </div>
+
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
@@ -675,7 +903,9 @@ export default function SchedulePage() {
                                 Prev
                             </button>
 
-                            <div className="text-sm text-slate-700">Page {currentPage} / {totalPages}</div>
+                            <div className="text-sm text-slate-700">
+                                Page {currentPage} / {totalPages}
+                            </div>
 
                             <button
                                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
@@ -704,9 +934,7 @@ function SummaryCard({ title, value, icon }) {
                 </div>
                 <div>
                     <p className="text-sm text-slate-500">{title}</p>
-                    <h3 className="text-xl font-bold text-slate-900 break-words">
-                        {value}
-                    </h3>
+                    <h3 className="break-words text-xl font-bold text-slate-900">{value}</h3>
                 </div>
             </div>
         </div>

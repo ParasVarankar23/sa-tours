@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { getAdminDb } from "./firebaseAdmin";
 
 const allowSelfSignedCert = process.env.SMTP_ALLOW_SELF_SIGNED === "true";
 const smtpUser = (process.env.SMTP_EMAIL || "").trim();
@@ -264,6 +265,19 @@ function createInfoCard(title, rowsHtml) {
     `;
 }
 
+function normalizeStopName(name) {
+    if (!name) return name;
+    const n = String(name || "").trim();
+    const aliasMap = {
+        // common aliases -> canonical stop names
+        'borli mumbai': 'Borli Dongri',
+        'borli': 'Borli Dongri',
+        'panvel': 'Panvel',
+    };
+    const key = n.toLowerCase();
+    return aliasMap[key] || n;
+}
+
 function createOtpCard(otp) {
     return `
         <div style="
@@ -470,14 +484,43 @@ export async function sendForgotPasswordEmail(email, otp) {
    3) BOOKING CONFIRMATION EMAIL
 ========================================================= */
 export async function sendBookingConfirmation(email, name, booking = {}) {
+    // normalize stop names for clearer emails
+    const pickupName = normalizeStopName(booking.pickup || "");
+    const dropName = normalizeStopName(booking.drop || "");
+
+    // try to fetch bus contact info (helpline/emergency) from DB using busId or busNumber
+    let busInfo = null;
+    try {
+        const db = getAdminDb();
+        const busId = booking.busId || null;
+        if (busId) {
+            const snap = await db.ref(`buses/${busId}`).once('value');
+            if (snap.exists()) busInfo = snap.val() || null;
+        }
+    } catch (e) {
+        console.warn('Failed to load bus info for email:', e && e.message ? e.message : e);
+    }
+    const defaultHelpline = process.env.SA_TOURS_DEFAULT_HELPLINE || '8805718986';
+    const defaultBookingContact = process.env.SA_TOURS_DEFAULT_BOOKING || '9209471601';
+
+    const helpline = (busInfo && (busInfo.helpline || busInfo.contact || busInfo.phone)) || defaultHelpline;
+
+    // determine route-specific booking contact (fall back to busInfo.bookingContact or defaults)
+    let bookingContact = (busInfo && (busInfo.bookingContact || busInfo.booking || busInfo.phoneBooking)) || '';
+    const routeKey = String(booking.routeName || booking.route || booking.routeId || '').toLowerCase();
+    if (!bookingContact) {
+        if (routeKey.includes('borli')) bookingContact = '9209471309';
+        else if (routeKey.includes('dighi')) bookingContact = '9273635316';
+        else bookingContact = defaultBookingContact;
+    }
+
     const bookingCard = createInfoCard(
         "Booking Details",
         `
             ${infoRow("Passenger Name", name || "Passenger")}
             ${infoRow(
             "Bus",
-            `${booking.busNumber || "--"}${booking.routeName ? ` — ${booking.routeName}` : ""
-            }`
+            `${booking.busNumber || "--"}${booking.routeName ? ` — ${booking.routeName}` : ""}`
         )}
             ${infoRow(
             "Travel Date & Time",
@@ -485,18 +528,21 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
             }`
         )}
             ${infoRow("Seat Number", booking.seatNo || "--")}
-            ${infoRow(
-            "Pickup Point",
-            `${booking.pickup || "--"}${booking.pickupTime ? ` (${booking.pickupTime})` : ""
-            }`
-        )}
-            ${infoRow(
-            "Drop Point",
-            `${booking.drop || "--"}${booking.dropTime ? ` (${booking.dropTime})` : ""
-            }`
-        )}
+            ${infoRow("Helpline", helpline || '--')}
+            ${infoRow("Bus Booking", bookingContact || '--')}
+            ${infoRow("Pickup Point", `${pickupName || "--"}${booking.pickupTime ? ` (${booking.pickupTime})` : ""}`)}
+            ${infoRow("Drop Point", `${dropName || "--"}${booking.dropTime ? ` (${booking.dropTime})` : ""}`)}
         `
     );
+
+
+    // add payment info if present
+    let paymentRows = '';
+    if (booking.payment || booking.paymentMethod || booking.fare) {
+        paymentRows += infoRow('Fare', booking.fare !== undefined ? `₹${Number(booking.fare || 0).toFixed(2)}` : '--');
+        paymentRows += infoRow('Payment Method', booking.paymentMethod || '--');
+        if (booking.payment) paymentRows += infoRow('Payment ID', booking.payment);
+    }
 
     const htmlContent = createEmailTemplate({
         preheader: "Your SA Tours booking is confirmed",
@@ -508,6 +554,7 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
             "Great news! Your booking has been confirmed successfully. Please review your trip details below and keep this email for reference.",
         bodyHtml: `
             ${bookingCard}
+            ${paymentRows ? createInfoCard('Payment Details', paymentRows) : ''}
             ${createAlertBox(
             "<strong>Travel Reminder:</strong> Please arrive at your pickup point at least 10–15 minutes before departure.",
             "success"
@@ -518,36 +565,67 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
         footerNote: "Wishing you a safe and comfortable journey with SA Tours.",
     });
 
+    // attempt to generate a simple PDF receipt and attach if possible
+    let attachments = [];
+    try {
+        const PDFDocument = require('pdfkit');
+        const doc = new PDFDocument({ size: 'A4', margin: 40 });
+        const chunks = [];
+        doc.on('data', (c) => chunks.push(c));
+        const endPromise = new Promise((res) => doc.on('end', res));
+
+        doc.fontSize(20).fillColor('#ea580c').text('SA Tours — Booking Receipt', { align: 'center' });
+        doc.moveDown();
+        doc.fontSize(12).fillColor('#0f172a');
+        const rows = [
+            ['Passenger', name || 'Passenger'],
+            ['Bus', booking.busNumber || '--'],
+            ['Seat', booking.seatNo || '--'],
+            ['Date', booking.date || '--'],
+            ['Time', `${booking.startTime || '--'} → ${booking.endTime || '--'}`],
+            ['Pickup', pickupName || '--'],
+            ['Drop', dropName || '--'],
+            ['Fare', booking.fare !== undefined ? `₹${Number(booking.fare || 0).toFixed(2)}` : '--'],
+            ['Payment Method', booking.paymentMethod || '--'],
+            ['Payment ID', booking.payment || '--'],
+        ];
+
+        rows.forEach(([k, v]) => {
+            doc.font('Helvetica-Bold').text(k + ':', { continued: true, width: 150 });
+            doc.font('Helvetica').text(' ' + String(v));
+            doc.moveDown(0.2);
+        });
+
+        doc.moveDown(1);
+        doc.fontSize(10).fillColor('#64748b').text('Thank you for booking with SA Tours. Present this receipt at the counter if needed.', { align: 'left' });
+        doc.end();
+
+        await endPromise;
+        const pdfBuffer = Buffer.concat(chunks);
+        if (pdfBuffer && pdfBuffer.length) {
+            attachments.push({ filename: 'receipt.pdf', content: pdfBuffer, contentType: 'application/pdf' });
+        }
+    } catch (e) {
+        console.warn('PDF generation failed (pdfkit may not be installed):', e && e.message ? e.message : e);
+    }
+
     try {
         const mailOptions = {
             from: `"SA Tours" <${smtpUser}>`,
             to: email,
-            subject: `Booking Confirmed — ${booking.busNumber || "SA Tours"}`,
+            subject: `Booking Confirmed — ${booking.busNumber || 'SA Tours'}`,
             html: htmlContent,
+            attachments: attachments,
         };
 
-        console.log(
-            "sendBookingConfirmation: sending to",
-            email,
-            "subject:",
-            mailOptions.subject
-        );
+        console.log('sendBookingConfirmation: sending to', email, 'subject:', mailOptions.subject, 'attachments:', attachments.length);
 
         const info = await sendMailWithRetry(mailOptions);
-        console.log(
-            "Booking confirmation email sent:",
-            info?.messageId || info
-        );
+        console.log('Booking confirmation email sent:', info?.messageId || info);
         return true;
     } catch (error) {
-        console.error(
-            "Error sending booking confirmation email:",
-            error?.message || error
-        );
-        throw new Error(
-            "Failed to send booking confirmation email: " +
-            (error?.message || String(error))
-        );
+        console.error('Error sending booking confirmation email:', error?.message || error);
+        throw new Error('Failed to send booking confirmation email: ' + (error?.message || String(error)));
     }
 }
 
@@ -555,6 +633,42 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
    4) BOOKING CANCELLATION EMAIL
 ========================================================= */
 export async function sendBookingCancellation(email, name, booking = {}) {
+    const pickupName = normalizeStopName(booking.pickup || "");
+    const dropName = normalizeStopName(booking.drop || "");
+
+    // try to fetch bus contact info (helpline/emergency) from DB using busId or busNumber
+    let busInfo = null;
+    try {
+        const db = getAdminDb();
+        const busId = booking.busId || null;
+        if (busId) {
+            const snap = await db.ref(`buses/${busId}`).once('value');
+            if (snap.exists()) busInfo = snap.val() || null;
+        }
+    } catch (e) {
+        console.warn('Failed to load bus info for cancellation email:', e && e.message ? e.message : e);
+    }
+
+    const defaultHelpline = process.env.SA_TOURS_DEFAULT_HELPLINE || '8805718986';
+    const defaultBookingContact = process.env.SA_TOURS_DEFAULT_BOOKING || '9209471601';
+
+    const helpline = (busInfo && (busInfo.helpline || busInfo.contact || busInfo.phone)) || defaultHelpline;
+    let bookingContact = (busInfo && (busInfo.bookingContact || busInfo.booking || busInfo.phoneBooking)) || '';
+    const routeKey = String(booking.routeName || booking.route || booking.routeId || '').toLowerCase();
+    if (!bookingContact) {
+        if (routeKey.includes('borli')) bookingContact = '9209471309';
+        else if (routeKey.includes('dighi')) bookingContact = '9273635316';
+        else bookingContact = defaultBookingContact;
+    }
+
+    // add payment info if present
+    let paymentRows = '';
+    if (booking.payment || booking.paymentMethod || booking.fare) {
+        paymentRows += infoRow('Fare', booking.fare !== undefined ? `₹${Number(booking.fare || 0).toFixed(2)}` : '--');
+        paymentRows += infoRow('Payment Method', booking.paymentMethod || '--');
+        if (booking.payment) paymentRows += infoRow('Payment ID', booking.payment);
+    }
+
     const bookingCard = createInfoCard(
         "Cancelled Booking Details",
         `
@@ -570,16 +684,10 @@ export async function sendBookingCancellation(email, name, booking = {}) {
             }`
         )}
             ${infoRow("Seat Number", booking.seatNo || "--")}
-            ${infoRow(
-            "Pickup Point",
-            `${booking.pickup || "--"}${booking.pickupTime ? ` (${booking.pickupTime})` : ""
-            }`
-        )}
-            ${infoRow(
-            "Drop Point",
-            `${booking.drop || "--"}${booking.dropTime ? ` (${booking.dropTime})` : ""
-            }`
-        )}
+            ${infoRow("Helpline", helpline || '--')}
+            ${infoRow("Bus Booking", bookingContact || '--')}
+            ${infoRow("Pickup Point", `${pickupName || "--"}${booking.pickupTime ? ` (${booking.pickupTime})` : ""}`)}
+            ${infoRow("Drop Point", `${dropName || "--"}${booking.dropTime ? ` (${booking.dropTime})` : ""}`)}
         `
     );
 
@@ -594,15 +702,16 @@ export async function sendBookingCancellation(email, name, booking = {}) {
         bodyHtml: `
             ${bookingCard}
             ${createAlertBox(
-            "<strong>Need help?</strong> If you think this cancellation was a mistake, please contact SA Tours support immediately.",
-            "danger"
+            "<strong>Travel Reminder:</strong> Please arrive at your pickup point at least 10–15 minutes before departure.",
+            "success"
         )}
+            ${paymentRows ? createInfoCard('Payment Details', paymentRows) : ''}
         `,
-        buttonText: "Browse Available Buses",
+        buttonText: "View My Bookings",
         buttonUrl: APP_URL,
         footerNote: "We hope to serve you again soon with SA Tours.",
     });
-
+    // send simple booking confirmation (PDF attach handled in server-side flow)
     try {
         const mailOptions = {
             from: `"SA Tours" <${smtpUser}>`,
@@ -611,27 +720,12 @@ export async function sendBookingCancellation(email, name, booking = {}) {
             html: htmlContent,
         };
 
-        console.log(
-            "sendBookingCancellation: sending to",
-            email,
-            "subject:",
-            mailOptions.subject
-        );
-
+        console.log("sendBookingCancellation: sending to", email, "subject:", mailOptions.subject);
         const info = await sendMailWithRetry(mailOptions);
-        console.log(
-            "Booking cancellation email sent:",
-            info?.messageId || info
-        );
+        console.log("Booking cancellation email sent:", info?.messageId || info);
         return true;
     } catch (error) {
-        console.error(
-            "Error sending booking cancellation email:",
-            error?.message || error
-        );
-        throw new Error(
-            "Failed to send booking cancellation email: " +
-            (error?.message || String(error))
-        );
+        console.error("Error sending booking cancellation email:", error?.message || error);
+        throw new Error('Failed to send booking cancellation email: ' + (error?.message || String(error)));
     }
 }

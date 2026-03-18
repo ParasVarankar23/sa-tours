@@ -4,7 +4,7 @@
  * Calculate fare between two stops using bus pricing config.
  * bus: bus object from Firebase containing pricingRules and stops
  */
-export function calculateFare({ bus, fromStop, toStop, busType = "AC" }) {
+export function calculateFare({ bus, fromStop, toStop, busType = "AC", season = false }) {
     if (!bus || !bus.stops || !Array.isArray(bus.stops)) {
         return { fare: 0, fareRuleMatched: null, stopDistance: 0, routeDirection: null };
     }
@@ -26,10 +26,16 @@ export function calculateFare({ bus, fromStop, toStop, busType = "AC" }) {
     const key = `${fromStop}|${toStop}`;
     const reverseKey = `${toStop}|${fromStop}`;
     if (exactMap[key]) {
-        return { fare: Number(exactMap[key]), fareRuleMatched: key, stopDistance, routeDirection, busType };
+        let fareVal = Number(exactMap[key]);
+        const seasonInc = (bus.pricingRules && Number(bus.pricingRules.seasonIncrement)) || 0;
+        if (season && seasonInc) fareVal = fareVal + seasonInc;
+        return { fare: fareVal, fareRuleMatched: key, stopDistance, routeDirection, busType };
     }
     if (exactMap[reverseKey]) {
-        return { fare: Number(exactMap[reverseKey]), fareRuleMatched: reverseKey, stopDistance, routeDirection, busType };
+        let fareVal = Number(exactMap[reverseKey]);
+        const seasonInc = (bus.pricingRules && Number(bus.pricingRules.seasonIncrement)) || 0;
+        if (season && seasonInc) fareVal = fareVal + seasonInc;
+        return { fare: fareVal, fareRuleMatched: reverseKey, stopDistance, routeDirection, busType };
     }
 
     // fallback to segment pricing
@@ -50,6 +56,10 @@ export function calculateFare({ bus, fromStop, toStop, busType = "AC" }) {
         else if (stopDistance <= 6) fare = non.long;
         else fare = non.full;
     }
+
+    // apply season increment if requested
+    const seasonInc = (bus.pricingRules && Number(bus.pricingRules.seasonIncrement)) || 0;
+    if (season && seasonInc) fare = fare + seasonInc;
 
     return { fare, fareRuleMatched: "segment_fallback", stopDistance, routeDirection, busType };
 }

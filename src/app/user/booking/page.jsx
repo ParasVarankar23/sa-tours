@@ -2,6 +2,7 @@
 
 import SeatLayout from "@/components/SeatLayout";
 import { showAppToast } from "@/lib/client/toast";
+import { calculateFare } from "@/lib/pricing";
 import {
     BusFront,
     CalendarDays,
@@ -493,7 +494,8 @@ export default function BookingPage() {
                                             }
 
                                             try {
-                                                const results = [];
+                                                // Build booking payloads and compute fare per seat
+                                                const bookingsPayload = [];
                                                 for (const seatNo of selectedSeats) {
                                                     const form = bookingForms[String(seatNo)] || {};
                                                     const payload = {
@@ -512,23 +514,91 @@ export default function BookingPage() {
                                                         dropTime: form.dropTime || "",
                                                     };
 
-                                                    const res = await fetch("/api/booking", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-                                                    const data = await res.json();
-                                                    results.push({ seat: seatNo, ok: res.ok, data });
-                                                    if (!res.ok) break;
+                                                    try {
+                                                        const busForPricing = { ...(selectedBus || {}) };
+                                                        const sched = (schedules && schedules[selectedBus.busId] && schedules[selectedBus.busId][date]) || null;
+                                                        if (sched && sched.pricingOverride) {
+                                                            busForPricing.pricingRules = { ...(selectedBus.pricingRules || {}), ...(sched.pricingOverride || {}) };
+                                                        }
+                                                        const season = !!(sched && sched.season);
+                                                        const fareRes = calculateFare({ bus: busForPricing, fromStop: form.pickup, toStop: form.drop, busType: selectedBus.busType || 'AC', season });
+                                                        if (fareRes && fareRes.fare !== undefined) payload.fare = Number(fareRes.fare) || 0;
+                                                    } catch (err) {
+                                                        // ignore fare calculation errors
+                                                        payload.fare = 0;
+                                                    }
+
+                                                    bookingsPayload.push(payload);
                                                 }
 
-                                                const firstFail = results.find((r) => !r.ok);
-                                                if (firstFail) throw new Error(firstFail.data.error || `Failed for seat ${firstFail.seat}`);
+                                                const totalAmount = bookingsPayload.reduce((s, b) => s + (Number(b.fare) || 0), 0);
+                                                if (!totalAmount || totalAmount <= 0) return showAppToast('error', 'Invalid fare amount');
 
-                                                showAppToast("success", "Seats booked successfully");
-                                                // refresh bookings
-                                                await fetchBookings();
-                                                setSelectedSeats([]);
-                                                setBookingForms({});
+                                                // Create Razorpay order on server
+                                                const orderRes = await fetch('/api/public/create-razorpay-order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: totalAmount, currency: 'INR' }) });
+                                                const orderData = await orderRes.json();
+                                                if (!orderRes.ok) throw new Error(orderData.error || 'Failed to create payment order');
+                                                const order = orderData.order;
+
+                                                // Load Razorpay script
+                                                const loaded = await new Promise((resolve) => {
+                                                    if (typeof window === 'undefined') return resolve(false);
+                                                    if (window.Razorpay) return resolve(true);
+                                                    const s = document.createElement('script');
+                                                    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+                                                    s.onload = () => resolve(true);
+                                                    s.onerror = () => resolve(false);
+                                                    document.body.appendChild(s);
+                                                });
+
+                                                if (!loaded) throw new Error('Failed to load payment gateway');
+
+                                                const options = {
+                                                    key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
+                                                    amount: order.amount, // in paise
+                                                    currency: order.currency || 'INR',
+                                                    name: 'SA Tours',
+                                                    description: 'Booking payment',
+                                                    order_id: order.id,
+                                                    handler: async function (resp) {
+                                                        try {
+                                                            // verify payment on server
+                                                            const vRes = await fetch('/api/public/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId: resp.razorpay_payment_id, orderId: resp.razorpay_order_id, signature: resp.razorpay_signature, amount: totalAmount, currency: 'INR' }) });
+                                                            const vData = await vRes.json();
+                                                            if (!vRes.ok) throw new Error(vData.error || 'Payment verification failed');
+
+                                                            const paymentRecord = vData.payment || {};
+                                                            const paymentId = paymentRecord.id || paymentRecord.paymentId || resp.razorpay_payment_id;
+
+                                                            // create bookings and attach payment id
+                                                            const results = [];
+                                                            for (const payload of bookingsPayload) {
+                                                                const withPayment = { ...payload, payment: paymentId, paymentMethod: 'razorpay' };
+                                                                const bRes = await fetch('/api/booking', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withPayment) });
+                                                                const bData = await bRes.json();
+                                                                results.push({ ok: bRes.ok, data: bData });
+                                                            }
+
+                                                            const failed = results.find((r) => !r.ok);
+                                                            if (failed) throw new Error(failed.data?.error || 'Failed to create booking after payment');
+
+                                                            showAppToast('success', 'Payment successful and bookings created');
+                                                            await fetchBookings();
+                                                            setSelectedSeats([]);
+                                                            setBookingForms({});
+                                                        } catch (err) {
+                                                            console.error(err);
+                                                            showAppToast('error', err.message || 'Payment succeeded but booking failed');
+                                                        }
+                                                    },
+                                                    modal: { ondismiss: function () { showAppToast('info', 'Payment cancelled'); } }
+                                                };
+
+                                                const rzp = new window.Razorpay(options);
+                                                rzp.open();
                                             } catch (err) {
                                                 console.error(err);
-                                                showAppToast("error", err.message || "Booking failed");
+                                                showAppToast('error', err.message || 'Booking/payment failed');
                                             }
                                         }}
                                         className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#059669] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition hover:bg-[#047857]"

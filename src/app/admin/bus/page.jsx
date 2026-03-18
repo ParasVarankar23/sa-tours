@@ -56,6 +56,10 @@ const initialForm = {
     seatLayout: "",
     stops: [],
     cabins: [],
+    pricingRules: {
+        seasonIncrement: "",
+        exactFareMap: {},
+    },
 };
 
 export default function AdminBusPage() {
@@ -155,6 +159,21 @@ export default function AdminBusPage() {
     const handleInputChange = (e, isEdit = false) => {
         const { name, value } = e.target;
 
+        // support dotted names for nested properties e.g. pricingRules.seasonIncrement
+        const setNested = (obj, path, val) => {
+            const parts = String(path).split(".");
+            const last = parts.pop();
+            let cur = { ...(obj || {}) };
+            let top = cur;
+            for (const p of parts) {
+                if (cur[p] === undefined || cur[p] === null || typeof cur[p] !== 'object') cur[p] = {};
+                cur[p] = { ...(cur[p] || {}) };
+                cur = cur[p];
+            }
+            cur[last] = val;
+            return top;
+        };
+
         if (isEdit) {
             // If editing startTime, shift stop times by delta
             if (name === "startTime") {
@@ -194,15 +213,23 @@ export default function AdminBusPage() {
                 return;
             }
 
-            setEditData((prev) => ({
-                ...prev,
-                [name]: value,
-            }));
+            if (name && name.includes('.')) {
+                setEditData((prev) => ({ ...prev, ...setNested(prev, name, value) }));
+            } else {
+                setEditData((prev) => ({
+                    ...prev,
+                    [name]: value,
+                }));
+            }
         } else {
-            setFormData((prev) => ({
-                ...prev,
-                [name]: value,
-            }));
+            if (name && name.includes('.')) {
+                setFormData((prev) => ({ ...prev, ...setNested(prev, name, value) }));
+            } else {
+                setFormData((prev) => ({
+                    ...prev,
+                    [name]: value,
+                }));
+            }
         }
     };
 
@@ -395,12 +422,23 @@ export default function AdminBusPage() {
         setSaving(true);
 
         try {
+            // prepare payload and normalize pricingRules
+            const payload = { ...formData };
+            if (payload.pricingRules && typeof payload.pricingRules.exactFareMap === 'string') {
+                try {
+                    payload.pricingRules.exactFareMap = JSON.parse(payload.pricingRules.exactFareMap || '{}');
+                } catch (e) {
+                    // invalid JSON
+                    return showAppToast('error', 'Exact Fare Map JSON is invalid');
+                }
+            }
+
             const res = await fetch("/api/bus", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify(formData),
+                body: JSON.stringify(payload),
             });
 
             const data = await res.json();
@@ -435,6 +473,7 @@ export default function AdminBusPage() {
             seatLayout: bus.seatLayout || "",
             stops: Array.isArray(bus.stops) ? bus.stops : [],
             cabins: Array.isArray(bus.cabins) ? bus.cabins : [],
+            pricingRules: bus.pricingRules || { seasonIncrement: "", exactFareMap: {} },
         });
 
         setEditOriginalStartTime(bus.startTime || "");
@@ -455,12 +494,21 @@ export default function AdminBusPage() {
         setSaving(true);
 
         try {
+            const payload = { ...editData };
+            if (payload.pricingRules && typeof payload.pricingRules.exactFareMap === 'string') {
+                try {
+                    payload.pricingRules.exactFareMap = JSON.parse(payload.pricingRules.exactFareMap || '{}');
+                } catch (e) {
+                    return showAppToast('error', 'Exact Fare Map JSON is invalid');
+                }
+            }
+
             const res = await fetch("/api/bus", {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify(editData),
+                body: JSON.stringify(payload),
             });
 
             const data = await res.json();
@@ -1023,6 +1071,37 @@ function BusFormModal({
                                         onChange={handleInputChange}
                                         icon={<Clock3 className="h-5 w-5 text-[#f97316]" />}
                                     />
+                                    {/* Pricing Rules */}
+                                    <div className="col-span-1 md:col-span-2">
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                                            Season Increment (₹)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="pricingRules.seasonIncrement"
+                                            value={(data.pricingRules && data.pricingRules.seasonIncrement) || ""}
+                                            onChange={handleInputChange}
+                                            className="w-full rounded-lg border px-3 py-2"
+                                            placeholder="e.g. 100"
+                                        />
+                                    </div>
+
+                                    <div className="col-span-1 md:col-span-2">
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                                            Exact Fare Map (JSON)
+                                        </label>
+                                        <textarea
+                                            name="pricingRules.exactFareMap"
+                                            value={JSON.stringify((data.pricingRules && data.pricingRules.exactFareMap) || {}, null, 2)}
+                                            onChange={(e) => {
+                                                // store as raw JSON string in nested property; backend will parse
+                                                handleInputChange({ target: { name: 'pricingRules.exactFareMap', value: e.target.value } }, isEdit);
+                                            }}
+                                            rows={4}
+                                            className="w-full rounded-lg border px-3 py-2 font-mono text-xs"
+                                            placeholder='{"From|To": 400, "From|Other": 450}'
+                                        />
+                                    </div>
                                 </div>
                             </div>
 

@@ -16,48 +16,60 @@ function toStr(s) {
 }
 
 function makeLayout(layout, cabinsCount = 6) {
-    // Return rows array of objects { left: seat|null, right: [seat,seat]|[] }
-    // plus cabins array for bottom cabins
-    const L = String(layout);
-    if (L === "23") {
-        // 23-seat: 7 main rows of (1 left + 2 right) = 21 seats
-        // plus a back row of 2 seats = 23 total; cabins follow after that
-        const rows = [];
-        let seat = 1;
-        for (let r = 0; r < 7; r++) {
-            // left 1, right 2
-            rows.push({ left: seat++, right: [seat++, seat++] });
-        }
-        // back row (2 seats) to make total 23 seats
-        const back = { left: null, right: [seat++, seat++] };
-        const cabins = Array.from({ length: cabinsCount }, (_, i) => seat + i);
-        return { rows: [...rows, back], cabins };
-    }
+    // deterministic seat generator with explicit back-row starts for common layouts
+    // returns rows: array of { left: number|null, right: number[] } and cabins numbers
+    const total = Number(String(layout)) || 31;
 
-    if (L === "27") {
-        // 27-seat: 9 rows of left1 + right2, then cabins 6
-        const rows = [];
-        let seat = 1;
-        for (let r = 0; r < 9; r++) {
-            rows.push({ left: seat++, right: [seat++, seat++] });
-        }
-        const cabins = Array.from({ length: cabinsCount }, (_, i) => seat + i);
-        return { rows, cabins };
-    }
+    // explicit back row start number for known layouts
+    const explicitBackStart = {
+        23: 19, // back row should be 19..23
+        27: 23, // back row should be 23..27
+        31: 27, // back row should be 27..31
+    };
 
-    // default (31): 9 rows of left1 + right2 = 27 seats, then a back row of 5 seats -> total 32? no, 27+5=32? Wait
-    // We want total 31: 9*3=27, back row 4? but desired back row is 5 seats (27-31). Compute: 9 rows -> 27 seats, back row -> 5 seats (27..31) totals 32.
-    // Correct approach: produce 9 main rows (27 seats) and back row with seats 27..31 (5 seats) — seat numbering overlaps, so instead generate 8 main rows (24), pairRow handled in visualizer; to keep consistent with numbering used elsewhere, we'll produce 9 main rows (27 seats) and back row of 4 seats plus move seat 27 into back row by shifting numbering.
-    // Simpler and consistent: create 9 main rows (left1 + right2) -> seats 1..27, then back row with 4 seats -> 28..31, and adjust visualizer to include seat 27 in back row display. To move seat '27' visually into back row, visualizer will list lastRow as [27,28,29,30,31].
+    const backStart = explicitBackStart[total] || Math.max(1, total - (total % 3 === 0 ? 3 : total % 3));
+
     const rows = [];
     let seat = 1;
-    for (let r = 0; r < 9; r++) {
-        rows.push({ left: seat++, right: [seat++, seat++] });
+
+    // generate main rows up to backStart-1 using right-first ordering
+    while (seat < backStart) {
+        const remaining = backStart - seat;
+        if (remaining >= 3) {
+            const right1 = seat++;
+            const right2 = seat++;
+            const left = seat++;
+            rows.push({ left, right: [right1, right2] });
+        } else if (remaining === 2) {
+            const right1 = seat++;
+            const right2 = seat++;
+            rows.push({ left: null, right: [right1, right2] });
+        } else if (remaining === 1) {
+            const right1 = seat++;
+            rows.push({ left: null, right: [right1] });
+        }
     }
-    // back row: place the remaining seats. We'll place seats 28..31 in a right array, and keep seat 27 as last element of previous rows (visualizer will render 27 in back row visually)
-    const back = { left: null, right: [seat++, seat++, seat++, seat++] };
-    const cabins = Array.from({ length: cabinsCount }, (_, i) => seat + i);
-    return { rows: [...rows, back], cabins };
+
+    // back row explicitly from backStart to total
+    const backRight = [];
+    for (let s = backStart; s <= total; s++) backRight.push(s);
+    rows.push({ left: null, right: backRight });
+    // Adjust penultimate row: if the row before back row has a left seat and
+    // the penultimate's following row (usually the row just before back) has room
+    // to hold one more right seat, move that left into the next row so numbers
+    // visually align (e.g., make 24 sit with 25,26).
+    if (rows.length >= 2) {
+        const pen = rows.length - 2; // index of penultimate row
+        const next = pen + 1; // last row (back row)
+        if (rows[pen].left !== null && Array.isArray(rows[next].right) && rows[next].right.length < 3) {
+            // move left seat into the front of the next row's right array
+            rows[next].right = [rows[pen].left, ...rows[next].right];
+            rows[pen].left = null;
+        }
+    }
+
+    const cabins = Array.from({ length: cabinsCount }, (_, i) => total + 1 + i);
+    return { rows, cabins };
 }
 
 export default function SeatLayout({ layout = "31", bookedSeats = [], bookedMap = {}, selectedSeats = [], onSelect, onViewBooking, compact = false, cabins = [] }) {
@@ -74,14 +86,20 @@ export default function SeatLayout({ layout = "31", bookedSeats = [], bookedMap 
         const isBooked = bookedSet.has(id);
         const booking = bookedMap && bookedMap[id] ? bookedMap[id] : null;
         const isSelected = selectedSet.has(id);
+        const isBlocked = booking && booking.status === "blocked";
 
         const base = "flex items-center justify-center rounded-md border select-none";
         const sizeCls = compact ? "h-8 px-2 text-sm" : "h-10 px-3 text-sm";
 
         const cls = clsx(base, sizeCls, {
-            "bg-red-200 border-red-300 text-red-800 cursor-not-allowed": isBooked,
-            "bg-[#f97316] text-white": isSelected && !isBooked,
-            "bg-white border-slate-200 text-slate-800 hover:bg-orange-50 cursor-pointer": !isBooked && !isSelected,
+            // booked seats (already purchased)
+            "bg-red-200 border-red-300 text-red-800 cursor-not-allowed": isBooked && !isBlocked,
+            // blocked seats (reserved by admin)
+            "bg-amber-100 border-amber-300 text-amber-800 cursor-not-allowed": isBlocked,
+            // selected by current user
+            "bg-[#f97316] text-white": isSelected && !isBooked && !isBlocked,
+            // available
+            "bg-white border-slate-200 text-slate-800 hover:bg-orange-50 cursor-pointer": !isBooked && !isSelected && !isBlocked,
         });
 
         return (
@@ -101,21 +119,33 @@ export default function SeatLayout({ layout = "31", bookedSeats = [], bookedMap 
         );
     };
 
+    function renderPlaceholder(key) {
+        // visually matches seat button size to create spacing
+        return (
+            <div key={key} className="h-10 w-12 rounded-md" />
+        );
+    }
+
     return (
         <div className="w-full">
             <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-semibold text-slate-600">Driver</div>
                 <div className="text-sm text-slate-500">Seats ({L})</div>
             </div>
 
             <div className="space-y-2">
-                {rows.map((row, i) => (
-                    <div key={i} className="flex items-center gap-4">
-                        <div className="w-16 flex justify-center">{renderSeat(row.left)}</div>
-                        <div className="flex-1" />
-                        <div className="flex gap-3">{(row.right || []).map((s) => renderSeat(s))}</div>
-                    </div>
-                ))}
+                {rows.map((row, i) => {
+                    const isBack = row.left === null;
+                    const rightSeats = row.right || [];
+                    // for back rows with fewer items, add placeholders to create a left gap
+                    const placeholderCount = isBack ? Math.max(0, 3 - rightSeats.length) : 0;
+                    return (
+                        <div key={i} className="flex items-start gap-4">
+                            <div className="w-16 flex justify-center">{i === 0 ? <div className="h-8" /> : null}{renderSeat(row.left)}</div>
+                            <div className="flex-1" />
+                            <div className="flex gap-3">{placeholderCount > 0 ? Array.from({ length: placeholderCount }).map((_, idx) => renderPlaceholder(`${i}-ph-${idx}`)) : null}{rightSeats.map((s) => renderSeat(s))}</div>
+                        </div>
+                    );
+                })}
             </div>
 
             <div className="mt-4 grid grid-cols-6 gap-2">
@@ -127,11 +157,12 @@ export default function SeatLayout({ layout = "31", bookedSeats = [], bookedMap 
                 ))}
             </div>
 
-            <div className="mt-4 grid grid-cols-4 gap-4 text-xs">
+            <div className="mt-4 grid grid-cols-6 gap-4 text-xs">
                 <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-white border border-slate-200" /> Available</div>
                 <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-[#f97316]" /> Selected</div>
                 <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-red-200 border border-red-300" /> Booked</div>
                 <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-slate-100 border border-slate-200" /> Cabin</div>
+                <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-amber-100 border border-amber-300" /> Blocked</div>
             </div>
         </div>
     );

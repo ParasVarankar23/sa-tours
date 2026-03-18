@@ -18,11 +18,13 @@ export async function POST(req) {
             return NextResponse.json({ success: false, error: "busId and valid date (YYYY-MM-DD) are required" }, { status: 400 });
         }
 
-        // Allow schedule-specific meta: startTime, endTime, stops, available
+        // Allow schedule-specific meta: startTime, endTime, stops, available, season, pricingOverride
         const startTime = body.startTime ? String(body.startTime).trim() : null;
         const endTime = body.endTime ? String(body.endTime).trim() : null;
         const stops = Array.isArray(body.stops) ? body.stops : null;
         const available = body.available === undefined ? true : Boolean(body.available);
+        const season = body.season === undefined ? false : Boolean(body.season);
+        const pricingOverride = body.pricingOverride && typeof body.pricingOverride === 'object' ? body.pricingOverride : null;
 
         const db = getAdminDb();
         const path = `${COLLECTION}/${busId}/${date}`;
@@ -35,6 +37,8 @@ export async function POST(req) {
         if (startTime) value.startTime = startTime;
         if (endTime) value.endTime = endTime;
         if (stops) value.stops = stops;
+        if (season) value.season = true;
+        if (pricingOverride) value.pricingOverride = pricingOverride;
 
         await db.ref(path).set(value);
 
