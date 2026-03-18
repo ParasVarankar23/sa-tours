@@ -22,9 +22,6 @@ export default function SchedulePage() {
     const [date, setDate] = useState("");
     const [saving, setSaving] = useState(false);
     const [seasonFlag, setSeasonFlag] = useState(false);
-    const [pricingOverrideText, setPricingOverrideText] = useState("");
-    const [exactFareMap, setExactFareMap] = useState({});
-    const [pricingTerminals, setPricingTerminals] = useState({ forward: null, return: null });
     const [schedules, setSchedules] = useState({});
     const [searchTerm, setSearchTerm] = useState("");
     const [filterType, setFilterType] = useState("all");
@@ -120,53 +117,6 @@ export default function SchedulePage() {
         return buses.find((b) => b.busId === busId) || null;
     }, [buses, busId]);
 
-    // initialize exactFareMap from pricingOverrideText or selectedBus pricingRules
-    useEffect(() => {
-        let map = {};
-        let terminals = { forward: null, return: null };
-
-        if (pricingOverrideText && pricingOverrideText.trim()) {
-            try {
-                const parsed = JSON.parse(pricingOverrideText);
-                map = (parsed && parsed.exactFareMap) || {};
-                if (parsed && parsed.terminals) terminals = parsed.terminals;
-            } catch {
-                // ignore invalid JSON
-            }
-        } else if (
-            selectedBus &&
-            selectedBus.pricingRules &&
-            selectedBus.pricingRules.exactFareMap
-        ) {
-            map = { ...(selectedBus.pricingRules.exactFareMap || {}) };
-        }
-
-        setExactFareMap(map);
-        setPricingTerminals(terminals);
-    }, [pricingOverrideText, selectedBus]);
-
-    // read pricing saved by fare-editor (localStorage) when busId/date change
-    useEffect(() => {
-        if (!busId || !date) return;
-
-        try {
-            const key = `schedule_pricing_override:${busId}:${date}`;
-            const raw =
-                typeof window !== "undefined" ? localStorage.getItem(key) : null;
-
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (parsed && parsed.exactFareMap) {
-                    setExactFareMap(parsed.exactFareMap || {});
-                    setPricingOverrideText(JSON.stringify(parsed));
-                    if (parsed.terminals) setPricingTerminals(parsed.terminals || { forward: null, return: null });
-                }
-            }
-        } catch {
-            // ignore
-        }
-    }, [busId, date]);
-
     const allSchedules = buses.flatMap((b) => {
         const dates = schedules[b.busId] ? Object.keys(schedules[b.busId]) : [];
         return dates.map((d) => ({
@@ -231,37 +181,10 @@ export default function SchedulePage() {
 
         setSaving(true);
         try {
-            let pricingOverride = null;
-
-            const hasExact = Object.keys(exactFareMap || {}).some(
-                (k) =>
-                    exactFareMap[k] !== "" &&
-                    exactFareMap[k] !== undefined &&
-                    exactFareMap[k] !== null
-            );
-
-            if (hasExact) {
-                const filtered = {};
-                Object.keys(exactFareMap).forEach((k) => {
-                    const v = exactFareMap[k];
-                    if (v !== "" && v !== undefined && v !== null) {
-                        filtered[k] = Number(v);
-                    }
-                });
-                pricingOverride = { exactFareMap: filtered, terminals: pricingTerminals };
-            } else if (pricingOverrideText && pricingOverrideText.trim()) {
-                try {
-                    pricingOverride = JSON.parse(pricingOverrideText);
-                } catch {
-                    setSaving(false);
-                    return showAppToast("error", "Pricing override JSON is invalid");
-                }
-            }
-
             const res = await fetch("/api/schedule", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ busId, date, season: seasonFlag, pricingOverride }),
+                body: JSON.stringify({ busId, date, season: seasonFlag }),
             });
 
             const data = await res.json();
@@ -273,10 +196,7 @@ export default function SchedulePage() {
             showAppToast("success", "Bus marked available on selected date");
             setBusId("");
             setDate("");
-            setPricingOverrideText("");
-            setExactFareMap({});
             setSeasonFlag(false);
-            setPricingTerminals({ forward: null, return: null });
             fetchSchedules();
         } catch (err) {
             console.error(err);
@@ -529,115 +449,6 @@ export default function SchedulePage() {
                             </div>
                         </div>
 
-                        {/* Season Toggle */}
-                        <div className="mt-5 flex items-center gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
-                            <input
-                                id="seasonFlag"
-                                type="checkbox"
-                                checked={seasonFlag}
-                                onChange={(e) => setSeasonFlag(e.target.checked)}
-                                className="h-4 w-4 accent-[#f97316]"
-                            />
-                            <label htmlFor="seasonFlag" className="text-sm font-medium text-slate-700">
-                                Apply Season Pricing (+₹100)
-                            </label>
-                        </div>
-
-                        {/* Pricing Override */}
-                        <div className="mt-6">
-                            <div className="mb-2 flex items-start justify-between gap-3">
-                                <label className="text-sm font-medium text-slate-700">
-                                    Pricing Override (Route-wise)
-                                </label>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (!busId || !date) {
-                                            return showAppToast(
-                                                "error",
-                                                "Select bus and date first to open editor"
-                                            );
-                                        }
-                                        router.push(
-                                            `/admin/schedule/fare-editor?busId=${encodeURIComponent(
-                                                busId
-                                            )}&date=${encodeURIComponent(date)}`
-                                        );
-                                    }}
-                                    className="rounded-2xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                                >
-                                    Open Route Editor
-                                </button>
-                            </div>
-
-                            {selectedBus &&
-                                Array.isArray(selectedBus.stops) &&
-                                selectedBus.stops.length > 0 ? (
-                                <div className="max-h-72 overflow-auto rounded-lg border bg-white p-2">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="text-left text-xs text-slate-500">
-                                                <th className="px-2 py-1">From</th>
-                                                <th className="px-2 py-1">To</th>
-                                                <th className="px-2 py-1">Fare (₹)</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {(() => {
-                                                const stops = (selectedBus.stops || []).map((s) =>
-                                                    typeof s === "string" ? s : s.stopName
-                                                );
-
-                                                const rows = [];
-                                                for (let i = 0; i < stops.length; i++) {
-                                                    for (let j = i + 1; j < stops.length; j++) {
-                                                        const from = stops[i];
-                                                        const to = stops[j];
-                                                        const key = `${from}|${to}`;
-
-                                                        rows.push(
-                                                            <tr key={key} className="border-t">
-                                                                <td className="px-2 py-2 text-slate-700">{from}</td>
-                                                                <td className="px-2 py-2 text-slate-700">{to}</td>
-                                                                <td className="px-2 py-2">
-                                                                    <input
-                                                                        type="number"
-                                                                        min={0}
-                                                                        value={exactFareMap[key] ?? ""}
-                                                                        onChange={(e) =>
-                                                                            setExactFareMap((prev) => ({
-                                                                                ...prev,
-                                                                                [key]: e.target.value,
-                                                                            }))
-                                                                        }
-                                                                        className="w-28 rounded-md border px-2 py-1 text-sm"
-                                                                        placeholder="e.g. 500"
-                                                                    />
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    }
-                                                }
-                                                return rows;
-                                            })()}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : (
-                                <textarea
-                                    value={pricingOverrideText}
-                                    onChange={(e) => setPricingOverrideText(e.target.value)}
-                                    rows={3}
-                                    className="w-full rounded-lg border px-3 py-2 font-mono text-xs"
-                                    placeholder='{"exactFareMap":{"Borli|Dighi":500}}'
-                                />
-                            )}
-
-                            <p className="mt-2 text-xs text-slate-500">
-                                Enter fares for specific From → To pairs. Values left empty will not
-                                be included.
-                            </p>
-                        </div>
 
                         {/* Action Buttons */}
                         <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -655,8 +466,6 @@ export default function SchedulePage() {
                                 onClick={() => {
                                     setBusId("");
                                     setDate("");
-                                    setPricingOverrideText("");
-                                    setExactFareMap({});
                                     setSeasonFlag(false);
                                 }}
                                 className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"

@@ -3,29 +3,165 @@ import { getAdminDb } from "../../../lib/firebaseAdmin";
 
 const COLLECTION_NAME = "buses";
 const seatLayoutOptions = ["31", "27", "23"];
+const MIN_STOP_GAP = 5; // block nearby pairs like Borli -> Mhasala
+
+/* =========================
+   Helpers
+========================= */
+
+function normalizeText(value) {
+    return String(value || "").trim();
+}
+
+function normalizeKey(value) {
+    return normalizeText(value).toLowerCase();
+}
 
 function sanitizeStops(stops) {
     if (!Array.isArray(stops)) return [];
 
     return stops
-        .filter((stop) => stop && (String(stop.stopName || "").trim() || String(stop.time || "").trim()))
+        .filter(
+            (stop) =>
+                stop &&
+                (normalizeText(stop.stopName) || normalizeText(stop.time))
+        )
         .slice(0, 20)
         .map((stop) => ({
-            stopName: String(stop.stopName || "").trim(),
-            time: String(stop.time || "").trim(),
-        }));
+            stopName: normalizeText(stop.stopName),
+            time: normalizeText(stop.time),
+        }))
+        .filter((stop) => stop.stopName);
 }
 
 function sanitizeCabins(cabins) {
     if (!Array.isArray(cabins)) return [];
 
     return cabins
-        .filter((cabin) => cabin && String(cabin.label || "").trim())
+        .filter((cabin) => cabin && normalizeText(cabin.label))
         .slice(0, 8)
         .map((cabin, index) => ({
             cabinNo: index + 1,
-            label: String(cabin.label || "").trim(),
+            label: normalizeText(cabin.label),
         }));
+}
+
+function buildRoutePointsFromSanitized(startPoint, stops, endPoint) {
+    return [
+        normalizeText(startPoint),
+        ...stops.map((s) => normalizeText(s.stopName)).filter(Boolean),
+        normalizeText(endPoint),
+    ].filter(Boolean);
+}
+
+function hasDuplicateRoutePoints(routePoints) {
+    const seen = new Set();
+
+    for (const point of routePoints) {
+        const key = normalizeKey(point);
+        if (seen.has(key)) return true;
+        seen.add(key);
+    }
+
+    return false;
+}
+
+function validateRoutePointTimes(startTime, stops, endTime) {
+    if (!normalizeText(startTime)) return "startTime is required";
+    if (!normalizeText(endTime)) return "endTime is required";
+
+    for (const stop of stops) {
+        if (!normalizeText(stop.time)) {
+            return `Time is required for stop ${stop.stopName}`;
+        }
+    }
+
+    return null;
+}
+
+function sanitizeFareRules(fareRules, routePoints) {
+    if (!Array.isArray(fareRules)) return [];
+
+    const uniqueMap = new Map();
+
+    for (const rule of fareRules.slice(0, 100)) {
+        const from = normalizeText(rule?.from);
+        const to = normalizeText(rule?.to);
+        const fare = Number(rule?.fare);
+
+        if (!from || !to || Number.isNaN(fare) || fare <= 0) continue;
+
+        const fromIndex = routePoints.findIndex((p) => normalizeKey(p) === normalizeKey(from));
+        const toIndex = routePoints.findIndex((p) => normalizeKey(p) === normalizeKey(to));
+
+        // must exist in route
+        if (fromIndex === -1 || toIndex === -1) continue;
+
+        // drop must come after pickup
+        if (toIndex <= fromIndex) continue;
+
+        // block nearby stops
+        if (toIndex - fromIndex < MIN_STOP_GAP) continue;
+
+        const key = `${normalizeKey(from)}|${normalizeKey(to)}`;
+
+        uniqueMap.set(key, {
+            from: routePoints[fromIndex],
+            to: routePoints[toIndex],
+            fare,
+        });
+    }
+
+    return Array.from(uniqueMap.values());
+}
+
+function validateFareRulesStrict(fareRules, routePoints) {
+    if (!Array.isArray(fareRules)) return null;
+
+    const seenPairs = new Set();
+
+    for (const rule of fareRules.slice(0, 100)) {
+        const from = normalizeText(rule?.from);
+        const to = normalizeText(rule?.to);
+        const fare = Number(rule?.fare);
+
+        // allow empty row to be ignored
+        if (!from && !to && (rule?.fare === "" || rule?.fare === undefined || rule?.fare === null)) {
+            continue;
+        }
+
+        if (!from || !to) {
+            return "Each fare rule must have pickup and drop";
+        }
+
+        if (!Number.isFinite(fare) || fare <= 0) {
+            return `Invalid fare for ${from} → ${to}`;
+        }
+
+        const fromIndex = routePoints.findIndex((p) => normalizeKey(p) === normalizeKey(from));
+        const toIndex = routePoints.findIndex((p) => normalizeKey(p) === normalizeKey(to));
+
+        if (fromIndex === -1 || toIndex === -1) {
+            return `Invalid fare rule route point: ${from} → ${to}`;
+        }
+
+        if (toIndex <= fromIndex) {
+            return `Drop must come after pickup for ${from} → ${to}`;
+        }
+
+        if (toIndex - fromIndex < MIN_STOP_GAP) {
+            return `Nearby stop fare not allowed for ${from} → ${to}`;
+        }
+
+        const pairKey = `${normalizeKey(routePoints[fromIndex])}|${normalizeKey(routePoints[toIndex])}`;
+        if (seenPairs.has(pairKey)) {
+            return `Duplicate fare rule found for ${routePoints[fromIndex]} → ${routePoints[toIndex]}`;
+        }
+
+        seenPairs.add(pairKey);
+    }
+
+    return null;
 }
 
 function validateBusPayload(body, isUpdate = false) {
@@ -42,21 +178,25 @@ function validateBusPayload(body, isUpdate = false) {
     ];
 
     for (const field of requiredFields) {
-        if (!String(body[field] || "").trim()) {
+        if (!normalizeText(body[field])) {
             return `${field} is required`;
         }
     }
 
-    if (!["AC", "Non-AC"].includes(String(body.busType).trim())) {
+    if (!["AC", "Non-AC"].includes(normalizeText(body.busType))) {
         return "Invalid bus type";
     }
 
-    if (!seatLayoutOptions.includes(String(body.seatLayout).trim())) {
+    if (!seatLayoutOptions.includes(normalizeText(body.seatLayout))) {
         return "Invalid seat layout";
     }
 
-    if (isUpdate && !String(body.busId || "").trim()) {
+    if (isUpdate && !normalizeText(body.busId)) {
         return "busId is required for update";
+    }
+
+    if (normalizeKey(body.startPoint) === normalizeKey(body.endPoint)) {
+        return "Start point and end point cannot be same";
     }
 
     return null;
@@ -80,8 +220,15 @@ export async function GET() {
 
         const data = snapshot.val();
 
-        const buses = Object.keys(data || {}).map((key) => ({ id: key, ...data[key] }));
-        buses.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const buses = Object.keys(data || {}).map((key) => ({
+            id: key,
+            ...data[key],
+        }));
+
+        buses.sort(
+            (a, b) =>
+                new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        );
 
         return NextResponse.json(
             {
@@ -120,22 +267,65 @@ export async function POST(req) {
             );
         }
 
-        const busNumber = String(body.busNumber).trim();
-        const startTime = String(body.startTime || "").trim();
-        const startPoint = String(body.startPoint || "").trim();
+        const busNumber = normalizeText(body.busNumber);
+        const busName = normalizeText(body.busName);
+        const busType = normalizeText(body.busType);
+        const routeName = normalizeText(body.routeName);
+        const startPoint = normalizeText(body.startPoint);
+        const endPoint = normalizeText(body.endPoint);
+        const startTime = normalizeText(body.startTime);
+        const endTime = normalizeText(body.endTime);
+        const seatLayout = normalizeText(body.seatLayout);
 
-        // Duplicate check: same bus number + same start time + same start point
+        const sanitizedStops = sanitizeStops(body.stops);
+        const sanitizedCabins = sanitizeCabins(body.cabins);
+        const routePoints = buildRoutePointsFromSanitized(startPoint, sanitizedStops, endPoint);
+
+        if (hasDuplicateRoutePoints(routePoints)) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "Duplicate route point names are not allowed",
+                },
+                { status: 400 }
+            );
+        }
+
+        const timeValidationError = validateRoutePointTimes(startTime, sanitizedStops, endTime);
+        if (timeValidationError) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: timeValidationError,
+                },
+                { status: 400 }
+            );
+        }
+
+        const strictFareError = validateFareRulesStrict(body.fareRules, routePoints);
+        if (strictFareError) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: strictFareError,
+                },
+                { status: 400 }
+            );
+        }
+
         const db = getAdminDb();
         const existingSnapshot = await db.ref(COLLECTION_NAME).once("value");
+        const existing = existingSnapshot.exists()
+            ? Object.values(existingSnapshot.val() || {})
+            : [];
 
-        const existing = existingSnapshot.exists() ? Object.values(existingSnapshot.val() || {}) : [];
-
+        // Duplicate check: same bus number + same start time + same start point
         if (
             existing.some(
                 (b) =>
-                    String(b.busNumber || "").trim() === busNumber &&
-                    String(b.startTime || "").trim() === startTime &&
-                    String(b.startPoint || "").trim() === startPoint
+                    normalizeKey(b.busNumber) === normalizeKey(busNumber) &&
+                    normalizeText(b.startTime) === startTime &&
+                    normalizeKey(b.startPoint) === normalizeKey(startPoint)
             )
         ) {
             return NextResponse.json(
@@ -153,28 +343,17 @@ export async function POST(req) {
         const newBus = {
             busId,
             busNumber,
-            busName: String(body.busName).trim(),
-            busType: String(body.busType).trim(),
-            routeName: String(body.routeName).trim(),
-            startPoint: String(body.startPoint).trim(),
-            endPoint: String(body.endPoint).trim(),
-            startTime: String(body.startTime).trim(),
-            endTime: String(body.endTime).trim(),
-            seatLayout: String(body.seatLayout).trim(),
-            stops: sanitizeStops(body.stops),
-            cabins: sanitizeCabins(body.cabins),
-            pricingRules: (function () {
-                try {
-                    const pr = body.pricingRules || null;
-                    if (!pr) return null;
-                    const exact = pr.exactFareMap && typeof pr.exactFareMap === 'object' ? pr.exactFareMap : {};
-                    const seasonInc = pr.seasonIncrement !== undefined && pr.seasonIncrement !== null ? Number(pr.seasonIncrement) : undefined;
-                    const out = {};
-                    if (Object.keys(exact).length) out.exactFareMap = exact;
-                    if (!Number.isNaN(seasonInc) && seasonInc !== undefined) out.seasonIncrement = seasonInc;
-                    return Object.keys(out).length ? out : null;
-                } catch (e) { return null; }
-            })(),
+            busName,
+            busType,
+            routeName,
+            startPoint,
+            endPoint,
+            startTime,
+            endTime,
+            seatLayout,
+            stops: sanitizedStops,
+            cabins: sanitizedCabins,
+            fareRules: sanitizeFareRules(body.fareRules, routePoints),
             createdAt: now,
             updatedAt: now,
         };
@@ -219,10 +398,52 @@ export async function PUT(req) {
             );
         }
 
-        const busId = String(body.busId).trim();
-        const busNumber = String(body.busNumber).trim();
-        const startTime = String(body.startTime || "").trim();
-        const startPoint = String(body.startPoint || "").trim();
+        const busId = normalizeText(body.busId);
+        const busNumber = normalizeText(body.busNumber);
+        const busName = normalizeText(body.busName);
+        const busType = normalizeText(body.busType);
+        const routeName = normalizeText(body.routeName);
+        const startPoint = normalizeText(body.startPoint);
+        const endPoint = normalizeText(body.endPoint);
+        const startTime = normalizeText(body.startTime);
+        const endTime = normalizeText(body.endTime);
+        const seatLayout = normalizeText(body.seatLayout);
+
+        const sanitizedStops = sanitizeStops(body.stops);
+        const sanitizedCabins = sanitizeCabins(body.cabins);
+        const routePoints = buildRoutePointsFromSanitized(startPoint, sanitizedStops, endPoint);
+
+        if (hasDuplicateRoutePoints(routePoints)) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "Duplicate route point names are not allowed",
+                },
+                { status: 400 }
+            );
+        }
+
+        const timeValidationError = validateRoutePointTimes(startTime, sanitizedStops, endTime);
+        if (timeValidationError) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: timeValidationError,
+                },
+                { status: 400 }
+            );
+        }
+
+        const strictFareError = validateFareRulesStrict(body.fareRules, routePoints);
+        if (strictFareError) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: strictFareError,
+                },
+                { status: 400 }
+            );
+        }
 
         const db = getAdminDb();
         const busSnapshot = await db.ref(`${COLLECTION_NAME}/${busId}`).once("value");
@@ -236,16 +457,16 @@ export async function PUT(req) {
                 { status: 404 }
             );
         }
-        // Duplicate check for another bus (scan existing entries)
+
         const allSnapshot = await db.ref(COLLECTION_NAME).once("value");
         const allBuses = allSnapshot.exists() ? Object.entries(allSnapshot.val() || {}) : [];
 
         const duplicateExists = allBuses.some(([key, val]) => {
             return (
                 key !== busId &&
-                String(val.busNumber || "").trim() === busNumber &&
-                String(val.startTime || "").trim() === startTime &&
-                String(val.startPoint || "").trim() === startPoint
+                normalizeKey(val.busNumber) === normalizeKey(busNumber) &&
+                normalizeText(val.startTime) === startTime &&
+                normalizeKey(val.startPoint) === normalizeKey(startPoint)
             );
         });
 
@@ -253,53 +474,39 @@ export async function PUT(req) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: "Another bus already exists with this bus number and travel date",
+                    error: "Another bus already exists with this bus number, start point and time",
                 },
                 { status: 409 }
             );
         }
 
+        const existingData = busSnapshot.val() || {};
+
         const updatedBusData = {
+            busId,
             busNumber,
-            busName: String(body.busName).trim(),
-            busType: String(body.busType).trim(),
-            routeName: String(body.routeName).trim(),
-            startPoint: String(body.startPoint).trim(),
-            endPoint: String(body.endPoint).trim(),
-            startTime: String(body.startTime).trim(),
-            endTime: String(body.endTime).trim(),
-            seatLayout: String(body.seatLayout).trim(),
-            stops: sanitizeStops(body.stops),
-            cabins: sanitizeCabins(body.cabins),
-            pricingRules: (function () {
-                try {
-                    const pr = body.pricingRules || null;
-                    if (!pr) return null;
-                    const exact = pr.exactFareMap && typeof pr.exactFareMap === 'object' ? pr.exactFareMap : {};
-                    const seasonInc = pr.seasonIncrement !== undefined && pr.seasonIncrement !== null ? Number(pr.seasonIncrement) : undefined;
-                    const out = {};
-                    if (Object.keys(exact).length) out.exactFareMap = exact;
-                    if (!Number.isNaN(seasonInc) && seasonInc !== undefined) out.seasonIncrement = seasonInc;
-                    return Object.keys(out).length ? out : null;
-                } catch (e) { return null; }
-            })(),
+            busName,
+            busType,
+            routeName,
+            startPoint,
+            endPoint,
+            startTime,
+            endTime,
+            seatLayout,
+            stops: sanitizedStops,
+            cabins: sanitizedCabins,
+            fareRules: sanitizeFareRules(body.fareRules, routePoints),
+            createdAt: existingData.createdAt || null,
             updatedAt: new Date().toISOString(),
         };
 
-        await db.ref(`${COLLECTION_NAME}/${busId}`).update(updatedBusData);
-
-        const existingData = busSnapshot.val() || {};
-        const updatedBus = {
-            busId,
-            ...updatedBusData,
-            createdAt: existingData.createdAt || null,
-        };
+        await db.ref(`${COLLECTION_NAME}/${busId}`).set(updatedBusData);
 
         return NextResponse.json(
             {
                 success: true,
                 message: "Bus updated successfully",
-                bus: updatedBus,
+                bus: updatedBusData,
             },
             { status: 200 }
         );
@@ -323,7 +530,7 @@ export async function DELETE(req) {
         const { searchParams } = new URL(req.url);
         const busId = searchParams.get("busId");
 
-        if (!busId || !String(busId).trim()) {
+        if (!busId || !normalizeText(busId)) {
             return NextResponse.json(
                 {
                     success: false,
@@ -334,7 +541,7 @@ export async function DELETE(req) {
         }
 
         const db = getAdminDb();
-        const busRef = db.ref(`${COLLECTION_NAME}/${String(busId).trim()}`);
+        const busRef = db.ref(`${COLLECTION_NAME}/${normalizeText(busId)}`);
         const busDoc = await busRef.once("value");
 
         if (!busDoc.exists()) {

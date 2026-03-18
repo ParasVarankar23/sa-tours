@@ -87,6 +87,7 @@ export default function SeatLayout({ layout = "31", bookedSeats = [], bookedMap 
         const booking = bookedMap && bookedMap[id] ? bookedMap[id] : null;
         const isSelected = selectedSet.has(id);
         const isBlocked = booking && booking.status === "blocked";
+        const isCabin = cabinNumbers.includes(Number(id));
 
         const base = "flex items-center justify-center rounded-md border select-none";
         const sizeCls = compact ? "h-8 px-2 text-sm" : "h-10 px-3 text-sm";
@@ -98,8 +99,10 @@ export default function SeatLayout({ layout = "31", bookedSeats = [], bookedMap 
             "bg-amber-100 border-amber-300 text-amber-800 cursor-not-allowed": isBlocked,
             // selected by current user
             "bg-[#f97316] text-white": isSelected && !isBooked && !isBlocked,
+            // cabin seats (visual style)
+            "bg-slate-100 border-slate-200 text-slate-800 hover:bg-slate-50 cursor-pointer": isCabin && !isBooked && !isBlocked && !isSelected,
             // available
-            "bg-white border-slate-200 text-slate-800 hover:bg-orange-50 cursor-pointer": !isBooked && !isSelected && !isBlocked,
+            "bg-white border-slate-200 text-slate-800 hover:bg-orange-50 cursor-pointer": !isBooked && !isSelected && !isBlocked && !isCabin,
         });
 
         return (

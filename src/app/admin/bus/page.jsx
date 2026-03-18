@@ -56,10 +56,7 @@ const initialForm = {
     seatLayout: "",
     stops: [],
     cabins: [],
-    pricingRules: {
-        seasonIncrement: "",
-        exactFareMap: {},
-    },
+    fareRules: [],
 };
 
 export default function AdminBusPage() {
@@ -83,6 +80,9 @@ export default function AdminBusPage() {
     const [confirmMessage, setConfirmMessage] = useState("");
     const [confirmAction, setConfirmAction] = useState(() => () => { });
 
+    const [editOriginalStops, setEditOriginalStops] = useState([]);
+    const [editOriginalEndTime, setEditOriginalEndTime] = useState("");
+
     const openConfirm = (message, action) => {
         setConfirmMessage(message);
         setConfirmAction(() => action);
@@ -94,8 +94,6 @@ export default function AdminBusPage() {
         setConfirmMessage("");
         setConfirmAction(() => () => { });
     };
-    const [editOriginalStops, setEditOriginalStops] = useState([]);
-    const [editOriginalEndTime, setEditOriginalEndTime] = useState("");
 
     const fetchBuses = async () => {
         try {
@@ -130,7 +128,7 @@ export default function AdminBusPage() {
                     .includes(term);
 
             const matchesSeat =
-                seatFilter === "All" || bus.seatLayout === seatFilter;
+                seatFilter === "All" || String(bus.seatLayout) === seatFilter;
 
             return matchesSearch && matchesSeat;
         });
@@ -150,32 +148,129 @@ export default function AdminBusPage() {
     const busStats = useMemo(() => {
         return {
             total: busList.length,
-            seats31: busList.filter((b) => b.seatLayout === "31").length,
-            seats27: busList.filter((b) => b.seatLayout === "27").length,
-            seats23: busList.filter((b) => b.seatLayout === "23").length,
+            seats31: busList.filter((b) => String(b.seatLayout) === "31").length,
+            seats27: busList.filter((b) => String(b.seatLayout) === "27").length,
+            seats23: busList.filter((b) => String(b.seatLayout) === "23").length,
         };
     }, [busList]);
+
+    const buildRoutePoints = (data) => {
+        const points = [];
+
+        if (data.startPoint?.trim()) {
+            points.push({
+                id: "start",
+                label: data.startPoint.trim(),
+                time: data.startTime || "",
+                type: "start",
+            });
+        }
+
+        (data.stops || []).forEach((stop, index) => {
+            if (stop?.stopName?.trim()) {
+                points.push({
+                    id: `stop-${index}`,
+                    label: stop.stopName.trim(),
+                    time: stop.time || "",
+                    type: "stop",
+                });
+            }
+        });
+
+        if (data.endPoint?.trim()) {
+            points.push({
+                id: "end",
+                label: data.endPoint.trim(),
+                time: data.endTime || "",
+                type: "end",
+            });
+        }
+
+        return points;
+    };
+
+    const validateBusForm = (data) => {
+        if (
+            !data.busNumber.trim() ||
+            !data.busName.trim() ||
+            !data.busType.trim() ||
+            !data.routeName.trim() ||
+            !data.startPoint.trim() ||
+            !data.endPoint.trim() ||
+            !data.startTime.trim() ||
+            !data.endTime.trim()
+        ) {
+            return "Please fill all required bus fields";
+        }
+
+        if (!seatLayoutOptions.includes(String(data.seatLayout))) {
+            return "Please select a valid seat layout";
+        }
+
+        if (data.startPoint.trim().toLowerCase() === data.endPoint.trim().toLowerCase()) {
+            return "Start point and end point cannot be same";
+        }
+
+        const routePoints = buildRoutePoints(data);
+
+        if (routePoints.length < 2) {
+            return "Please provide valid route points";
+        }
+
+        const pointLabels = routePoints.map((p) => p.label.toLowerCase());
+        const hasDuplicateStops = pointLabels.some(
+            (label, index) => pointLabels.indexOf(label) !== index
+        );
+
+        if (hasDuplicateStops) {
+            return "Duplicate route point names are not allowed";
+        }
+
+        for (let i = 0; i < routePoints.length; i++) {
+            if (!routePoints[i].time) {
+                return `Please provide time for ${routePoints[i].label}`;
+            }
+        }
+
+        const findIndex = (name) =>
+            routePoints.findIndex((p) => p.label === String(name || "").trim());
+
+        for (const rule of data.fareRules || []) {
+            const from = String(rule.from || "").trim();
+            const to = String(rule.to || "").trim();
+            const fare = Number(rule.fare);
+
+            if (!from || !to || !rule.fare) {
+                return "Please complete all fare rules";
+            }
+
+            const fromIndex = findIndex(from);
+            const toIndex = findIndex(to);
+
+            if (fromIndex === -1 || toIndex === -1) {
+                return `Invalid fare rule: ${from} → ${to}`;
+            }
+
+            if (toIndex <= fromIndex) {
+                return `Drop must be after pickup for ${from} → ${to}`;
+            }
+
+            if (toIndex - fromIndex < 2) {
+                return `Nearby stop fare not allowed for ${from} → ${to}`;
+            }
+
+            if (!Number.isFinite(fare) || fare <= 0) {
+                return `Fare must be greater than 0 for ${from} → ${to}`;
+            }
+        }
+
+        return null;
+    };
 
     const handleInputChange = (e, isEdit = false) => {
         const { name, value } = e.target;
 
-        // support dotted names for nested properties e.g. pricingRules.seasonIncrement
-        const setNested = (obj, path, val) => {
-            const parts = String(path).split(".");
-            const last = parts.pop();
-            let cur = { ...(obj || {}) };
-            let top = cur;
-            for (const p of parts) {
-                if (cur[p] === undefined || cur[p] === null || typeof cur[p] !== 'object') cur[p] = {};
-                cur[p] = { ...(cur[p] || {}) };
-                cur = cur[p];
-            }
-            cur[last] = val;
-            return top;
-        };
-
         if (isEdit) {
-            // If editing startTime, shift stop times by delta
             if (name === "startTime") {
                 try {
                     const prevBase = editOriginalStartTime || editData.startTime || "";
@@ -186,15 +281,16 @@ export default function AdminBusPage() {
 
                     if (prevMin !== null && newMin !== null) {
                         const delta = newMin - prevMin;
+
                         updatedStops = updatedStops.map((s) => {
                             const orig = timeToMinutes(s.time || s.stopTime || "");
                             if (orig === null) return { ...s };
                             return { ...s, time: minutesToTime(orig + delta) };
                         });
 
-                        // shift endTime too
                         const prevEnd = editOriginalEndTime || editData.endTime || "";
                         const prevEndMin = timeToMinutes(prevEnd);
+
                         if (prevEndMin !== null) {
                             const newEnd = minutesToTime(prevEndMin + delta);
                             setEditData((prev) => ({ ...prev, endTime: newEnd }));
@@ -203,43 +299,51 @@ export default function AdminBusPage() {
                     }
 
                     setEditData((prev) => ({ ...prev, [name]: value, stops: updatedStops }));
-                    // update base to new value so subsequent changes are relative
                     setEditOriginalStartTime(value);
-                    // also update original stops array
-                    setEditOriginalStops((prev) => (Array.isArray(prev) ? prev.map((s, i) => ({ ...(s || {}), time: (updatedStops[i] && updatedStops[i].time) || (s && s.time) || "" })) : updatedStops.map((s) => ({ ...(s || {}), time: s.time || "" }))));
-                } catch (err) {
+
+                    setEditOriginalStops((prev) =>
+                        Array.isArray(prev)
+                            ? prev.map((s, i) => ({
+                                ...(s || {}),
+                                time:
+                                    (updatedStops[i] && updatedStops[i].time) ||
+                                    (s && s.time) ||
+                                    "",
+                            }))
+                            : updatedStops.map((s) => ({ ...(s || {}), time: s.time || "" }))
+                    );
+                } catch {
                     setEditData((prev) => ({ ...prev, [name]: value }));
                 }
                 return;
             }
 
-            if (name && name.includes('.')) {
-                setEditData((prev) => ({ ...prev, ...setNested(prev, name, value) }));
-            } else {
-                setEditData((prev) => ({
-                    ...prev,
-                    [name]: value,
-                }));
-            }
+            setEditData((prev) => ({
+                ...prev,
+                [name]: value,
+            }));
         } else {
-            if (name && name.includes('.')) {
-                setFormData((prev) => ({ ...prev, ...setNested(prev, name, value) }));
-            } else {
-                setFormData((prev) => ({
-                    ...prev,
-                    [name]: value,
-                }));
-            }
+            setFormData((prev) => ({
+                ...prev,
+                [name]: value,
+            }));
         }
     };
 
     const handleStopChange = (index, field, value, isEdit = false) => {
         if (isEdit) {
-            // if changing a stop time, shift subsequent stops by the delta and update endTime
             const updatedStops = [...(editData.stops || [])];
 
             if (field === "time") {
-                const origTime = (editOriginalStops && editOriginalStops[index] && editOriginalStops[index].time) || (editData.stops && editData.stops[index] && editData.stops[index].time) || "";
+                const origTime =
+                    (editOriginalStops &&
+                        editOriginalStops[index] &&
+                        editOriginalStops[index].time) ||
+                    (editData.stops &&
+                        editData.stops[index] &&
+                        editData.stops[index].time) ||
+                    "";
+
                 const origMin = timeToMinutes(origTime);
                 const newMin = timeToMinutes(value);
 
@@ -247,6 +351,7 @@ export default function AdminBusPage() {
 
                 if (origMin !== null && newMin !== null) {
                     const delta = newMin - origMin;
+
                     for (let i = index + 1; i < updatedStops.length; i++) {
                         const s = updatedStops[i] || {};
                         const sMin = timeToMinutes(s.time || s.stopTime || "");
@@ -255,21 +360,24 @@ export default function AdminBusPage() {
                         }
                     }
 
-                    // shift endTime as well
                     const prevEnd = editOriginalEndTime || editData.endTime || "";
                     const prevEndMin = timeToMinutes(prevEnd);
+
                     if (prevEndMin !== null) {
                         const newEnd = minutesToTime(prevEndMin + delta);
                         setEditData((prev) => ({ ...prev, endTime: newEnd }));
                         setEditOriginalEndTime(newEnd);
                     }
 
-                    // update original stops so further changes are relative to new base
                     setEditOriginalStops((prev) => {
-                        const base = Array.isArray(prev) ? [...prev] : (editData.stops || []).map((s) => ({ ...s }));
+                        const base = Array.isArray(prev)
+                            ? [...prev]
+                            : (editData.stops || []).map((s) => ({ ...s }));
+
                         for (let i = index; i < updatedStops.length; i++) {
                             base[i] = { ...(base[i] || {}), time: updatedStops[i].time || "" };
                         }
+
                         return base;
                     });
                 }
@@ -283,7 +391,7 @@ export default function AdminBusPage() {
             }));
         } else {
             const updatedStops = [...(formData.stops || [])];
-            updatedStops[index][field] = value;
+            updatedStops[index] = { ...(updatedStops[index] || {}), [field]: value };
 
             setFormData((prev) => ({
                 ...prev,
@@ -331,7 +439,10 @@ export default function AdminBusPage() {
     const handleCabinChange = (index, value, isEdit = false) => {
         if (isEdit) {
             const updatedCabins = [...(editData.cabins || [])];
-            updatedCabins[index].label = value;
+            updatedCabins[index] = {
+                ...(updatedCabins[index] || {}),
+                label: value,
+            };
 
             setEditData((prev) => ({
                 ...prev,
@@ -339,7 +450,10 @@ export default function AdminBusPage() {
             }));
         } else {
             const updatedCabins = [...(formData.cabins || [])];
-            updatedCabins[index].label = value;
+            updatedCabins[index] = {
+                ...(updatedCabins[index] || {}),
+                label: value,
+            };
 
             setFormData((prev) => ({
                 ...prev,
@@ -390,30 +504,86 @@ export default function AdminBusPage() {
         }
     };
 
-    const validateBusForm = (data) => {
-        if (
-            !data.busNumber.trim() ||
-            !data.busName.trim() ||
-            !data.busType.trim() ||
-            !data.routeName.trim() ||
-            !data.startPoint.trim() ||
-            !data.endPoint.trim() ||
-            !data.startTime.trim() ||
-            !data.endTime.trim()
-        ) {
-            return "Please fill all required bus fields";
+    const handleFareRuleChange = (index, field, value, isEdit = false) => {
+        if (isEdit) {
+            setEditData((prev) => {
+                const updatedFareRules = [...(prev.fareRules || [])];
+                updatedFareRules[index] = {
+                    ...(updatedFareRules[index] || {}),
+                    [field]: value,
+                };
+                return {
+                    ...prev,
+                    fareRules: updatedFareRules,
+                };
+            });
+        } else {
+            setFormData((prev) => {
+                const updatedFareRules = [...(prev.fareRules || [])];
+                updatedFareRules[index] = {
+                    ...(updatedFareRules[index] || {}),
+                    [field]: value,
+                };
+                return {
+                    ...prev,
+                    fareRules: updatedFareRules,
+                };
+            });
         }
+    };
 
-        if (!seatLayoutOptions.includes(String(data.seatLayout))) {
-            return "Please select a valid seat layout";
+    const addFareRule = (isEdit = false) => {
+        if (isEdit) {
+            setEditData((prev) => {
+                const fareRules = Array.isArray(prev.fareRules) ? [...prev.fareRules] : [];
+                if (fareRules.length < 100) {
+                    fareRules.push({
+                        from: "",
+                        to: "",
+                        fare: "",
+                    });
+                }
+                return { ...prev, fareRules };
+            });
+        } else {
+            setFormData((prev) => {
+                const fareRules = Array.isArray(prev.fareRules) ? [...prev.fareRules] : [];
+                if (fareRules.length < 100) {
+                    fareRules.push({
+                        from: "",
+                        to: "",
+                        fare: "",
+                    });
+                }
+                return { ...prev, fareRules };
+            });
         }
+    };
 
-        return null;
+    const removeFareRule = (index, isEdit = false) => {
+        if (isEdit) {
+            setEditData((prev) => {
+                const fareRules = Array.isArray(prev.fareRules) ? [...prev.fareRules] : [];
+                if (index >= 0 && index < fareRules.length) {
+                    fareRules.splice(index, 1);
+                }
+                return { ...prev, fareRules };
+            });
+        } else {
+            setFormData((prev) => {
+                const fareRules = Array.isArray(prev.fareRules) ? [...prev.fareRules] : [];
+                if (index >= 0 && index < fareRules.length) {
+                    fareRules.splice(index, 1);
+                }
+                return { ...prev, fareRules };
+            });
+        }
     };
 
     const handleAddBus = async (e) => {
         e.preventDefault();
         if (saving) return;
+
         const error = validateBusForm(formData);
         if (error) {
             return showAppToast("error", error);
@@ -422,16 +592,7 @@ export default function AdminBusPage() {
         setSaving(true);
 
         try {
-            // prepare payload and normalize pricingRules
             const payload = { ...formData };
-            if (payload.pricingRules && typeof payload.pricingRules.exactFareMap === 'string') {
-                try {
-                    payload.pricingRules.exactFareMap = JSON.parse(payload.pricingRules.exactFareMap || '{}');
-                } catch (e) {
-                    // invalid JSON
-                    return showAppToast('error', 'Exact Fare Map JSON is invalid');
-                }
-            }
 
             const res = await fetch("/api/bus", {
                 method: "POST",
@@ -470,14 +631,18 @@ export default function AdminBusPage() {
             endPoint: bus.endPoint || "",
             startTime: bus.startTime || "",
             endTime: bus.endTime || "",
-            seatLayout: bus.seatLayout || "",
+            seatLayout: String(bus.seatLayout || ""),
             stops: Array.isArray(bus.stops) ? bus.stops : [],
             cabins: Array.isArray(bus.cabins) ? bus.cabins : [],
-            pricingRules: bus.pricingRules || { seasonIncrement: "", exactFareMap: {} },
+            fareRules: Array.isArray(bus.fareRules) ? bus.fareRules : [],
         });
 
         setEditOriginalStartTime(bus.startTime || "");
-        setEditOriginalStops(Array.isArray(bus.stops) ? bus.stops.map((s) => ({ ...(s || {}), time: s.time || s.stopTime || "" })) : []);
+        setEditOriginalStops(
+            Array.isArray(bus.stops)
+                ? bus.stops.map((s) => ({ ...(s || {}), time: s.time || s.stopTime || "" }))
+                : []
+        );
         setEditOriginalEndTime(bus.endTime || "");
 
         setShowEditModal(true);
@@ -486,6 +651,7 @@ export default function AdminBusPage() {
     const handleUpdateBus = async (e) => {
         e.preventDefault();
         if (saving) return;
+
         const error = validateBusForm(editData);
         if (error) {
             return showAppToast("error", error);
@@ -495,13 +661,6 @@ export default function AdminBusPage() {
 
         try {
             const payload = { ...editData };
-            if (payload.pricingRules && typeof payload.pricingRules.exactFareMap === 'string') {
-                try {
-                    payload.pricingRules.exactFareMap = JSON.parse(payload.pricingRules.exactFareMap || '{}');
-                } catch (e) {
-                    return showAppToast('error', 'Exact Fare Map JSON is invalid');
-                }
-            }
 
             const res = await fetch("/api/bus", {
                 method: "PUT",
@@ -533,7 +692,7 @@ export default function AdminBusPage() {
             try {
                 setDeletingId(busId);
 
-                const res = await fetch(`/api/bus?busId=${busId}`, {
+                const res = await fetch(`/api/bus?busId=${encodeURIComponent(busId)}`, {
                     method: "DELETE",
                 });
 
@@ -571,7 +730,7 @@ export default function AdminBusPage() {
                         Bus Management
                     </h1>
                     <p className="mt-1 text-sm text-slate-500">
-                        Create buses, route timings, stops and custom seat layouts.
+                        Create buses, route timings, stops, cabins, seat layouts and pickup/drop fares.
                     </p>
                 </div>
 
@@ -658,12 +817,14 @@ export default function AdminBusPage() {
                                 <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                                     Route
                                 </th>
-                                {/* Date column removed - travelDate not used */}
                                 <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                                     Time
                                 </th>
                                 <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                                     Layout
+                                </th>
+                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                    Fare Rules
                                 </th>
                                 <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
                                     Actions
@@ -674,13 +835,13 @@ export default function AdminBusPage() {
                         <tbody className="divide-y divide-slate-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={5} className="px-5 py-12 text-center text-slate-500">
+                                    <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
                                         Loading buses...
                                     </td>
                                 </tr>
                             ) : paginatedBuses.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-5 py-12 text-center text-slate-500">
+                                    <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
                                         No buses found.
                                     </td>
                                 </tr>
@@ -712,8 +873,6 @@ export default function AdminBusPage() {
                                             </p>
                                         </td>
 
-                                        {/* travelDate removed */}
-
                                         <td className="px-5 py-4">
                                             <p className="text-sm text-slate-700">
                                                 {bus.startTime} → {bus.endTime}
@@ -731,6 +890,12 @@ export default function AdminBusPage() {
                                                 >
                                                     {bus.seatLayout} Seats
                                                 </button>
+                                            </span>
+                                        </td>
+
+                                        <td className="px-5 py-4">
+                                            <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                                                {bus.fareRules?.length || 0} Rules
                                             </span>
                                         </td>
 
@@ -813,10 +978,15 @@ export default function AdminBusPage() {
                     handleInputChange={handleInputChange}
                     handleStopChange={handleStopChange}
                     handleCabinChange={handleCabinChange}
+                    handleFareRuleChange={(index, field, value) =>
+                        handleFareRuleChange(index, field, value, false)
+                    }
                     addStop={() => addStop(false)}
                     removeStop={(i) => removeStop(i, false)}
                     addCabin={() => addCabin(false)}
                     removeCabin={(i) => removeCabin(i, false)}
+                    addFareRule={() => addFareRule(false)}
+                    removeFareRule={(i) => removeFareRule(i, false)}
                 />
             )}
 
@@ -835,10 +1005,15 @@ export default function AdminBusPage() {
                     handleCabinChange={(index, value) =>
                         handleCabinChange(index, value, true)
                     }
+                    handleFareRuleChange={(index, field, value) =>
+                        handleFareRuleChange(index, field, value, true)
+                    }
                     addStop={() => addStop(true)}
                     removeStop={(i) => removeStop(i, true)}
                     addCabin={() => addCabin(true)}
                     removeCabin={(i) => removeCabin(i, true)}
+                    addFareRule={() => addFareRule(true)}
+                    removeFareRule={(i) => removeFareRule(i, true)}
                 />
             )}
 
@@ -880,9 +1055,7 @@ export default function AdminBusPage() {
 
                         <div className="mt-6 flex items-center justify-end gap-3">
                             <button
-                                onClick={() => {
-                                    closeConfirm();
-                                }}
+                                onClick={closeConfirm}
                                 className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                             >
                                 Cancel
@@ -920,10 +1093,13 @@ function BusFormModal({
     handleInputChange,
     handleStopChange,
     handleCabinChange,
+    handleFareRuleChange,
     addStop,
     removeStop,
     addCabin,
     removeCabin,
+    addFareRule,
+    removeFareRule,
     isEdit = false,
 }) {
     const [visibleStops, setVisibleStops] = useState(10);
@@ -933,6 +1109,70 @@ function BusFormModal({
     const showMore = () => setVisibleStops((v) => Math.min(20, v + 10));
     const showLess = () => setVisibleStops(10);
 
+    const routePoints = useMemo(() => {
+        const points = [];
+
+        if (data.startPoint?.trim()) {
+            points.push({
+                id: "start",
+                label: data.startPoint.trim(),
+                time: data.startTime || "",
+                type: "start",
+            });
+        }
+
+        (data.stops || []).forEach((stop, index) => {
+            if (stop?.stopName?.trim()) {
+                points.push({
+                    id: `stop-${index}`,
+                    label: stop.stopName.trim(),
+                    time: stop.time || "",
+                    type: "stop",
+                });
+            }
+        });
+
+        if (data.endPoint?.trim()) {
+            points.push({
+                id: "end",
+                label: data.endPoint.trim(),
+                time: data.endTime || "",
+                type: "end",
+            });
+        }
+
+        return points;
+    }, [
+        data.startPoint,
+        data.startTime,
+        data.stops,
+        data.endPoint,
+        data.endTime,
+    ]);
+
+    const findPointIndex = (stopLabel) => {
+        return routePoints.findIndex((p) => p.label === stopLabel);
+    };
+
+    const getValidDropOptions = (fromStop) => {
+        const fromIndex = findPointIndex(fromStop);
+        if (fromIndex === -1) return [];
+        return routePoints.filter((_, idx) => idx - fromIndex >= 2);
+    };
+
+    const isFareRuleValid = (rule) => {
+        if (!rule?.from || !rule?.to) return true;
+
+        const fromIndex = findPointIndex(rule.from);
+        const toIndex = findPointIndex(rule.to);
+
+        if (fromIndex === -1 || toIndex === -1) return false;
+        if (toIndex <= fromIndex) return false;
+        if (toIndex - fromIndex < 2) return false;
+
+        return true;
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-4">
             <div className="max-h-[95vh] w-full max-w-7xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
@@ -940,7 +1180,7 @@ function BusFormModal({
                     <div>
                         <h3 className="text-xl font-bold text-slate-900">{title}</h3>
                         <p className="text-sm text-slate-500">
-                            Fill bus details, route stops and seat layout.
+                            Fill bus details, route stops, cabins and pickup/drop fare rules.
                         </p>
                     </div>
 
@@ -1025,8 +1265,6 @@ function BusFormModal({
                                         </div>
                                     </div>
 
-                                    {/* Travel Date removed - not used */}
-
                                     <InputField
                                         label="Route Name"
                                         name="routeName"
@@ -1071,37 +1309,6 @@ function BusFormModal({
                                         onChange={handleInputChange}
                                         icon={<Clock3 className="h-5 w-5 text-[#f97316]" />}
                                     />
-                                    {/* Pricing Rules */}
-                                    <div className="col-span-1 md:col-span-2">
-                                        <label className="mb-2 block text-sm font-medium text-slate-700">
-                                            Season Increment (₹)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            name="pricingRules.seasonIncrement"
-                                            value={(data.pricingRules && data.pricingRules.seasonIncrement) || ""}
-                                            onChange={handleInputChange}
-                                            className="w-full rounded-lg border px-3 py-2"
-                                            placeholder="e.g. 100"
-                                        />
-                                    </div>
-
-                                    <div className="col-span-1 md:col-span-2">
-                                        <label className="mb-2 block text-sm font-medium text-slate-700">
-                                            Exact Fare Map (JSON)
-                                        </label>
-                                        <textarea
-                                            name="pricingRules.exactFareMap"
-                                            value={JSON.stringify((data.pricingRules && data.pricingRules.exactFareMap) || {}, null, 2)}
-                                            onChange={(e) => {
-                                                // store as raw JSON string in nested property; backend will parse
-                                                handleInputChange({ target: { name: 'pricingRules.exactFareMap', value: e.target.value } }, isEdit);
-                                            }}
-                                            rows={4}
-                                            className="w-full rounded-lg border px-3 py-2 font-mono text-xs"
-                                            placeholder='{"From|To": 400, "From|Other": 450}'
-                                        />
-                                    </div>
                                 </div>
                             </div>
 
@@ -1209,6 +1416,51 @@ function BusFormModal({
                                 </div>
                             </div>
 
+                            {/* Route Preview */}
+                            <div className="rounded-3xl border border-slate-200 p-5">
+                                <div className="mb-4">
+                                    <h4 className="text-lg font-semibold text-slate-900">
+                                        Route Points Preview
+                                    </h4>
+                                    <p className="text-sm text-slate-500">
+                                        Start point, intermediate stops and end point with timings.
+                                    </p>
+                                </div>
+
+                                {routePoints.length === 0 ? (
+                                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                                        Add start point / stops / end point to preview route.
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {routePoints.map((point, idx) => (
+                                            <div
+                                                key={point.id}
+                                                className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-xs font-bold text-[#f97316]">
+                                                        {idx + 1}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-slate-900">
+                                                            {point.label}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 uppercase">
+                                                            {point.type}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="rounded-xl bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+                                                    {point.time || "--:--"}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Cabin Options */}
                             <div className="rounded-3xl border border-slate-200 p-5">
                                 <div className="mb-4">
@@ -1268,6 +1520,156 @@ function BusFormModal({
                                         className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                                     >
                                         Add Cabin
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Fare Rules */}
+                            <div className="rounded-3xl border border-slate-200 p-5">
+                                <div className="mb-4">
+                                    <h4 className="text-lg font-semibold text-slate-900">
+                                        Pickup / Drop Fare Rules ({data.fareRules?.length || 0})
+                                    </h4>
+                                    <p className="text-sm text-slate-500">
+                                        Add manual fare by pickup and drop point. Nearby stop pairs are blocked automatically.
+                                    </p>
+                                </div>
+
+                                {(data.fareRules?.length || 0) === 0 ? (
+                                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+                                        <p className="text-sm font-medium text-slate-700">
+                                            No fare rules added yet
+                                        </p>
+                                        <p className="mt-1 text-xs text-slate-500">
+                                            Example: Borli → Dongri = ₹500
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {(data.fareRules || []).map((rule, index) => {
+                                            const validDropOptions = rule.from ? getValidDropOptions(rule.from) : [];
+                                            const validRule = isFareRuleValid(rule);
+
+                                            return (
+                                                <div
+                                                    key={index}
+                                                    className={`rounded-2xl border p-4 ${validRule
+                                                        ? "border-slate-200"
+                                                        : "border-red-300 bg-red-50/40"
+                                                        }`}
+                                                >
+                                                    <div className="mb-3 flex items-center justify-between">
+                                                        <p className="text-sm font-semibold text-slate-700">
+                                                            Fare Rule {index + 1}
+                                                        </p>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeFareRule(index)}
+                                                            className="rounded-md p-1 text-red-600 hover:bg-red-50"
+                                                            title="Remove fare rule"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                                        {/* Pickup */}
+                                                        <div>
+                                                            <label className="mb-2 block text-sm font-medium text-slate-700">
+                                                                Pickup Point
+                                                            </label>
+                                                            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                                                                <MapPin className="h-5 w-5 text-[#f97316]" />
+                                                                <select
+                                                                    value={rule.from || ""}
+                                                                    onChange={(e) => {
+                                                                        const selectedFrom = e.target.value;
+                                                                        handleFareRuleChange(index, "from", selectedFrom);
+
+                                                                        const nextValidDrops = getValidDropOptions(selectedFrom);
+                                                                        if (!nextValidDrops.some((p) => p.label === rule.to)) {
+                                                                            handleFareRuleChange(index, "to", "");
+                                                                        }
+                                                                    }}
+                                                                    className="w-full bg-transparent outline-none"
+                                                                >
+                                                                    <option value="">Select Pickup</option>
+                                                                    {routePoints.slice(0, -1).map((point) => (
+                                                                        <option key={point.id} value={point.label}>
+                                                                            {point.label} ({point.time || "--:--"})
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Drop */}
+                                                        <div>
+                                                            <label className="mb-2 block text-sm font-medium text-slate-700">
+                                                                Drop Point
+                                                            </label>
+                                                            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                                                                <MapPin className="h-5 w-5 text-[#f97316]" />
+                                                                <select
+                                                                    value={rule.to || ""}
+                                                                    onChange={(e) =>
+                                                                        handleFareRuleChange(index, "to", e.target.value)
+                                                                    }
+                                                                    className="w-full bg-transparent outline-none"
+                                                                    disabled={!rule.from}
+                                                                >
+                                                                    <option value="">
+                                                                        {rule.from ? "Select Drop" : "Select Pickup First"}
+                                                                    </option>
+                                                                    {validDropOptions.map((point) => (
+                                                                        <option key={point.id} value={point.label}>
+                                                                            {point.label} ({point.time || "--:--"})
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Fare */}
+                                                        <InputField
+                                                            label="Fare (₹)"
+                                                            value={rule.fare || ""}
+                                                            onChange={(e) =>
+                                                                handleFareRuleChange(index, "fare", e.target.value)
+                                                            }
+                                                            icon={<BusFront className="h-5 w-5 text-[#f97316]" />}
+                                                            placeholder="500"
+                                                            type="number"
+                                                        />
+                                                    </div>
+
+                                                    {!validRule && rule.from && rule.to ? (
+                                                        <p className="mt-3 rounded-xl bg-red-100 px-3 py-2 text-sm font-medium text-red-700">
+                                                            Invalid pair: nearby stops or wrong order not allowed.
+                                                        </p>
+                                                    ) : null}
+
+                                                    {rule.from && rule.to && rule.fare && validRule ? (
+                                                        <p className="mt-3 rounded-xl bg-orange-50 px-3 py-2 text-sm font-medium text-slate-700">
+                                                            {rule.from} → {rule.to} ={" "}
+                                                            <span className="font-bold text-[#f97316]">₹{rule.fare}</span>
+                                                        </p>
+                                                    ) : null}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                <div className="mt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => addFareRule && addFareRule()}
+                                        disabled={(data.fareRules?.length || 0) >= 100}
+                                        className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                    >
+                                        Add Fare Rule
                                     </button>
                                 </div>
                             </div>
@@ -1489,8 +1891,7 @@ function SeatVisualizer({ seatLayout, busNumber, busName, routeName, startTime, 
 
                 {/* Cabin */}
                 {(() => {
-                    const cabinCount = Array.isArray(cabins) ? cabins.length : 6;
-                    // determine last seat number from layout
+                    const cabinCount = Array.isArray(cabins) && cabins.length > 0 ? cabins.length : 6;
                     const allSeats = [
                         ...(layout.pairRow || []),
                         ...(layout.singleRow || []),
@@ -1527,8 +1928,6 @@ function SeatTicketBox({ seatNo }) {
             <div className="text-xs font-bold text-slate-900">{seatNo}</div>
 
             <div className="mt-1 space-y-1 text-[9px] leading-none text-slate-500">
-
-
                 <div className="flex items-center gap-1">
                     <span>Name:</span>
                     <span className="block h-[1px] flex-1 bg-slate-300" />
@@ -1548,6 +1947,7 @@ function SeatTicketBox({ seatNo }) {
                     <span>Mobile:</span>
                     <span className="block h-[1px] flex-1 bg-slate-300" />
                 </div>
+
                 <div className="flex items-center gap-1">
                     <span>Email:</span>
                     <span className="block h-[1px] flex-1 bg-slate-300" />
