@@ -2,6 +2,7 @@
 
 import SeatLayout from "@/components/SeatLayout";
 import { showAppToast } from "@/lib/client/toast";
+import pickupUtils from "@/lib/pickupDropUtils";
 import { calculateFare } from "@/lib/pricing";
 import {
   BusFront,
@@ -144,6 +145,10 @@ export default function BookingPage() {
     const sched = (schedules && schedules[selectedBus.busId] && schedules[selectedBus.busId][date]) || null;
     return (sched && sched.pricingOverride && sched.pricingOverride.terminals) || null;
   }, [selectedBus, date, schedules]);
+
+  const bookingConfig = useMemo(() => {
+    return pickupUtils.getEffectiveBookingConfig(schedules, selectedBus, date || "");
+  }, [schedules, selectedBus, date]);
 
   const availableBuses = useMemo(() => {
     if (!date) return [];
@@ -516,9 +521,12 @@ export default function BookingPage() {
                             disabled={!editingSeat && selectedSeats.length === 0}
                           >
                             <option value="">Select pickup</option>
-                            {(selectedBus.stops || []).map((s, i) => (
-                              <option key={i} value={s.stopName || s}>{s.stopName || s}</option>
-                            ))}
+                            {(() => {
+                              const picks = pickupUtils.getPickupOptions(selectedBus?.stops || [], bookingConfig || {});
+                              return picks.map((name, i) => (
+                                <option key={i} value={name}>{name}</option>
+                              ));
+                            })()}
                           </select>
 
                           <input
@@ -551,28 +559,15 @@ export default function BookingPage() {
                           >
                             <option value="">Select drop</option>
                             {(() => {
-                              const stops = selectedBus.stops || [];
-                              const stopNames = stops.map((s) => (s.stopName || s));
-                              const pickupIdx = bookingForm.pickup ? stopNames.indexOf(bookingForm.pickup) : -1;
-                              const forward = scheduleTerminals ? scheduleTerminals.forward : null;
-                              const ret = scheduleTerminals ? scheduleTerminals.return : null;
-                              const forwardIdx = forward ? stopNames.indexOf(forward) : -1;
-                              const returnIdx = ret ? stopNames.indexOf(ret) : -1;
-
-                              return stopNames.map((name, i) => {
-                                let allowed = true;
-                                if (pickupIdx !== -1) {
-                                  if (i > pickupIdx) {
-                                    // forward direction: ensure not beyond forward terminal
-                                    if (forwardIdx !== -1 && i > forwardIdx) allowed = false;
-                                  } else if (i < pickupIdx) {
-                                    // reverse direction: ensure not before return terminal
-                                    if (returnIdx !== -1 && i < returnIdx) allowed = false;
-                                  }
-                                }
-                                if (!allowed) return null;
-                                return <option key={i} value={name}>{name}</option>;
-                              });
+                              const groups = pickupUtils.getDropGroups(selectedBus?.stops || [], bookingForm.pickup, bookingConfig || {});
+                              if (!groups || groups.length === 0) return null;
+                              return groups.map((g, gi) => (
+                                <optgroup key={gi} label={g.label}>
+                                  {g.options.map((opt) => (
+                                    <option key={`${gi}-${opt.index}`} value={opt.name}>{opt.name}</option>
+                                  ))}
+                                </optgroup>
+                              ));
                             })()}
                           </select>
 

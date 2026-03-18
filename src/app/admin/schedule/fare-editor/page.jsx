@@ -16,6 +16,12 @@ export default function FareEditorPage() {
     const [exactFareMap, setExactFareMap] = useState({});
     const [forwardTerminal, setForwardTerminal] = useState("");
     const [returnTerminal, setReturnTerminal] = useState("");
+    const [cityEntryStop, setCityEntryStop] = useState("");
+    const [returnVillageStartStop, setReturnVillageStartStop] = useState("");
+    const [majorDropStopsText, setMajorDropStopsText] = useState("");
+    const [hiddenPickupText, setHiddenPickupText] = useState("");
+    const [hiddenDropText, setHiddenDropText] = useState("");
+    const [blockedPairsText, setBlockedPairsText] = useState("");
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -48,6 +54,15 @@ export default function FareEditorPage() {
                     setForwardTerminal(parsed.terminals.forward || "");
                     setReturnTerminal(parsed.terminals.return || "");
                 }
+                if (parsed.bookingConfig) {
+                    const bc = parsed.bookingConfig || {};
+                    setCityEntryStop(bc.cityEntryStop || bc.cityEntry || "");
+                    setReturnVillageStartStop(bc.returnVillageStartStop || bc.returnVillageStart || "");
+                    setMajorDropStopsText((bc.majorDropStops || []).join(", "));
+                    setHiddenPickupText((bc.hiddenPickupStops || []).join(", "));
+                    setHiddenDropText((bc.hiddenDropStops || []).join(", "));
+                    setBlockedPairsText((bc.blockedPairs || []).map(p => Array.isArray(p) ? p.join("|") : String(p)).join("\n"));
+                }
             } else if (selectedBus && selectedBus.pricingRules && selectedBus.pricingRules.exactFareMap) {
                 setExactFareMap({ ...(selectedBus.pricingRules.exactFareMap || {}) });
                 // default terminals: try find 'Panvel' for return, otherwise last stop
@@ -55,6 +70,16 @@ export default function FareEditorPage() {
                 const panvelIdx = stops.findIndex((s) => s && s.toLowerCase().includes('panvel'));
                 setForwardTerminal(stops[stops.length - 1] || "");
                 setReturnTerminal(panvelIdx !== -1 ? stops[panvelIdx] : (stops[stops.length - 1] || ""));
+                // load bookingConfig from selectedBus if present
+                if (selectedBus.bookingConfig) {
+                    const bc = selectedBus.bookingConfig || {};
+                    setCityEntryStop(bc.cityEntryStop || bc.cityEntry || "");
+                    setReturnVillageStartStop(bc.returnVillageStartStop || bc.returnVillageStart || "");
+                    setMajorDropStopsText((bc.majorDropStops || []).join(", "));
+                    setHiddenPickupText((bc.hiddenPickupStops || []).join(", "));
+                    setHiddenDropText((bc.hiddenDropStops || []).join(", "));
+                    setBlockedPairsText((bc.blockedPairs || []).map(p => Array.isArray(p) ? p.join("|") : String(p)).join("\n"));
+                }
             }
         } catch (e) {
             // ignore
@@ -69,8 +94,28 @@ export default function FareEditorPage() {
             const v = exactFareMap[k];
             if (v !== "" && v !== undefined && v !== null) filtered[k] = Number(v);
         });
+        // build bookingConfig
+        const buildList = (txt) => (typeof txt === 'string' ? txt.split(',').map(s => s.trim()).filter(Boolean) : []);
+        const parseBlocked = (txt) => {
+            if (!txt) return [];
+            return String(txt).split(/\r?\n/).map((line) => {
+                const p = line.trim();
+                if (!p) return null;
+                const parts = p.includes('|') ? p.split('|') : (p.includes(',') ? p.split(',') : [p]);
+                return parts.map(x => x.trim()).filter(Boolean);
+            }).filter(Boolean);
+        };
 
-        const payload = { exactFareMap: filtered, terminals: { forward: forwardTerminal || null, return: returnTerminal || null } };
+        const bookingConfig = {
+            cityEntryStop: cityEntryStop || null,
+            returnVillageStartStop: returnVillageStartStop || null,
+            majorDropStops: buildList(majorDropStopsText),
+            hiddenPickupStops: buildList(hiddenPickupText),
+            hiddenDropStops: buildList(hiddenDropText),
+            blockedPairs: parseBlocked(blockedPairsText),
+        };
+
+        const payload = { exactFareMap: filtered, terminals: { forward: forwardTerminal || null, return: returnTerminal || null }, bookingConfig };
         try {
             const key = `schedule_pricing_override:${selectedBusId}:${date}`;
             localStorage.setItem(key, JSON.stringify(payload));
@@ -144,6 +189,16 @@ export default function FareEditorPage() {
                             })}
                         </select>
                     </div>
+
+                    <div>
+                        <label className="mb-2 block text-sm font-medium text-slate-700">City entry stop</label>
+                        <input value={cityEntryStop} onChange={(e) => setCityEntryStop(e.target.value)} placeholder="e.g. Panvel" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm" />
+                    </div>
+
+                    <div>
+                        <label className="mb-2 block text-sm font-medium text-slate-700">Return village start stop</label>
+                        <input value={returnVillageStartStop} onChange={(e) => setReturnVillageStartStop(e.target.value)} placeholder="e.g. Kolad" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm" />
+                    </div>
                 </div>
 
                 <div>
@@ -187,6 +242,28 @@ export default function FareEditorPage() {
                                         })()}
                                     </tbody>
                                 </table>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                <div>
+                                    <label className="text-xs font-medium text-slate-600">Hidden pickup stops (comma separated)</label>
+                                    <input value={hiddenPickupText} onChange={(e) => setHiddenPickupText(e.target.value)} placeholder="e.g. Agarwada, Vadvali Phata" className="w-full mt-1 rounded-md border px-2 py-1 text-sm" />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-medium text-slate-600">Hidden drop stops (comma separated)</label>
+                                    <input value={hiddenDropText} onChange={(e) => setHiddenDropText(e.target.value)} placeholder="e.g. Agarwada, Vadvali Phata" className="w-full mt-1 rounded-md border px-2 py-1 text-sm" />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-medium text-slate-600">Major drop stops (comma separated)</label>
+                                    <input value={majorDropStopsText} onChange={(e) => setMajorDropStopsText(e.target.value)} placeholder="Panvel, Nerul, Vashi, Chembur, Dongri" className="w-full mt-1 rounded-md border px-2 py-1 text-sm" />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-medium text-slate-600">Blocked pairs (one per line, use `From|To`)</label>
+                                    <textarea value={blockedPairsText} onChange={(e) => setBlockedPairsText(e.target.value)} placeholder={"Dighi|Adgaon\nAdgaon|Dighi"} className="w-full mt-1 rounded-md border px-2 py-1 text-sm h-20" />
+                                </div>
                             </div>
                         </div>
                     ) : (
