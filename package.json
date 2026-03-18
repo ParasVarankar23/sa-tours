@@ -1,11 +1,13 @@
 {
   "name": "tours",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "backfill:payments": "node scripts/backfill-payments.js"
   },
   "dependencies": {
     "cloudinary": "^2.9.0",

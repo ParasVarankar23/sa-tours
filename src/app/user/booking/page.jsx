@@ -563,7 +563,7 @@ export default function BookingPage() {
                                                     handler: async function (resp) {
                                                         try {
                                                             // verify payment on server
-                                                            const vRes = await fetch('/api/public/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId: resp.razorpay_payment_id, orderId: resp.razorpay_order_id, signature: resp.razorpay_signature, amount: totalAmount, currency: 'INR' }) });
+                                                            const vRes = await fetch('/api/public/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId: resp.razorpay_payment_id, orderId: resp.razorpay_order_id, signature: resp.razorpay_signature, amount: totalAmount, currency: 'INR', metadata: { bookings: bookingsPayload } }) });
                                                             const vData = await vRes.json();
                                                             if (!vRes.ok) throw new Error(vData.error || 'Payment verification failed');
 

@@ -713,7 +713,7 @@ export default function BookingPage() {
                                     order_id: order.id,
                                     handler: async function (resp) {
                                       try {
-                                        const vRes = await fetch('/api/public/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId: resp.razorpay_payment_id, orderId: resp.razorpay_order_id, signature: resp.razorpay_signature, amount: totalAmount, currency: 'INR' }) });
+                                        const vRes = await fetch('/api/public/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId: resp.razorpay_payment_id, orderId: resp.razorpay_order_id, signature: resp.razorpay_signature, amount: totalAmount, currency: 'INR', metadata: { bookings: bookingsPayload } }) });
                                         const vData = await vRes.json();
                                         if (!vRes.ok) throw new Error(vData.error || 'Payment verification failed');
                                         const paymentRecord = vData.payment || {};
@@ -790,7 +790,18 @@ export default function BookingPage() {
                                   const token = localStorage.getItem('authToken');
                                   for (const c of created) {
                                     const bookingMeta = { booking: { date, busId: selectedBus.busId, seatNo: c.seat } };
-                                    const payload = { amount: Number(computedFare) || 0, currency: 'INR', userId: null, metadata: bookingMeta, note: 'Cash collected by admin' };
+                                    // include passenger info in metadata so payment record can show name/phone/email immediately
+                                    const passenger = {
+                                      name: bookingForm.name || null,
+                                      phone: bookingForm.phone || null,
+                                      email: bookingForm.email || null,
+                                      pickup: bookingForm.pickup || null,
+                                      pickupTime: bookingForm.pickupTime || null,
+                                      drop: bookingForm.drop || null,
+                                      dropTime: bookingForm.dropTime || null,
+                                      busNumber: selectedBus.busNumber || null,
+                                    };
+                                    const payload = { amount: Number(computedFare) || 0, currency: 'INR', userId: null, metadata: { ...bookingMeta, user: passenger }, note: 'Cash collected by admin' };
                                     const pRes = await fetch('/api/admin/offline-payment', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) });
                                     const pData = await pRes.json();
                                     if (!pRes.ok) console.warn('offline payment attach failed', pData);
