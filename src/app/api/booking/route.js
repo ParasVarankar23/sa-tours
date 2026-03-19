@@ -5,6 +5,9 @@ import {
 } from "../../../lib/emailService";
 import { getAdminDb } from "../../../lib/firebaseAdmin";
 
+/* =========================
+   Helpers
+========================= */
 function validateDate(d) {
     return /^\d{4}-\d{2}-\d{2}$/.test(d);
 }
@@ -17,39 +20,128 @@ function normalizeKey(v) {
     return normalizeText(v).toLowerCase();
 }
 
-function buildRouteStops(busData) {
-    const middleStops = Array.isArray(busData?.stops)
-        ? busData.stops
-            .map((s) => (typeof s === "string" ? s : s?.stopName))
-            .filter(Boolean)
-            .map((s) => normalizeText(s))
-        : [];
+/* =========================
+   New Bus Structure Helpers
+   Supports:
+   - startPoint: { name, time }
+   - pickupPoints: [{ name, time }]
+   - dropPoints: [{ name, time }]
+   - endPoint: { name, time }
+========================= */
 
-    return [
-        normalizeText(busData?.startPoint),
-        ...middleStops,
-        normalizeText(busData?.endPoint),
-    ].filter(Boolean);
+function getStartPoint(busData) {
+    const sp = busData?.startPoint;
+    if (!sp) return { name: "", time: "" };
+
+    if (typeof sp === "string") {
+        return {
+            name: normalizeText(sp),
+            time: normalizeText(busData?.startTime),
+        };
+    }
+
+    return {
+        name: normalizeText(sp?.name),
+        time: normalizeText(sp?.time || busData?.startTime),
+    };
 }
 
-function getStopTime(busData, stopName) {
-    if (!busData || !stopName) return "";
+function getEndPoint(busData) {
+    const ep = busData?.endPoint;
+    if (!ep) return { name: "", time: "" };
 
-    if (normalizeKey(busData.startPoint) === normalizeKey(stopName)) {
-        return normalizeText(busData.startTime);
+    if (typeof ep === "string") {
+        return {
+            name: normalizeText(ep),
+            time: normalizeText(busData?.endTime),
+        };
     }
 
-    if (normalizeKey(busData.endPoint) === normalizeKey(stopName)) {
-        return normalizeText(busData.endTime);
+    return {
+        name: normalizeText(ep?.name),
+        time: normalizeText(ep?.time || busData?.endTime),
+    };
+}
+
+function getPickupOptions(busData) {
+    const startPoint = getStartPoint(busData);
+
+    const pickupPoints = Array.isArray(busData?.pickupPoints)
+        ? busData.pickupPoints
+            .map((p) => ({
+                name: normalizeText(p?.name),
+                time: normalizeText(p?.time),
+            }))
+            .filter((p) => p.name)
+        : [];
+
+    const all = [];
+
+    // include start point if available
+    if (startPoint.name) {
+        all.push(startPoint);
     }
 
-    const found = (busData.stops || []).find((s) => {
-        const name = typeof s === "string" ? s : s?.stopName;
-        return normalizeKey(name) === normalizeKey(stopName);
-    });
+    // include pickup points, avoid duplicate names
+    for (const p of pickupPoints) {
+        const exists = all.some((x) => normalizeKey(x.name) === normalizeKey(p.name));
+        if (!exists) all.push(p);
+    }
 
-    if (!found) return "";
-    return typeof found === "string" ? "" : normalizeText(found.time);
+    return all;
+}
+
+function getDropOptions(busData) {
+    const endPoint = getEndPoint(busData);
+
+    const dropPoints = Array.isArray(busData?.dropPoints)
+        ? busData.dropPoints
+            .map((p) => ({
+                name: normalizeText(p?.name),
+                time: normalizeText(p?.time),
+            }))
+            .filter((p) => p.name)
+        : [];
+
+    const all = [];
+
+    // include drop points first
+    for (const p of dropPoints) {
+        const exists = all.some((x) => normalizeKey(x.name) === normalizeKey(p.name));
+        if (!exists) all.push(p);
+    }
+
+    // include end point if available
+    if (endPoint.name) {
+        const exists = all.some((x) => normalizeKey(x.name) === normalizeKey(endPoint.name));
+        if (!exists) {
+            all.push(endPoint);
+        }
+    }
+
+    return all;
+}
+
+function isValidPickup(busData, pickup) {
+    const options = getPickupOptions(busData);
+    return options.some((p) => normalizeKey(p.name) === normalizeKey(pickup));
+}
+
+function isValidDrop(busData, drop) {
+    const options = getDropOptions(busData);
+    return options.some((p) => normalizeKey(p.name) === normalizeKey(drop));
+}
+
+function getPickupTime(busData, pickup) {
+    const options = getPickupOptions(busData);
+    const found = options.find((p) => normalizeKey(p.name) === normalizeKey(pickup));
+    return found ? normalizeText(found.time) : "";
+}
+
+function getDropTime(busData, drop) {
+    const options = getDropOptions(busData);
+    const found = options.find((p) => normalizeKey(p.name) === normalizeKey(drop));
+    return found ? normalizeText(found.time) : "";
 }
 
 function findExactFare(busData, fromStop, toStop) {
@@ -70,15 +162,27 @@ function findExactFare(busData, fromStop, toStop) {
 }
 
 function validatePickupDrop(busData, pickup, drop) {
-    const routeStops = buildRouteStops(busData);
+    if (!pickup) {
+        return { ok: false, error: "Pickup point is required" };
+    }
 
-    const pickupIndex = routeStops.findIndex((s) => normalizeKey(s) === normalizeKey(pickup));
-    const dropIndex = routeStops.findIndex((s) => normalizeKey(s) === normalizeKey(drop));
+    if (!drop) {
+        return { ok: false, error: "Drop point is required" };
+    }
 
-    if (pickupIndex === -1) return { ok: false, error: "Invalid pickup point" };
-    if (dropIndex === -1) return { ok: false, error: "Invalid drop point" };
-    if (dropIndex <= pickupIndex) {
-        return { ok: false, error: "Drop point must come after pickup point" };
+    const pickupOk = isValidPickup(busData, pickup);
+    if (!pickupOk) {
+        return { ok: false, error: "Invalid pickup point" };
+    }
+
+    const dropOk = isValidDrop(busData, drop);
+    if (!dropOk) {
+        return { ok: false, error: "Invalid drop point" };
+    }
+
+    // prevent same pickup and drop
+    if (normalizeKey(pickup) === normalizeKey(drop)) {
+        return { ok: false, error: "Pickup and drop cannot be the same" };
     }
 
     return { ok: true };
@@ -162,15 +266,7 @@ export async function POST(req) {
 
         const busData = busSnap.val() || {};
 
-        // pickup/drop required
-        if (!pickup || !drop) {
-            return NextResponse.json(
-                { success: false, error: "Pickup and drop are required" },
-                { status: 400 }
-            );
-        }
-
-        // validate route order
+        // pickup/drop required + validate
         const routeValidation = validatePickupDrop(busData, pickup, drop);
         if (!routeValidation.ok) {
             return NextResponse.json(
@@ -189,7 +285,7 @@ export async function POST(req) {
         }
 
         // if frontend sent fare, validate it
-        if (body.fare !== undefined && body.fare !== null) {
+        if (body.fare !== undefined && body.fare !== null && body.fare !== "") {
             const sentFare = Number(body.fare);
             if (!Number.isFinite(sentFare) || sentFare !== exactFare) {
                 return NextResponse.json(
@@ -199,8 +295,8 @@ export async function POST(req) {
             }
         }
 
-        const resolvedPickupTime = getStopTime(busData, pickup) || null;
-        const resolvedDropTime = getStopTime(busData, drop) || null;
+        const resolvedPickupTime = getPickupTime(busData, pickup) || null;
+        const resolvedDropTime = getDropTime(busData, drop) || null;
 
         const seatRef = db.ref(`bookings/${date}/${busId}/${seatNo}`);
         const existing = await seatRef.once("value");
@@ -218,17 +314,23 @@ export async function POST(req) {
             name,
             phone,
             email: email || null,
+
             pickup,
             pickupTime: resolvedPickupTime,
+
             drop,
             dropTime: resolvedDropTime,
+
             fare: exactFare,
+
             busNumber: busNumber || normalizeText(busData.busNumber) || null,
             startTime: startTime || normalizeText(busData.startTime) || null,
             endTime: endTime || normalizeText(busData.endTime) || null,
+
             createdAt: now,
             updatedAt: now,
             status: "booked",
+
             payment: body.payment ? normalizeText(body.payment) : null,
             paymentMethod: body.paymentMethod ? normalizeText(body.paymentMethod) : null,
         };
@@ -258,7 +360,7 @@ export async function POST(req) {
     } catch (err) {
         console.error("POST /api/booking error:", err);
         return NextResponse.json(
-            { success: false, error: "Failed to create booking" },
+            { success: false, error: err.message || "Failed to create booking" },
             { status: 500 }
         );
     }
@@ -308,6 +410,7 @@ export async function PUT(req) {
         }
 
         const busData = busSnap.val() || {};
+        const existingVal = existing.val() || {};
 
         const updates = {
             updatedAt: new Date().toISOString(),
@@ -318,15 +421,8 @@ export async function PUT(req) {
         if (email) updates.email = email;
 
         if (pickup || drop) {
-            const finalPickup = pickup || existing.val()?.pickup || "";
-            const finalDrop = drop || existing.val()?.drop || "";
-
-            if (!finalPickup || !finalDrop) {
-                return NextResponse.json(
-                    { success: false, error: "Pickup and drop are required" },
-                    { status: 400 }
-                );
-            }
+            const finalPickup = pickup || existingVal.pickup || "";
+            const finalDrop = drop || existingVal.drop || "";
 
             const routeValidation = validatePickupDrop(busData, finalPickup, finalDrop);
             if (!routeValidation.ok) {
@@ -346,15 +442,29 @@ export async function PUT(req) {
 
             updates.pickup = finalPickup;
             updates.drop = finalDrop;
-            updates.pickupTime = getStopTime(busData, finalPickup) || null;
-            updates.dropTime = getStopTime(busData, finalDrop) || null;
+            updates.pickupTime = getPickupTime(busData, finalPickup) || null;
+            updates.dropTime = getDropTime(busData, finalDrop) || null;
             updates.fare = exactFare;
+        }
+
+        // allow payment fields update if sent
+        if (body.payment !== undefined) {
+            updates.payment = body.payment ? normalizeText(body.payment) : null;
+        }
+
+        if (body.paymentMethod !== undefined) {
+            updates.paymentMethod = body.paymentMethod
+                ? normalizeText(body.paymentMethod)
+                : null;
+        }
+
+        if (body.status !== undefined) {
+            updates.status = body.status ? normalizeText(body.status) : existingVal.status || "booked";
         }
 
         await seatRef.update(updates);
 
         try {
-            const existingVal = existing.val() || {};
             const emailToUse = updates.email || existingVal.email || "";
             const nameToUse = updates.name || existingVal.name || "Passenger";
 
@@ -372,14 +482,14 @@ export async function PUT(req) {
             {
                 success: true,
                 message: "Booking updated",
-                booking: { seatNo, ...updates },
+                booking: { seatNo, ...existingVal, ...updates },
             },
             { status: 200 }
         );
     } catch (err) {
         console.error("PUT /api/booking error:", err);
         return NextResponse.json(
-            { success: false, error: "Failed to update booking" },
+            { success: false, error: err.message || "Failed to update booking" },
             { status: 500 }
         );
     }
@@ -405,7 +515,15 @@ export async function DELETE(req) {
         const db = getAdminDb();
         const seatRef = db.ref(`bookings/${date}/${busId}/${seatNo}`);
         const existing = await seatRef.once("value");
-        const existingVal = existing.exists() ? existing.val() || {} : null;
+
+        if (!existing.exists()) {
+            return NextResponse.json(
+                { success: false, error: "Booking not found" },
+                { status: 404 }
+            );
+        }
+
+        const existingVal = existing.val() || {};
 
         await seatRef.remove();
 

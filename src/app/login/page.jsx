@@ -22,7 +22,7 @@ const auth = getFirebaseAuth();
 const googleProvider = new GoogleAuthProvider();
 
 const fadeUp = {
-    hidden: { opacity: 0, y: 24 },
+    hidden: { opacity: 0, y: 20 },
     show: {
         opacity: 1,
         y: 0,
@@ -34,7 +34,7 @@ const stagger = {
     hidden: {},
     show: {
         transition: {
-            staggerChildren: 0.1,
+            staggerChildren: 0.08,
         },
     },
 };
@@ -131,13 +131,9 @@ export default function LoginPage() {
         setGoogleLoading(true);
 
         try {
-            // Force account chooser to ensure user can pick an email
             googleProvider.setCustomParameters({ prompt: "select_account" });
-            console.debug("calling signInWithPopup...");
+
             const result = await signInWithPopup(auth, googleProvider);
-            console.debug("signInWithPopup result:", result);
-            // The credential.idToken is a Google OAuth ID token (aud = OAuth client).
-            // We need a Firebase ID token for server-side verification with the Admin SDK.
             const firebaseIdToken = await result.user.getIdToken();
 
             if (!firebaseIdToken) {
@@ -195,19 +191,19 @@ export default function LoginPage() {
     };
 
     return (
-        <section className="bg-[#f8fafc] py-3 sm:py-4 lg:py-5">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div className="grid items-start gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:gap-6">
+        <section className="min-h-[calc(100vh-88px)] bg-gradient-to-br from-slate-50 via-white to-orange-50/40 flex items-center">
+            <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-8">
+                <div className="grid items-center gap-8 lg:grid-cols-[1.08fr_0.92fr] xl:gap-12">
                     {/* LEFT SIDE CONTENT */}
                     <motion.div
                         variants={stagger}
                         initial="hidden"
                         animate="show"
-                        className="order-2 hidden lg:order-1 lg:block"
+                        className="hidden lg:block"
                     >
                         <motion.p
                             variants={fadeUp}
-                            className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-600 ring-1 ring-orange-100"
+                            className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-600"
                         >
                             <Bus size={16} />
                             Welcome Back to SA Tours & Travels
@@ -215,7 +211,7 @@ export default function LoginPage() {
 
                         <motion.h1
                             variants={fadeUp}
-                            className="mt-3 text-3xl font-bold leading-tight text-slate-900 sm:text-4xl lg:text-[40px] lg:leading-[1.30]"
+                            className="mt-4 max-w-2xl text-4xl font-extrabold leading-tight text-slate-900 xl:text-5xl xl:leading-[1.15]"
                         >
                             Login to manage your{" "}
                             <span className="text-orange-500">bookings</span> and{" "}
@@ -224,24 +220,27 @@ export default function LoginPage() {
 
                         <motion.p
                             variants={fadeUp}
-                            className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 sm:text-[15px]"
+                            className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-600 xl:text-base"
                         >
                             Access your account to check booking status, view daily bus schedules,
                             manage travel details and stay updated with route timing information for
                             Borli, Dighi, Mahasala, Panvel, Vashi and Mumbai.
                         </motion.p>
 
-                        <motion.div variants={stagger} className="mt-5 grid gap-3 sm:grid-cols-3">
+                        <motion.div
+                            variants={stagger}
+                            className="mt-6 grid gap-4 sm:grid-cols-3"
+                        >
                             <motion.div
                                 variants={fadeUp}
                                 whileHover={{ y: -4 }}
-                                className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"
+                                className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-md"
                             >
-                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
                                     <CalendarDays size={18} />
                                 </div>
-                                <p className="mt-3 text-lg font-bold text-slate-900">View Schedule</p>
-                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                <p className="mt-4 text-lg font-bold text-slate-900">View Schedule</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-600">
                                     Check daily departure and return timings quickly.
                                 </p>
                             </motion.div>
@@ -249,13 +248,13 @@ export default function LoginPage() {
                             <motion.div
                                 variants={fadeUp}
                                 whileHover={{ y: -4 }}
-                                className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"
+                                className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-md"
                             >
-                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
                                     <MapPin size={18} />
                                 </div>
-                                <p className="mt-3 text-lg font-bold text-slate-900">Track Routes</p>
-                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                <p className="mt-4 text-lg font-bold text-slate-900">Track Routes</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-600">
                                     Get route and office details for your travel support.
                                 </p>
                             </motion.div>
@@ -263,13 +262,13 @@ export default function LoginPage() {
                             <motion.div
                                 variants={fadeUp}
                                 whileHover={{ y: -4 }}
-                                className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"
+                                className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-md"
                             >
-                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
                                     <ShieldCheck size={18} />
                                 </div>
-                                <p className="mt-3 text-lg font-bold text-slate-900">Secure Access</p>
-                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                <p className="mt-4 text-lg font-bold text-slate-900">Secure Access</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-600">
                                     Safe and reliable account access for passengers.
                                 </p>
                             </motion.div>
@@ -281,31 +280,30 @@ export default function LoginPage() {
                         variants={fadeUp}
                         initial="hidden"
                         animate="show"
-                        className="order-1 lg:order-2"
+                        className="mx-auto w-full max-w-md"
                     >
-                        <div className="mx-auto max-w-md rounded-[2rem] border border-slate-200 bg-white p-4 shadow-xl sm:p-4">
+                        <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:p-6 lg:p-7">
                             <div className="text-center">
-                                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-orange-500">
+                                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-orange-500 sm:text-sm">
                                     Welcome Back
                                 </p>
-                                <h2 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">
-                                    Login
-                                </h2>
-                                <p className="mt-1.5 text-sm leading-6 text-slate-600">
+                                <h2 className="mt-2 text-3xl font-bold text-slate-900">Login</h2>
+                                <p className="mt-2 text-sm leading-6 text-slate-600">
                                     Access your account for bookings, schedule details and travel updates.
                                 </p>
                             </div>
 
-                            <form className="mt-3.5 space-y-3" onSubmit={handleSubmit}>
+                            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
                                 {/* Email / Phone */}
                                 <div>
                                     <label
                                         htmlFor="login-id"
-                                        className="mb-1 block text-sm font-medium text-slate-700"
+                                        className="mb-2 block text-sm font-medium text-slate-700"
                                     >
                                         Email or Phone Number
                                     </label>
-                                    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-2 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
+
+                                    <div className="flex h-12 items-center gap-3 rounded-2xl border border-slate-200 px-4 transition-all focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
                                         <Mail size={18} className="shrink-0 text-slate-400" />
                                         <input
                                             id="login-id"
@@ -314,7 +312,7 @@ export default function LoginPage() {
                                             value={formData.loginId}
                                             onChange={handleChange}
                                             placeholder="Enter email or phone number"
-                                            className="w-full bg-transparent text-sm outline-none"
+                                            className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
                                             required
                                         />
                                     </div>
@@ -322,7 +320,7 @@ export default function LoginPage() {
 
                                 {/* Password */}
                                 <div>
-                                    <div className="mb-1 flex items-center justify-between">
+                                    <div className="mb-2 flex items-center justify-between">
                                         <label
                                             htmlFor="login-password"
                                             className="block text-sm font-medium text-slate-700"
@@ -331,7 +329,7 @@ export default function LoginPage() {
                                         </label>
                                     </div>
 
-                                    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-2 transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
+                                    <div className="flex h-12 items-center gap-3 rounded-2xl border border-slate-200 px-4 transition-all focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
                                         <LockKeyhole size={18} className="shrink-0 text-slate-400" />
 
                                         <input
@@ -341,7 +339,7 @@ export default function LoginPage() {
                                             value={formData.password}
                                             onChange={handleChange}
                                             placeholder="Enter your password"
-                                            className="w-full bg-transparent text-sm outline-none"
+                                            className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
                                             required
                                         />
 
@@ -357,7 +355,7 @@ export default function LoginPage() {
 
                                     <Link
                                         href="/forgot-password"
-                                        className="mt-1.5 block text-right text-[11px] font-medium text-orange-500 transition hover:text-orange-600"
+                                        className="mt-2 block text-right text-xs font-medium text-orange-500 transition hover:text-orange-600"
                                     >
                                         Forgot Password?
                                     </Link>
@@ -367,7 +365,7 @@ export default function LoginPage() {
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="w-full rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
+                                    className="mt-1 w-full rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
                                 >
                                     {loading ? "Logging in..." : "Login"}
                                 </button>
@@ -378,7 +376,7 @@ export default function LoginPage() {
                                         <div className="w-full border-t border-slate-200" />
                                     </div>
                                     <div className="relative flex justify-center">
-                                        <span className="bg-white px-3 text-xs font-medium text-slate-400">
+                                        <span className="bg-white px-3 text-[11px] font-semibold tracking-wide text-slate-400">
                                             OR CONTINUE WITH
                                         </span>
                                     </div>
@@ -389,7 +387,7 @@ export default function LoginPage() {
                                     type="button"
                                     disabled={googleLoading}
                                     onClick={handleGoogleLogin}
-                                    className="flex w-full items-center justify-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
+                                    className="flex w-full items-center justify-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
                                 >
                                     <svg
                                         width="18"
@@ -418,7 +416,7 @@ export default function LoginPage() {
                                 </button>
 
                                 {/* Signup */}
-                                <p className="text-center text-sm text-slate-600">
+                                <p className="pt-1 text-center text-sm text-slate-600">
                                     Don&apos;t have an account?{" "}
                                     <Link
                                         href="/signup"

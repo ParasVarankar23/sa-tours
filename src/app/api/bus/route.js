@@ -3,7 +3,6 @@ import { getAdminDb } from "../../../lib/firebaseAdmin";
 
 const COLLECTION_NAME = "buses";
 const seatLayoutOptions = ["31", "27", "23"];
-const MIN_STOP_GAP = 2; // blocks nearby stop pairs
 
 /* =========================
    Helpers
@@ -40,21 +39,28 @@ function rangesOverlap(startA, endA, startB, endB) {
     return aStart <= bEnd && bStart <= aEnd;
 }
 
-function sanitizeStops(stops) {
-    if (!Array.isArray(stops)) return [];
+function sanitizeSinglePoint(point) {
+    if (!point || (!normalizeText(point.name) && !normalizeText(point.time))) {
+        return { name: "", time: "" };
+    }
 
-    return stops
-        .filter(
-            (stop) =>
-                stop &&
-                (normalizeText(stop.stopName) || normalizeText(stop.time))
-        )
-        .slice(0, 20)
-        .map((stop) => ({
-            stopName: normalizeText(stop.stopName),
-            time: normalizeText(stop.time),
+    return {
+        name: normalizeText(point.name),
+        time: normalizeText(point.time),
+    };
+}
+
+function sanitizePoints(points, max = 20) {
+    if (!Array.isArray(points)) return [];
+
+    return points
+        .filter((point) => point && (normalizeText(point.name) || normalizeText(point.time)))
+        .slice(0, max)
+        .map((point) => ({
+            name: normalizeText(point.name),
+            time: normalizeText(point.time),
         }))
-        .filter((stop) => stop.stopName);
+        .filter((point) => point.name);
 }
 
 function sanitizeCabins(cabins) {
@@ -69,19 +75,35 @@ function sanitizeCabins(cabins) {
         }));
 }
 
-function buildRoutePointsFromSanitized(startPoint, stops, endPoint) {
-    return [
-        normalizeText(startPoint),
-        ...stops.map((s) => normalizeText(s.stopName)).filter(Boolean),
-        normalizeText(endPoint),
-    ].filter(Boolean);
+/* =========================
+   New Cleanup Helpers
+========================= */
+
+function removeStartPointFromPickupPoints(pickupPoints, startPoint) {
+    if (!Array.isArray(pickupPoints)) return [];
+
+    const startKey = normalizeKey(startPoint?.name);
+    if (!startKey) return pickupPoints;
+
+    return pickupPoints.filter((point) => normalizeKey(point?.name) !== startKey);
 }
 
-function hasDuplicateRoutePoints(routePoints) {
+function removeEndPointFromDropPoints(dropPoints, endPoint) {
+    if (!Array.isArray(dropPoints)) return [];
+
+    const endKey = normalizeKey(endPoint?.name);
+    if (!endKey) return dropPoints;
+
+    return dropPoints.filter((point) => normalizeKey(point?.name) !== endKey);
+}
+
+function hasDuplicateNames(points) {
     const seen = new Set();
 
-    for (const point of routePoints) {
-        const key = normalizeKey(point);
+    for (const point of points) {
+        const key = normalizeKey(point.name);
+        if (!key) continue;
+
         if (seen.has(key)) return true;
         seen.add(key);
     }
@@ -89,24 +111,45 @@ function hasDuplicateRoutePoints(routePoints) {
     return false;
 }
 
-function validateRoutePointTimes(startTime, stops, endTime) {
-    if (!normalizeText(startTime)) return "startTime is required";
-    if (!normalizeText(endTime)) return "endTime is required";
-
-    for (const stop of stops) {
-        if (!normalizeText(stop.time)) {
-            return `Time is required for stop ${stop.stopName}`;
+function validatePointTimes(points, label) {
+    for (const point of points) {
+        if (!normalizeText(point.time)) {
+            return `Time is required for ${label}: ${point.name}`;
         }
+    }
+    return null;
+}
+
+function validateSinglePoint(point, label) {
+    if (!normalizeText(point?.name)) {
+        return `${label} name is required`;
+    }
+
+    if (!normalizeText(point?.time)) {
+        return `${label} time is required`;
     }
 
     return null;
 }
 
+function generateBusId() {
+    return `BUS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+}
+
 /* =========================
    Fare Rules Logic
+
+   Rules:
+   - from => only pickupPoints
+   - to   => only dropPoints
+
+   NOTE:
+   startPoint and endPoint are separate.
+   pickupPoints should NOT include startPoint.
+   dropPoints should NOT include endPoint.
 ========================= */
 
-function buildExpandedFareEntries(rawFareRules, routePoints) {
+function buildExpandedFareEntries(rawFareRules, pickupPoints, dropPoints) {
     if (!Array.isArray(rawFareRules)) return [];
 
     const expandedEntries = [];
@@ -120,7 +163,6 @@ function buildExpandedFareEntries(rawFareRules, routePoints) {
         const fareStartDate = normalizeDateOnly(rule?.fareStartDate);
         const fareEndDate = normalizeDateOnly(rule?.fareEndDate);
 
-        // NEW FLAG
         const applyToAllNextPickupsBeforeDrop = Boolean(
             rule?.applyToAllNextPickupsBeforeDrop ?? rule?.applyToAllPreviousPickups
         );
@@ -144,23 +186,20 @@ function buildExpandedFareEntries(rawFareRules, routePoints) {
             throw new Error(`Invalid fare for ${from} → ${to}`);
         }
 
-        const fromIndex = routePoints.findIndex(
-            (p) => normalizeKey(p) === normalizeKey(from)
-        );
-        const toIndex = routePoints.findIndex(
-            (p) => normalizeKey(p) === normalizeKey(to)
+        const fromIndex = pickupPoints.findIndex(
+            (p) => normalizeKey(p.name) === normalizeKey(from)
         );
 
-        if (fromIndex === -1 || toIndex === -1) {
-            throw new Error(`Invalid fare rule route point: ${from} → ${to}`);
+        const toIndex = dropPoints.findIndex(
+            (p) => normalizeKey(p.name) === normalizeKey(to)
+        );
+
+        if (fromIndex === -1) {
+            throw new Error(`Invalid pickup point in fare rule: ${from}`);
         }
 
-        if (toIndex <= fromIndex) {
-            throw new Error(`Drop must come after pickup for ${from} → ${to}`);
-        }
-
-        if (toIndex - fromIndex < MIN_STOP_GAP) {
-            throw new Error(`Nearby stop fare not allowed for ${from} → ${to}`);
+        if (toIndex === -1) {
+            throw new Error(`Invalid drop point in fare rule: ${to}`);
         }
 
         if (fareStartDate && !isValidDateString(fareStartDate)) {
@@ -199,24 +238,26 @@ function buildExpandedFareEntries(rawFareRules, routePoints) {
         };
 
         if (applyToAllNextPickupsBeforeDrop) {
-            // NEW LOGIC: selected pickup + all next pickups before drop
-            for (let i = fromIndex; i < toIndex; i++) {
-                if (toIndex - i < MIN_STOP_GAP) continue;
-                pushExpanded(routePoints[i], routePoints[toIndex], i, toIndex);
+            for (let i = fromIndex; i < pickupPoints.length; i++) {
+                pushExpanded(pickupPoints[i].name, dropPoints[toIndex].name, i, toIndex);
             }
         } else {
-            pushExpanded(routePoints[fromIndex], routePoints[toIndex], fromIndex, toIndex);
+            pushExpanded(
+                pickupPoints[fromIndex].name,
+                dropPoints[toIndex].name,
+                fromIndex,
+                toIndex
+            );
         }
     }
 
     return expandedEntries;
 }
 
-function validateFareRulesStrict(fareRules, routePoints) {
+function validateFareRulesStrict(fareRules, pickupPoints, dropPoints) {
     try {
-        const expandedEntries = buildExpandedFareEntries(fareRules, routePoints);
+        const expandedEntries = buildExpandedFareEntries(fareRules, pickupPoints, dropPoints);
 
-        // Overlap check on SAME FINAL PAIR (for same date ranges)
         for (let i = 0; i < expandedEntries.length; i++) {
             for (let j = i + 1; j < expandedEntries.length; j++) {
                 const a = expandedEntries[i];
@@ -239,42 +280,11 @@ function validateFareRulesStrict(fareRules, routePoints) {
                     const aIdx = Number.isFinite(a.sourceRuleIndex) ? a.sourceRuleIndex : null;
                     const bIdx = Number.isFinite(b.sourceRuleIndex) ? b.sourceRuleIndex : null;
 
-                    // Debug logging to help trace overlaps
-                    console.log("[fare-validator] Overlap detected between expanded entries:", {
-                        pair: `${a.from} → ${a.to}`,
-                        entryA: {
-                            from: a.from,
-                            to: a.to,
-                            fare: a.fare,
-                            fareStartDate: a.fareStartDate,
-                            fareEndDate: a.fareEndDate,
-                            sourceRuleIndex: aIdx,
-                            sourceFrom: a.sourceFrom,
-                            sourceTo: a.sourceTo,
-                        },
-                        entryB: {
-                            from: b.from,
-                            to: b.to,
-                            fare: b.fare,
-                            fareStartDate: b.fareStartDate,
-                            fareEndDate: b.fareEndDate,
-                            sourceRuleIndex: bIdx,
-                            sourceFrom: b.sourceFrom,
-                            sourceTo: b.sourceTo,
-                        },
-                    });
-
-                    // If entries come from different source rules, let later override earlier
+                    // later rule overrides earlier rule
                     if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
-                        console.log(
-                            `[fare-validator] Overlap skipped: later rule (index ${Math.max(aIdx, bIdx)}) overrides earlier rule (index ${Math.min(aIdx, bIdx)}) for ${a.from} → ${a.to}`
-                        );
                         continue;
                     }
 
-                    console.log(`[fare-validator] Overlap error: same source rule or missing indices for ${a.from} → ${a.to}`);
-
-                    // return structured conflict so caller can include it in API response
                     return {
                         message: `Overlapping fare dates found for ${a.from} → ${a.to}`,
                         conflict: {
@@ -311,7 +321,7 @@ function validateFareRulesStrict(fareRules, routePoints) {
     }
 }
 
-function sanitizeFareRulesRaw(fareRules, routePoints) {
+function sanitizeFareRulesRaw(fareRules, pickupPoints, dropPoints) {
     if (!Array.isArray(fareRules)) return [];
 
     const cleaned = [];
@@ -327,7 +337,6 @@ function sanitizeFareRulesRaw(fareRules, routePoints) {
             rule?.applyToAllNextPickupsBeforeDrop ?? rule?.applyToAllPreviousPickups
         );
 
-        // skip fully empty row
         if (
             !from &&
             !to &&
@@ -340,16 +349,15 @@ function sanitizeFareRulesRaw(fareRules, routePoints) {
 
         if (!from || !to || !Number.isFinite(fare) || fare <= 0) continue;
 
-        const fromIndex = routePoints.findIndex(
-            (p) => normalizeKey(p) === normalizeKey(from)
+        const fromIndex = pickupPoints.findIndex(
+            (p) => normalizeKey(p.name) === normalizeKey(from)
         );
-        const toIndex = routePoints.findIndex(
-            (p) => normalizeKey(p) === normalizeKey(to)
+
+        const toIndex = dropPoints.findIndex(
+            (p) => normalizeKey(p.name) === normalizeKey(to)
         );
 
         if (fromIndex === -1 || toIndex === -1) continue;
-        if (toIndex <= fromIndex) continue;
-        if (toIndex - fromIndex < MIN_STOP_GAP) continue;
 
         if (fareStartDate && !isValidDateString(fareStartDate)) continue;
         if (fareEndDate && !isValidDateString(fareEndDate)) continue;
@@ -361,8 +369,8 @@ function sanitizeFareRulesRaw(fareRules, routePoints) {
         }
 
         cleaned.push({
-            from: routePoints[fromIndex],
-            to: routePoints[toIndex],
+            from: pickupPoints[fromIndex].name,
+            to: dropPoints[toIndex].name,
             fare,
             fareStartDate: fareStartDate || "",
             fareEndDate: fareEndDate || "",
@@ -373,16 +381,14 @@ function sanitizeFareRulesRaw(fareRules, routePoints) {
     return cleaned;
 }
 
-function buildEffectiveFareRules(fareRules, routePoints) {
-    const expandedEntries = buildExpandedFareEntries(fareRules, routePoints);
+function buildEffectiveFareRules(fareRules, pickupPoints, dropPoints) {
+    const expandedEntries = buildExpandedFareEntries(fareRules, pickupPoints, dropPoints);
 
-    // latest rule wins for same final pair + same date bucket
     const effectiveMap = new Map();
 
     for (const entry of expandedEntries) {
         const key = `${normalizeKey(entry.from)}|${normalizeKey(entry.to)}|${entry.fareStartDate}|${entry.fareEndDate}`;
 
-        // later rules override earlier rules automatically because Map.set replaces
         effectiveMap.set(key, {
             from: entry.from,
             to: entry.to,
@@ -399,6 +405,49 @@ function buildEffectiveFareRules(fareRules, routePoints) {
 }
 
 /* =========================
+   Common Payload Sanitizer
+========================= */
+
+function getSanitizedBusData(body) {
+    const busNumber = normalizeText(body.busNumber);
+    const busName = normalizeText(body.busName);
+    const busType = normalizeText(body.busType);
+    const routeName = normalizeText(body.routeName);
+    const startTime = normalizeText(body.startTime);
+    const endTime = normalizeText(body.endTime);
+    const seatLayout = normalizeText(body.seatLayout);
+
+    const startPoint = sanitizeSinglePoint(body.startPoint);
+    const endPoint = sanitizeSinglePoint(body.endPoint);
+
+    let pickupPoints = sanitizePoints(body.pickupPoints, 20);
+    let dropPoints = sanitizePoints(body.dropPoints, 20);
+
+    // IMPORTANT:
+    // Remove start point if frontend sends it inside pickupPoints
+    // Remove end point if frontend sends it inside dropPoints
+    pickupPoints = removeStartPointFromPickupPoints(pickupPoints, startPoint);
+    dropPoints = removeEndPointFromDropPoints(dropPoints, endPoint);
+
+    const cabins = sanitizeCabins(body.cabins);
+
+    return {
+        busNumber,
+        busName,
+        busType,
+        routeName,
+        startTime,
+        endTime,
+        seatLayout,
+        startPoint,
+        endPoint,
+        pickupPoints,
+        dropPoints,
+        cabins,
+    };
+}
+
+/* =========================
    Main Validation
 ========================= */
 
@@ -408,8 +457,6 @@ function validateBusPayload(body, isUpdate = false) {
         "busName",
         "busType",
         "routeName",
-        "startPoint",
-        "endPoint",
         "startTime",
         "endTime",
         "seatLayout",
@@ -433,15 +480,52 @@ function validateBusPayload(body, isUpdate = false) {
         return "busId is required for update";
     }
 
-    if (normalizeKey(body.startPoint) === normalizeKey(body.endPoint)) {
-        return "Start point and end point cannot be same";
+    const {
+        startPoint,
+        endPoint,
+        pickupPoints,
+        dropPoints,
+    } = getSanitizedBusData(body);
+
+    const startPointError = validateSinglePoint(startPoint, "Start point");
+    if (startPointError) return startPointError;
+
+    const endPointError = validateSinglePoint(endPoint, "End point");
+    if (endPointError) return endPointError;
+
+    if (pickupPoints.length === 0) {
+        return "At least one pickup point is required";
+    }
+
+    if (dropPoints.length === 0) {
+        return "At least one drop point is required";
+    }
+
+    if (hasDuplicateNames(pickupPoints)) {
+        return "Duplicate pickup point names are not allowed";
+    }
+
+    if (hasDuplicateNames(dropPoints)) {
+        return "Duplicate drop point names are not allowed";
+    }
+
+    // Extra safety:
+    // startPoint must not match any pickupPoint after cleanup
+    if (
+        pickupPoints.some((p) => normalizeKey(p.name) === normalizeKey(startPoint.name))
+    ) {
+        return "Start point cannot be repeated inside pickup points";
+    }
+
+    // Extra safety:
+    // endPoint must not match any dropPoint after cleanup
+    if (
+        dropPoints.some((p) => normalizeKey(p.name) === normalizeKey(endPoint.name))
+    ) {
+        return "End point cannot be repeated inside drop points";
     }
 
     return null;
-}
-
-function generateBusId() {
-    return `BUS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
 
 /* =========================
@@ -465,8 +549,7 @@ export async function GET() {
 
         buses.sort(
             (a, b) =>
-                new Date(b.createdAt || 0).getTime() -
-                new Date(a.createdAt || 0).getTime()
+                new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
         );
 
         return NextResponse.json(
@@ -506,50 +589,75 @@ export async function POST(req) {
             );
         }
 
-        const busNumber = normalizeText(body.busNumber);
-        const busName = normalizeText(body.busName);
-        const busType = normalizeText(body.busType);
-        const routeName = normalizeText(body.routeName);
-        const startPoint = normalizeText(body.startPoint);
-        const endPoint = normalizeText(body.endPoint);
-        const startTime = normalizeText(body.startTime);
-        const endTime = normalizeText(body.endTime);
-        const seatLayout = normalizeText(body.seatLayout);
-
-        const sanitizedStops = sanitizeStops(body.stops);
-        const sanitizedCabins = sanitizeCabins(body.cabins);
-        const routePoints = buildRoutePointsFromSanitized(
-            startPoint,
-            sanitizedStops,
-            endPoint
-        );
-
-        if (hasDuplicateRoutePoints(routePoints)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    error: "Duplicate route point names are not allowed",
-                },
-                { status: 400 }
-            );
-        }
-
-        const timeValidationError = validateRoutePointTimes(
+        const {
+            busNumber,
+            busName,
+            busType,
+            routeName,
             startTime,
-            sanitizedStops,
-            endTime
-        );
-        if (timeValidationError) {
+            endTime,
+            seatLayout,
+            startPoint,
+            endPoint,
+            pickupPoints,
+            dropPoints,
+            cabins,
+        } = getSanitizedBusData(body);
+
+        const startPointTimeError = validateSinglePoint(startPoint, "Start point");
+        if (startPointTimeError) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: timeValidationError,
+                    error: startPointTimeError,
                 },
                 { status: 400 }
             );
         }
 
-        const strictFareError = validateFareRulesStrict(body.fareRules, routePoints);
+        const endPointTimeError = validateSinglePoint(endPoint, "End point");
+        if (endPointTimeError) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: endPointTimeError,
+                },
+                { status: 400 }
+            );
+        }
+
+        const pickupTimeError = validatePointTimes(pickupPoints, "pickup point");
+        if (pickupTimeError) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: pickupTimeError,
+                },
+                { status: 400 }
+            );
+        }
+
+        const dropTimeError = validatePointTimes(dropPoints, "drop point");
+        if (dropTimeError) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: dropTimeError,
+                },
+                { status: 400 }
+            );
+        }
+
+        // For fare validation, include startPoint as the first pickup option and endPoint as the last drop option
+        const pickupPointsForFare = (startPoint && startPoint.name) ? [{ name: startPoint.name, time: startPoint.time }, ...pickupPoints] : pickupPoints;
+        const dropPointsForFare = (endPoint && endPoint.name) ? [...dropPoints, { name: endPoint.name, time: endPoint.time }] : dropPoints;
+
+        const strictFareError = validateFareRulesStrict(
+            body.fareRules,
+            pickupPointsForFare,
+            dropPointsForFare
+        );
+
         if (strictFareError) {
             if (typeof strictFareError === "string") {
                 return NextResponse.json(
@@ -577,19 +685,18 @@ export async function POST(req) {
             ? Object.values(existingSnapshot.val() || {})
             : [];
 
-        // Duplicate check: same bus number + same start time + same start point
         if (
             existing.some(
                 (b) =>
                     normalizeKey(b.busNumber) === normalizeKey(busNumber) &&
                     normalizeText(b.startTime) === startTime &&
-                    normalizeKey(b.startPoint) === normalizeKey(startPoint)
+                    normalizeKey(b.routeName) === normalizeKey(routeName)
             )
         ) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: "A bus with same number, start point and time already exists",
+                    error: "A bus with same number, route and start time already exists",
                 },
                 { status: 409 }
             );
@@ -598,8 +705,9 @@ export async function POST(req) {
         const busId = generateBusId();
         const now = new Date().toISOString();
 
-        const fareRulesRaw = sanitizeFareRulesRaw(body.fareRules, routePoints);
-        const fareRules = buildEffectiveFareRules(body.fareRules, routePoints);
+        const fareRulesRaw = sanitizeFareRulesRaw(body.fareRules, pickupPointsForFare, dropPointsForFare);
+
+        const fareRules = buildEffectiveFareRules(body.fareRules, pickupPointsForFare, dropPointsForFare);
 
         const newBus = {
             busId,
@@ -607,17 +715,22 @@ export async function POST(req) {
             busName,
             busType,
             routeName,
-            startPoint,
-            endPoint,
             startTime,
             endTime,
             seatLayout,
-            stops: sanitizedStops,
-            cabins: sanitizedCabins,
 
-            // IMPORTANT:
-            fareRulesRaw, // admin original rules
-            fareRules,    // final effective expanded rules for booking
+            startPoint,
+            pickupPoints,
+            dropPoints,
+            endPoint,
+
+            cabins,
+
+            // admin original rules
+            fareRulesRaw,
+
+            // effective expanded rules used for booking
+            fareRules,
 
             createdAt: now,
             updatedAt: now,
@@ -664,50 +777,76 @@ export async function PUT(req) {
         }
 
         const busId = normalizeText(body.busId);
-        const busNumber = normalizeText(body.busNumber);
-        const busName = normalizeText(body.busName);
-        const busType = normalizeText(body.busType);
-        const routeName = normalizeText(body.routeName);
-        const startPoint = normalizeText(body.startPoint);
-        const endPoint = normalizeText(body.endPoint);
-        const startTime = normalizeText(body.startTime);
-        const endTime = normalizeText(body.endTime);
-        const seatLayout = normalizeText(body.seatLayout);
 
-        const sanitizedStops = sanitizeStops(body.stops);
-        const sanitizedCabins = sanitizeCabins(body.cabins);
-        const routePoints = buildRoutePointsFromSanitized(
-            startPoint,
-            sanitizedStops,
-            endPoint
-        );
-
-        if (hasDuplicateRoutePoints(routePoints)) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    error: "Duplicate route point names are not allowed",
-                },
-                { status: 400 }
-            );
-        }
-
-        const timeValidationError = validateRoutePointTimes(
+        const {
+            busNumber,
+            busName,
+            busType,
+            routeName,
             startTime,
-            sanitizedStops,
-            endTime
-        );
-        if (timeValidationError) {
+            endTime,
+            seatLayout,
+            startPoint,
+            endPoint,
+            pickupPoints,
+            dropPoints,
+            cabins,
+        } = getSanitizedBusData(body);
+
+        const startPointTimeError = validateSinglePoint(startPoint, "Start point");
+        if (startPointTimeError) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: timeValidationError,
+                    error: startPointTimeError,
                 },
                 { status: 400 }
             );
         }
 
-        const strictFareError = validateFareRulesStrict(body.fareRules, routePoints);
+        const endPointTimeError = validateSinglePoint(endPoint, "End point");
+        if (endPointTimeError) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: endPointTimeError,
+                },
+                { status: 400 }
+            );
+        }
+
+        const pickupTimeError = validatePointTimes(pickupPoints, "pickup point");
+        if (pickupTimeError) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: pickupTimeError,
+                },
+                { status: 400 }
+            );
+        }
+
+        const dropTimeError = validatePointTimes(dropPoints, "drop point");
+        if (dropTimeError) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: dropTimeError,
+                },
+                { status: 400 }
+            );
+        }
+
+        // For fare validation on update, include start/end points in the options
+        const pickupPointsForFareU = (startPoint && startPoint.name) ? [{ name: startPoint.name, time: startPoint.time }, ...pickupPoints] : pickupPoints;
+        const dropPointsForFareU = (endPoint && endPoint.name) ? [...dropPoints, { name: endPoint.name, time: endPoint.time }] : dropPoints;
+
+        const strictFareError = validateFareRulesStrict(
+            body.fareRules,
+            pickupPointsForFareU,
+            dropPointsForFareU
+        );
+
         if (strictFareError) {
             if (typeof strictFareError === "string") {
                 return NextResponse.json(
@@ -752,7 +891,7 @@ export async function PUT(req) {
                 key !== busId &&
                 normalizeKey(val.busNumber) === normalizeKey(busNumber) &&
                 normalizeText(val.startTime) === startTime &&
-                normalizeKey(val.startPoint) === normalizeKey(startPoint)
+                normalizeKey(val.routeName) === normalizeKey(routeName)
             );
         });
 
@@ -760,8 +899,7 @@ export async function PUT(req) {
             return NextResponse.json(
                 {
                     success: false,
-                    error:
-                        "Another bus already exists with this bus number, start point and time",
+                    error: "Another bus already exists with this bus number, route and start time",
                 },
                 { status: 409 }
             );
@@ -769,8 +907,9 @@ export async function PUT(req) {
 
         const existingData = busSnapshot.val() || {};
 
-        const fareRulesRaw = sanitizeFareRulesRaw(body.fareRules, routePoints);
-        const fareRules = buildEffectiveFareRules(body.fareRules, routePoints);
+        const fareRulesRaw = sanitizeFareRulesRaw(body.fareRules, pickupPointsForFareU, dropPointsForFareU);
+
+        const fareRules = buildEffectiveFareRules(body.fareRules, pickupPointsForFareU, dropPointsForFareU);
 
         const updatedBusData = {
             busId,
@@ -778,17 +917,22 @@ export async function PUT(req) {
             busName,
             busType,
             routeName,
-            startPoint,
-            endPoint,
             startTime,
             endTime,
             seatLayout,
-            stops: sanitizedStops,
-            cabins: sanitizedCabins,
 
-            // IMPORTANT:
-            fareRulesRaw, // admin original rules
-            fareRules,    // final effective expanded rules for booking
+            startPoint,
+            pickupPoints,
+            dropPoints,
+            endPoint,
+
+            cabins,
+
+            // admin original rules
+            fareRulesRaw,
+
+            // effective expanded rules used for booking
+            fareRules,
 
             createdAt: existingData.createdAt || null,
             updatedAt: new Date().toISOString(),

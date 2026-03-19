@@ -27,9 +27,45 @@ function normalizeKey(v) {
   return normalizeText(v).toLowerCase();
 }
 
+function resolvePointValue(val, fallback = "") {
+  if (!val) return String(fallback || "");
+  if (typeof val === "object") return String(val.name || "");
+  return String(val);
+}
+
 function buildRouteStops(bus) {
   if (!bus) return [];
+  const resolve = (p) => {
+    if (!p) return "";
+    if (typeof p === "object") return normalizeText(p.name);
+    return normalizeText(p);
+  };
 
+  // Prefer explicit pickupPoints/dropPoints shape when available
+  if (Array.isArray(bus.pickupPoints) || Array.isArray(bus.dropPoints)) {
+    const start = resolve(bus.startPoint);
+    const pickups = Array.isArray(bus.pickupPoints)
+      ? bus.pickupPoints.map((p) => normalizeText(typeof p === "string" ? p : p?.name)).filter(Boolean)
+      : [];
+    const drops = Array.isArray(bus.dropPoints)
+      ? bus.dropPoints.map((p) => normalizeText(typeof p === "string" ? p : p?.name)).filter(Boolean)
+      : [];
+    const end = resolve(bus.endPoint);
+
+    const all = [];
+    if (start) all.push(start);
+    for (const p of pickups) {
+      if (!all.some((x) => normalizeKey(x) === normalizeKey(p))) all.push(p);
+    }
+    for (const d of drops) {
+      if (!all.some((x) => normalizeKey(x) === normalizeKey(d))) all.push(d);
+    }
+    if (end && !all.some((x) => normalizeKey(x) === normalizeKey(end))) all.push(end);
+
+    return all;
+  }
+
+  // Fallback to legacy `stops` array if present
   const middleStops = Array.isArray(bus.stops)
     ? bus.stops
       .map((s) => (typeof s === "string" ? s : s?.stopName))
@@ -37,21 +73,20 @@ function buildRouteStops(bus) {
       .map((s) => normalizeText(s))
     : [];
 
-  return [
-    normalizeText(bus.startPoint),
-    ...middleStops,
-    normalizeText(bus.endPoint),
-  ].filter(Boolean);
+  return [resolve(bus.startPoint), ...middleStops, resolve(bus.endPoint)].filter(Boolean);
 }
 
 function getStopTime(bus, stopName) {
   if (!bus || !stopName) return "";
 
-  if (normalizeKey(bus.startPoint) === normalizeKey(stopName)) {
+  const startName = typeof bus.startPoint === "object" ? normalizeText(bus.startPoint.name) : normalizeText(bus.startPoint);
+  const endName = typeof bus.endPoint === "object" ? normalizeText(bus.endPoint.name) : normalizeText(bus.endPoint);
+
+  if (normalizeKey(startName) === normalizeKey(stopName)) {
     return normalizeText(bus.startTime);
   }
 
-  if (normalizeKey(bus.endPoint) === normalizeKey(stopName)) {
+  if (normalizeKey(endName) === normalizeKey(stopName)) {
     return normalizeText(bus.endTime);
   }
 
@@ -65,18 +100,77 @@ function getStopTime(bus, stopName) {
 }
 
 function getPickupOptions(bus) {
+  if (!bus) return [];
+
+  // Prefer explicit pickupPoints shape when available
+  if (Array.isArray(bus.pickupPoints)) {
+    const resolve = (p) => {
+      if (!p) return "";
+      if (typeof p === "object") return normalizeText(p.name);
+      return normalizeText(p);
+    };
+
+    const start = resolve(bus.startPoint);
+    const pickups = bus.pickupPoints.map((p) => resolve(p)).filter(Boolean);
+
+    const out = [];
+    if (start) out.push(start);
+    for (const p of pickups) {
+      if (!out.some((x) => normalizeKey(x) === normalizeKey(p))) out.push(p);
+    }
+
+    return out;
+  }
+
   const stops = buildRouteStops(bus);
   if (stops.length <= 1) return [];
   return stops.slice(0, stops.length - 1);
 }
 
 function getDropOptions(bus, pickup) {
-  const stops = buildRouteStops(bus);
-  if (!pickup) return [];
+  if (!bus || !pickup) return [];
 
+  // If explicit pickup/drop shapes present, build ordered stops and slice
+  if (Array.isArray(bus.pickupPoints) || Array.isArray(bus.dropPoints)) {
+    const resolve = (p) => {
+      if (!p) return "";
+      if (typeof p === "object") return normalizeText(p.name);
+      return normalizeText(p);
+    };
+
+    const start = resolve(bus.startPoint);
+    const pickups = Array.isArray(bus.pickupPoints)
+      ? bus.pickupPoints.map((p) => resolve(p)).filter(Boolean)
+      : [];
+    const drops = Array.isArray(bus.dropPoints)
+      ? bus.dropPoints.map((p) => resolve(p)).filter(Boolean)
+      : [];
+    const end = resolve(bus.endPoint);
+
+    const all = [];
+    if (start) all.push(start);
+    for (const p of pickups) if (!all.some((x) => normalizeKey(x) === normalizeKey(p))) all.push(p);
+    for (const d of drops) if (!all.some((x) => normalizeKey(x) === normalizeKey(d))) all.push(d);
+    if (end && !all.some((x) => normalizeKey(x) === normalizeKey(end))) all.push(end);
+
+    const pickupIndex = all.findIndex((s) => normalizeKey(s) === normalizeKey(pickup));
+    if (pickupIndex === -1) return [];
+
+    const sliced = all.slice(pickupIndex + 1);
+    const dropSet = new Set(drops.map((d) => normalizeKey(d)));
+    const pickupSet = new Set(pickups.map((p) => normalizeKey(p)));
+
+    // exclude any stop that is also listed as a pickup
+    return sliced.filter((s) => {
+      const key = normalizeKey(s);
+      if (pickupSet.has(key)) return false;
+      return dropSet.has(key) || (end && key === normalizeKey(end));
+    });
+  }
+
+  const stops = buildRouteStops(bus);
   const pickupIndex = stops.findIndex((s) => normalizeKey(s) === normalizeKey(pickup));
   if (pickupIndex === -1) return [];
-
   return stops.slice(pickupIndex + 1);
 }
 
@@ -887,7 +981,8 @@ export default function BookingPage() {
                 const booked = bookedCounts[bus.busId]?.booked ?? 0;
                 const blocked = bookedCounts[bus.busId]?.blocked ?? 0;
                 const cabins = Array.isArray(bus.cabins) ? bus.cabins.length : 0;
-                const available = Math.max(totalSeats - booked - blocked, 0);
+                // Show available seats as total minus booked (blocked seats remain counted here)
+                const available = Math.max(totalSeats - booked, 0);
 
                 return (
                   <div
@@ -961,7 +1056,7 @@ export default function BookingPage() {
                       <CompactInfoCard
                         icon={<MapPin className="h-4 w-4 text-[#f97316]" />}
                         label="Path"
-                        value={`${bus.startPoint || "--"} → ${bus.endPoint || "--"}`}
+                        value={`${resolvePointValue(bus.startPoint, "--")} → ${resolvePointValue(bus.endPoint, "--")}`}
                       />
                       <CompactInfoCard
                         icon={<Clock3 className="h-4 w-4 text-[#f97316]" />}
@@ -990,13 +1085,15 @@ export default function BookingPage() {
                   {selectedBus.busNumber} — {selectedBus.routeName}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  {selectedBus.startPoint} → {selectedBus.endPoint} •{" "}
-                  {selectedBus.startTime} → {selectedBus.endTime}
+                  {`${resolvePointValue(selectedBus.startPoint, "--")} → ${resolvePointValue(
+                    selectedBus.endPoint,
+                    "--"
+                  )} • ${selectedBus.startTime || "--:--"} → ${selectedBus.endTime || "--:--"}`}
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
-                {user?.role === "admin" && (
+                {/* {user?.role === "admin" && (
                   <button
                     onClick={() =>
                       router.push(
@@ -1009,7 +1106,7 @@ export default function BookingPage() {
                   >
                     Manage Route / Edit Fare
                   </button>
-                )}
+                )} */}
 
                 <button
                   onClick={closeBusModal}

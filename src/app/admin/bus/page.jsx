@@ -21,29 +21,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-function timeToMinutes(t) {
-    if (!t) return null;
-    const parts = String(t).split(":");
-    if (parts.length < 2) return null;
-    const hh = parseInt(parts[0], 10);
-    const mm = parseInt(parts[1], 10);
-    if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
-    return hh * 60 + mm;
-}
-
-function minutesToTime(m) {
-    if (m === null || m === undefined || Number.isNaN(m)) return "";
-    const wrap = ((m % (24 * 60)) + 24 * 60) % (24 * 60);
-    const hh = Math.floor(wrap / 60)
-        .toString()
-        .padStart(2, "0");
-    const mm = (wrap % 60).toString().padStart(2, "0");
-    return `${hh}:${mm}`;
-}
-
 const seatLayoutOptions = ["31", "27", "23"];
 const ITEMS_PER_PAGE = 10;
-const MIN_STOP_GAP = 2;
 
 const initialForm = {
     busId: "",
@@ -52,11 +31,12 @@ const initialForm = {
     busType: "",
     routeName: "",
     startPoint: "",
-    endPoint: "",
     startTime: "",
+    endPoint: "",
     endTime: "",
     seatLayout: "",
-    stops: [],
+    pickupPoints: [],
+    dropPoints: [],
     cabins: [],
     fareRules: [],
 };
@@ -77,9 +57,8 @@ export default function AdminBusPage() {
 
     const [formData, setFormData] = useState(initialForm);
     const [editData, setEditData] = useState(initialForm);
-    const [editOriginalStartTime, setEditOriginalStartTime] = useState("");
-    const [editOriginalStops, setEditOriginalStops] = useState([]);
-    const [editOriginalEndTime, setEditOriginalEndTime] = useState("");
+
+    const normalizeKey = (s) => String(s || "").trim().toLowerCase();
 
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmMessage, setConfirmMessage] = useState("");
@@ -124,7 +103,15 @@ export default function AdminBusPage() {
         const term = searchTerm.toLowerCase().trim();
 
         return busList.filter((bus) => {
-            const matchesSearch = `${bus.busNumber || ""} ${bus.busName || ""} ${bus.busType || ""} ${bus.routeName || ""} ${bus.startPoint || ""} ${bus.endPoint || ""}`
+            const pickupNames = Array.isArray(bus.pickupPoints)
+                ? bus.pickupPoints.map((p) => p.name).join(" ")
+                : "";
+
+            const dropNames = Array.isArray(bus.dropPoints)
+                ? bus.dropPoints.map((p) => p.name).join(" ")
+                : "";
+
+            const matchesSearch = `${bus.busNumber || ""} ${bus.busName || ""} ${bus.busType || ""} ${bus.routeName || ""} ${pickupNames} ${dropNames}`
                 .toLowerCase()
                 .includes(term);
 
@@ -155,57 +142,20 @@ export default function AdminBusPage() {
         };
     }, [busList]);
 
-    const buildRoutePoints = (data) => {
-        const points = [];
-
-        if (data.startPoint?.trim()) {
-            points.push({
-                id: "start",
-                label: data.startPoint.trim(),
-                time: data.startTime || "",
-                type: "start",
-            });
-        }
-
-        (data.stops || []).forEach((stop, index) => {
-            if (stop?.stopName?.trim()) {
-                points.push({
-                    id: `stop-${index}`,
-                    label: stop.stopName.trim(),
-                    time: stop.time || "",
-                    type: "stop",
-                });
-            }
-        });
-
-        if (data.endPoint?.trim()) {
-            points.push({
-                id: "end",
-                label: data.endPoint.trim(),
-                time: data.endTime || "",
-                type: "end",
-            });
-        }
-
-        return points;
-    };
-
-    const rangesOverlap = (startA, endA, startB, endB) => {
-        const aStart = startA ? new Date(startA).setHours(0, 0, 0, 0) : -Infinity;
-        const aEnd = endA ? new Date(endA).setHours(0, 0, 0, 0) : Infinity;
-        const bStart = startB ? new Date(startB).setHours(0, 0, 0, 0) : -Infinity;
-        const bEnd = endB ? new Date(endB).setHours(0, 0, 0, 0) : Infinity;
-        return aStart <= bEnd && bStart <= aEnd;
-    };
-
     const validateBusForm = (data) => {
+        const resolvePointString = (p) => {
+            if (!p) return "";
+            if (typeof p === "object") return String(p.name || "").trim();
+            return String(p || "").trim();
+        };
+
         if (
             !data.busNumber.trim() ||
             !data.busName.trim() ||
             !data.busType.trim() ||
             !data.routeName.trim() ||
-            !data.startPoint.trim() ||
-            !data.endPoint.trim() ||
+            !resolvePointString(data.startPoint) ||
+            !resolvePointString(data.endPoint) ||
             !data.startTime.trim() ||
             !data.endTime.trim()
         ) {
@@ -216,95 +166,131 @@ export default function AdminBusPage() {
             return "Please select a valid seat layout";
         }
 
-        if (data.startPoint.trim().toLowerCase() === data.endPoint.trim().toLowerCase()) {
-            return "Start point and end point cannot be same";
+        const pickupPoints = Array.isArray(data.pickupPoints) ? data.pickupPoints : [];
+        const dropPoints = Array.isArray(data.dropPoints) ? data.dropPoints : [];
+
+        const validPickups = pickupPoints.filter((p) => p?.name?.trim());
+        const validDrops = dropPoints.filter((p) => p?.name?.trim());
+
+        // include startPoint as first pickup option and endPoint as last drop option for validation
+        const pickupOptions = [];
+        const startStr = resolvePointString(data.startPoint);
+        if (startStr) pickupOptions.push({ name: startStr, time: data.startTime || "" });
+        pickupOptions.push(...validPickups);
+
+        const dropOptions = [];
+        dropOptions.push(...validDrops);
+        const endStr = resolvePointString(data.endPoint);
+        if (endStr) dropOptions.push({ name: endStr, time: data.endTime || "" });
+
+        if (validPickups.length === 0) {
+            return "At least one pickup point is required";
         }
 
-        const routePoints = buildRoutePoints(data);
-
-        if (routePoints.length < 2) {
-            return "Please provide valid route points";
+        if (validDrops.length === 0) {
+            return "At least one drop point is required";
         }
 
-        const pointLabels = routePoints.map((p) => p.label.toLowerCase());
-        const hasDuplicateStops = pointLabels.some(
-            (label, index) => pointLabels.indexOf(label) !== index
-        );
-
-        if (hasDuplicateStops) {
-            return "Duplicate route point names are not allowed";
+        const pickupRawNames = validPickups.map((p) => String(p.name || "").trim());
+        const pickupLower = pickupRawNames.map((n) => n.toLowerCase());
+        const duplicatePickupNames = pickupRawNames.filter((n, i) => pickupLower.indexOf(n.toLowerCase()) !== i);
+        if (duplicatePickupNames.length > 0) {
+            const uniq = [...new Set(duplicatePickupNames.map((n) => n.trim()))];
+            return `Duplicate pickup point names are not allowed: ${uniq.join(", ")}`;
         }
 
-        for (let i = 0; i < routePoints.length; i++) {
-            if (!routePoints[i].time) {
-                return `Please provide time for ${routePoints[i].label}`;
+        const dropRawNames = validDrops.map((p) => String(p.name || "").trim());
+        const dropLower = dropRawNames.map((n) => n.toLowerCase());
+        const duplicateDropNames = dropRawNames.filter((n, i) => dropLower.indexOf(n.toLowerCase()) !== i);
+        if (duplicateDropNames.length > 0) {
+            const uniq = [...new Set(duplicateDropNames.map((n) => n.trim()))];
+            return `Duplicate drop point names are not allowed: ${uniq.join(", ")}`;
+        }
+
+        const sStart = resolvePointString(data.startPoint).toLowerCase();
+        const sEnd = resolvePointString(data.endPoint).toLowerCase();
+        if (sStart && sEnd && sStart === sEnd) {
+            return "Start point and End point cannot be the same";
+        }
+
+        for (const p of validPickups) {
+            if (!p.time?.trim()) {
+                return `Please provide time for pickup point: ${p.name}`;
             }
         }
 
-        const findIndex = (name) =>
-            routePoints.findIndex((p) => p.label === String(name || "").trim());
+        for (const p of validDrops) {
+            if (!p.time?.trim()) {
+                return `Please provide time for drop point: ${p.name}`;
+            }
+        }
+
+        const fareRules = Array.isArray(data.fareRules) ? data.fareRules : [];
 
         const expandedRules = [];
 
-        for (const rule of data.fareRules || []) {
-            const from = String(rule.from || "").trim();
-            const to = String(rule.to || "").trim();
-            const fare = Number(rule.fare);
-            const fareStartDate = String(rule.fareStartDate || "").trim();
-            const fareEndDate = String(rule.fareEndDate || "").trim();
-            const applyToAllNextPickupsBeforeDrop = !!rule.applyToAllNextPickupsBeforeDrop;
+        for (let ruleIndex = 0; ruleIndex < fareRules.length; ruleIndex++) {
+            const rule = fareRules[ruleIndex];
+            const from = String(rule?.from || "").trim();
+            const to = String(rule?.to || "").trim();
+            const fare = Number(rule?.fare);
+            const fareStartDate = String(rule?.fareStartDate || "").trim();
+            const fareEndDate = String(rule?.fareEndDate || "").trim();
+            const applyToAllNextPickupsBeforeDrop = !!rule?.applyToAllNextPickupsBeforeDrop;
 
             const isEmptyRow =
                 !from &&
                 !to &&
-                (rule.fare === "" || rule.fare === undefined || rule.fare === null) &&
+                (rule?.fare === "" || rule?.fare === undefined || rule?.fare === null) &&
                 !fareStartDate &&
                 !fareEndDate;
 
             if (isEmptyRow) continue;
 
-            if (!from || !to || !rule.fare) {
-                return "Please complete all fare rules";
-            }
-
-            const fromIndex = findIndex(from);
-            const toIndex = findIndex(to);
-
-            if (fromIndex === -1 || toIndex === -1) {
-                return `Invalid fare rule: ${from} → ${to}`;
-            }
-
-            if (toIndex <= fromIndex) {
-                return `Drop must be after pickup for ${from} → ${to}`;
-            }
-
-            if (toIndex - fromIndex < MIN_STOP_GAP) {
-                return `Nearby stop fare not allowed for ${from} → ${to}`;
+            if (!from || !to || !rule?.fare) {
+                return `Please complete all fare rules (rule ${ruleIndex + 1})`;
             }
 
             if (!Number.isFinite(fare) || fare <= 0) {
-                return `Fare must be greater than 0 for ${from} → ${to}`;
+                return `Fare must be greater than 0 for rule ${ruleIndex + 1}`;
+            }
+
+            const fromIndex = pickupOptions.findIndex(
+                (p) => p.name.trim().toLowerCase() === from.toLowerCase()
+            );
+            const toIndex = dropOptions.findIndex(
+                (p) => p.name.trim().toLowerCase() === to.toLowerCase()
+            );
+
+            if (fromIndex === -1) {
+                return `Invalid pickup point in fare rule ${ruleIndex + 1}`;
+            }
+
+            if (toIndex === -1) {
+                return `Invalid drop point in fare rule ${ruleIndex + 1}`;
             }
 
             if (fareStartDate && fareEndDate) {
                 const start = new Date(fareStartDate);
                 const end = new Date(fareEndDate);
+
                 if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-                    return `Invalid fare date for ${from} → ${to}`;
+                    return `Invalid fare dates in rule ${ruleIndex + 1}`;
                 }
+
                 if (end < start) {
-                    return `Fare end date must be after start date for ${from} → ${to}`;
+                    return `Fare end date must be after start date in rule ${ruleIndex + 1}`;
                 }
             }
 
             if (applyToAllNextPickupsBeforeDrop) {
-                for (let i = fromIndex; i < toIndex; i++) {
-                    if (toIndex - i < MIN_STOP_GAP) continue;
+                for (let i = fromIndex; i < pickupOptions.length; i++) {
                     expandedRules.push({
-                        from: routePoints[i].label,
-                        to: routePoints[toIndex].label,
+                        from: pickupOptions[i].name,
+                        to,
                         fareStartDate,
                         fareEndDate,
+                        sourceRuleIndex: ruleIndex,
                     });
                 }
             } else {
@@ -313,6 +299,7 @@ export default function AdminBusPage() {
                     to,
                     fareStartDate,
                     fareEndDate,
+                    sourceRuleIndex: ruleIndex,
                 });
             }
         }
@@ -322,20 +309,33 @@ export default function AdminBusPage() {
                 const a = expandedRules[i];
                 const b = expandedRules[j];
 
-                if (
+                const samePair =
                     a.from.toLowerCase() === b.from.toLowerCase() &&
-                    a.to.toLowerCase() === b.to.toLowerCase()
-                ) {
-                    if (
-                        rangesOverlap(
-                            a.fareStartDate,
-                            a.fareEndDate,
-                            b.fareStartDate,
-                            b.fareEndDate
-                        )
-                    ) {
-                        return `Overlapping fare dates found for ${a.from} → ${a.to}`;
+                    a.to.toLowerCase() === b.to.toLowerCase();
+
+                if (!samePair) continue;
+
+                const aStart = a.fareStartDate
+                    ? new Date(a.fareStartDate).setHours(0, 0, 0, 0)
+                    : -Infinity;
+                const aEnd = a.fareEndDate
+                    ? new Date(a.fareEndDate).setHours(0, 0, 0, 0)
+                    : Infinity;
+                const bStart = b.fareStartDate
+                    ? new Date(b.fareStartDate).setHours(0, 0, 0, 0)
+                    : -Infinity;
+                const bEnd = b.fareEndDate
+                    ? new Date(b.fareEndDate).setHours(0, 0, 0, 0)
+                    : Infinity;
+
+                const overlap = aStart <= bEnd && bStart <= aEnd;
+
+                if (overlap) {
+                    if (a.sourceRuleIndex !== b.sourceRuleIndex) {
+                        continue; // later override allowed
                     }
+
+                    return `Overlapping fare dates found for ${a.from} → ${a.to}`;
                 }
             }
         }
@@ -346,168 +346,130 @@ export default function AdminBusPage() {
     const handleInputChange = (e, isEdit = false) => {
         const { name, value } = e.target;
 
-        if (isEdit) {
-            if (name === "startTime") {
-                try {
-                    const prevBase = editOriginalStartTime || editData.startTime || "";
-                    const prevMin = timeToMinutes(prevBase);
-                    const newMin = timeToMinutes(value);
+        const applyStartSync = (prevObj, newVal) => {
+            const updated = { ...prevObj, [name]: newVal };
+            const newStart = String(newVal || "").trim();
+            const prevStart = String(prevObj.startPoint || prevObj.start || "").trim();
 
-                    let updatedStops = Array.isArray(editData.stops) ? [...editData.stops] : [];
-
-                    if (prevMin !== null && newMin !== null) {
-                        const delta = newMin - prevMin;
-
-                        updatedStops = updatedStops.map((s) => {
-                            const orig = timeToMinutes(s.time || s.stopTime || "");
-                            if (orig === null) return { ...s };
-                            return { ...s, time: minutesToTime(orig + delta) };
-                        });
-
-                        const prevEnd = editOriginalEndTime || editData.endTime || "";
-                        const prevEndMin = timeToMinutes(prevEnd);
-
-                        if (prevEndMin !== null) {
-                            const newEnd = minutesToTime(prevEndMin + delta);
-                            setEditData((prev) => ({ ...prev, endTime: newEnd }));
-                            setEditOriginalEndTime(newEnd);
-                        }
+            if (name === "startPoint") {
+                const pickups = Array.isArray(prevObj.pickupPoints) ? [...prevObj.pickupPoints] : [];
+                if (pickups.length > 0) {
+                    const firstName = String(pickups[0]?.name || pickups[0] || "").trim();
+                    if (normalizeKey(firstName) === normalizeKey(prevStart) || firstName === "") {
+                        pickups[0] = { ...(pickups[0] || {}), name: newStart, time: prevObj.startTime || prevObj.startTime || "" };
+                    } else {
+                        // remove any other pickup that matches newStart to avoid duplicates
+                        const idx = pickups.findIndex((p) => normalizeKey(p?.name || "") === normalizeKey(newStart));
+                        if (idx > -1) pickups.splice(idx, 1);
                     }
-
-                    setEditData((prev) => ({ ...prev, [name]: value, stops: updatedStops }));
-                    setEditOriginalStartTime(value);
-
-                    setEditOriginalStops((prev) =>
-                        Array.isArray(prev)
-                            ? prev.map((s, i) => ({
-                                ...(s || {}),
-                                time:
-                                    (updatedStops[i] && updatedStops[i].time) ||
-                                    (s && s.time) ||
-                                    "",
-                            }))
-                            : updatedStops.map((s) => ({ ...(s || {}), time: s.time || "" }))
-                    );
-                } catch {
-                    setEditData((prev) => ({ ...prev, [name]: value }));
+                    updated.pickupPoints = pickups;
                 }
-                return;
             }
 
-            setEditData((prev) => ({
-                ...prev,
-                [name]: value,
-            }));
+            if (name === "endPoint") {
+                const drops = Array.isArray(prevObj.dropPoints) ? [...prevObj.dropPoints] : [];
+                const prevEnd = String(prevObj.endPoint || prevObj.end || "").trim();
+                if (drops.length > 0) {
+                    const last = drops[drops.length - 1];
+                    const lastName = String(last?.name || last || "").trim();
+                    if (normalizeKey(lastName) === normalizeKey(prevEnd) || lastName === "") {
+                        drops[drops.length - 1] = { ...(last || {}), name: String(newVal || "").trim(), time: prevObj.endTime || prevObj.endTime || "" };
+                    } else {
+                        const idx = drops.findIndex((p) => normalizeKey(p?.name || "") === normalizeKey(String(newVal || "")));
+                        if (idx > -1) drops.splice(idx, 1);
+                    }
+                    updated.dropPoints = drops;
+                }
+            }
+
+            return updated;
+        };
+
+        if (isEdit) {
+            setEditData((prev) => applyStartSync(prev, value));
         } else {
-            setFormData((prev) => ({
-                ...prev,
-                [name]: value,
-            }));
+            setFormData((prev) => applyStartSync(prev, value));
         }
     };
 
-    const handleStopChange = (index, field, value, isEdit = false) => {
-        if (isEdit) {
-            const updatedStops = [...(editData.stops || [])];
+    const handlePointChange = (section, index, field, value, isEdit = false) => {
+        const normalize = (s) => String(s || "").trim().toLowerCase();
 
-            if (field === "time") {
-                const origTime =
-                    (editOriginalStops &&
-                        editOriginalStops[index] &&
-                        editOriginalStops[index].time) ||
-                    (editData.stops &&
-                        editData.stops[index] &&
-                        editData.stops[index].time) ||
-                    "";
-
-                const origMin = timeToMinutes(origTime);
-                const newMin = timeToMinutes(value);
-
-                updatedStops[index] = { ...(updatedStops[index] || {}), time: value };
-
-                if (origMin !== null && newMin !== null) {
-                    const delta = newMin - origMin;
-
-                    for (let i = index + 1; i < updatedStops.length; i++) {
-                        const s = updatedStops[i] || {};
-                        const sMin = timeToMinutes(s.time || s.stopTime || "");
-                        if (sMin !== null) {
-                            updatedStops[i] = { ...s, time: minutesToTime(sMin + delta) };
-                        }
+        // Prevent duplicate names when editing pickup/drop names
+        if (field === "name" && (section === "pickupPoints" || section === "dropPoints")) {
+            const newName = normalize(value);
+            if (newName) {
+                if (isEdit) {
+                    const other = (editData[section] || []).filter((_, i) => i !== index).map((p) => normalize(p?.name));
+                    const startName = normalize(editData.startPoint || editData.start || "");
+                    const endName = normalize(editData.endPoint || editData.end || "");
+                    if (other.includes(newName) || (section === "pickupPoints" ? startName === newName : endName === newName)) {
+                        showAppToast("error", `Duplicate ${section === "pickupPoints" ? "pickup" : "drop"} point name not allowed`);
+                        return;
                     }
-
-                    const prevEnd = editOriginalEndTime || editData.endTime || "";
-                    const prevEndMin = timeToMinutes(prevEnd);
-
-                    if (prevEndMin !== null) {
-                        const newEnd = minutesToTime(prevEndMin + delta);
-                        setEditData((prev) => ({ ...prev, endTime: newEnd }));
-                        setEditOriginalEndTime(newEnd);
+                } else {
+                    const other = (formData[section] || []).filter((_, i) => i !== index).map((p) => normalize(p?.name));
+                    const startName = normalize(formData.startPoint || formData.start || "");
+                    const endName = normalize(formData.endPoint || formData.end || "");
+                    if (other.includes(newName) || (section === "pickupPoints" ? startName === newName : endName === newName)) {
+                        showAppToast("error", `Duplicate ${section === "pickupPoints" ? "pickup" : "drop"} point name not allowed`);
+                        return;
                     }
-
-                    setEditOriginalStops((prev) => {
-                        const base = Array.isArray(prev)
-                            ? [...prev]
-                            : (editData.stops || []).map((s) => ({ ...s }));
-
-                        for (let i = index; i < updatedStops.length; i++) {
-                            base[i] = { ...(base[i] || {}), time: updatedStops[i].time || "" };
-                        }
-
-                        return base;
-                    });
                 }
-            } else {
-                updatedStops[index] = { ...(updatedStops[index] || {}), [field]: value };
             }
-
-            setEditData((prev) => ({
-                ...prev,
-                stops: updatedStops,
-            }));
-        } else {
-            const updatedStops = [...(formData.stops || [])];
-            updatedStops[index] = { ...(updatedStops[index] || {}), [field]: value };
-
-            setFormData((prev) => ({
-                ...prev,
-                stops: updatedStops,
-            }));
         }
-    };
 
-    const addStop = (isEdit = false) => {
         if (isEdit) {
             setEditData((prev) => {
-                const stops = Array.isArray(prev.stops) ? [...prev.stops] : [];
-                if (stops.length < 20) stops.push({ stopName: "", time: "" });
-                return { ...prev, stops };
+                const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
+                updated[index] = { ...(updated[index] || {}), [field]: value };
+                return { ...prev, [section]: updated };
             });
         } else {
             setFormData((prev) => {
-                const stops = Array.isArray(prev.stops) ? [...prev.stops] : [];
-                if (stops.length < 20) stops.push({ stopName: "", time: "" });
-                return { ...prev, stops };
+                const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
+                updated[index] = { ...(updated[index] || {}), [field]: value };
+                return { ...prev, [section]: updated };
             });
         }
     };
 
-    const removeStop = (index, isEdit = false) => {
+    const addPoint = (section, isEdit = false) => {
         if (isEdit) {
             setEditData((prev) => {
-                const stops = Array.isArray(prev.stops) ? [...prev.stops] : [];
-                if (index >= 0 && index < stops.length) {
-                    stops.splice(index, 1);
+                const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
+                if (updated.length < 20) {
+                    updated.push({ name: "", time: "" });
                 }
-                return { ...prev, stops };
+                return { ...prev, [section]: updated };
             });
         } else {
             setFormData((prev) => {
-                const stops = Array.isArray(prev.stops) ? [...prev.stops] : [];
-                if (index >= 0 && index < stops.length) {
-                    stops.splice(index, 1);
+                const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
+                if (updated.length < 20) {
+                    updated.push({ name: "", time: "" });
                 }
-                return { ...prev, stops };
+                return { ...prev, [section]: updated };
+            });
+        }
+    };
+
+    const removePoint = (section, index, isEdit = false) => {
+        if (isEdit) {
+            setEditData((prev) => {
+                const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
+                if (index >= 0 && index < updated.length) {
+                    updated.splice(index, 1);
+                }
+                return { ...prev, [section]: updated };
+            });
+        } else {
+            setFormData((prev) => {
+                const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
+                if (index >= 0 && index < updated.length) {
+                    updated.splice(index, 1);
+                }
+                return { ...prev, [section]: updated };
             });
         }
     };
@@ -591,13 +553,16 @@ export default function AdminBusPage() {
 
                 if (field === "from") {
                     const rule = updatedFareRules[index];
-                    if (rule?.to) {
-                        const routePoints = buildRoutePoints(prev);
-                        const fromIndex = routePoints.findIndex((p) => p.label === value);
-                        const toIndex = routePoints.findIndex((p) => p.label === rule.to);
-                        if (fromIndex === -1 || toIndex === -1 || toIndex <= fromIndex) {
-                            updatedFareRules[index].to = "";
-                        }
+                    const validDrops = Array.isArray(prev.dropPoints) ? prev.dropPoints.slice() : [];
+                    const resolvePointString = (p) => {
+                        if (!p) return "";
+                        if (typeof p === "object") return String(p.name || "").trim();
+                        return String(p || "").trim();
+                    };
+                    const endStr = resolvePointString(prev.endPoint);
+                    if (endStr) validDrops.push({ name: endStr, time: prev.endTime || "" });
+                    if (rule?.to && !validDrops.some((p) => p.name === rule.to)) {
+                        updatedFareRules[index].to = "";
                     }
                 }
 
@@ -616,13 +581,16 @@ export default function AdminBusPage() {
 
                 if (field === "from") {
                     const rule = updatedFareRules[index];
-                    if (rule?.to) {
-                        const routePoints = buildRoutePoints(prev);
-                        const fromIndex = routePoints.findIndex((p) => p.label === value);
-                        const toIndex = routePoints.findIndex((p) => p.label === rule.to);
-                        if (fromIndex === -1 || toIndex === -1 || toIndex <= fromIndex) {
-                            updatedFareRules[index].to = "";
-                        }
+                    const validDrops = Array.isArray(prev.dropPoints) ? prev.dropPoints.slice() : [];
+                    const resolvePointString = (p) => {
+                        if (!p) return "";
+                        if (typeof p === "object") return String(p.name || "").trim();
+                        return String(p || "").trim();
+                    };
+                    const endStr = resolvePointString(prev.endPoint);
+                    if (endStr) validDrops.push({ name: endStr, time: prev.endTime || "" });
+                    if (rule?.to && !validDrops.some((p) => p.name === rule.to)) {
+                        updatedFareRules[index].to = "";
                     }
                 }
 
@@ -687,7 +655,31 @@ export default function AdminBusPage() {
         e.preventDefault();
         if (saving) return;
 
-        const error = validateBusForm(formData);
+        // sanitize and dedupe before validating to give clearer UX on Add
+        const dedupeByName = (arr) => {
+            const seen = new Set();
+            const out = [];
+            for (const p of Array.isArray(arr) ? arr : []) {
+                const name = String(p?.name || "").trim();
+                const time = String(p?.time || "").trim();
+                if (!name) continue;
+                const k = normalizeKey(name);
+                if (seen.has(k)) continue;
+                seen.add(k);
+                out.push({ name, time });
+            }
+            return out;
+        };
+
+        const sanitizedForm = {
+            ...formData,
+            pickupPoints: dedupeByName(formData.pickupPoints),
+            dropPoints: dedupeByName(formData.dropPoints),
+            startPoint: String(formData.startPoint || "").trim(),
+            endPoint: String(formData.endPoint || "").trim(),
+        };
+
+        const error = validateBusForm(sanitizedForm);
         if (error) {
             return showAppToast("error", error);
         }
@@ -695,7 +687,47 @@ export default function AdminBusPage() {
         setSaving(true);
 
         try {
-            const payload = { ...formData };
+            const payload = { ...sanitizedForm };
+            // synthesize startPoint/endPoint objects for server compatibility using sanitizedForm
+            const synthesizedStart = { name: (typeof sanitizedForm.startPoint === "object" ? String(sanitizedForm.startPoint.name || "") : String(sanitizedForm.startPoint || "")).trim(), time: sanitizedForm.startTime || "" };
+            const synthesizedEnd = { name: (typeof sanitizedForm.endPoint === "object" ? String(sanitizedForm.endPoint.name || "") : String(sanitizedForm.endPoint || "")).trim(), time: sanitizedForm.endTime || "" };
+            payload.startPoint = synthesizedStart;
+            payload.endPoint = synthesizedEnd;
+            // ensure pickupPoints includes startPoint as first element and dropPoints includes endPoint as last element
+            const rawPickups = Array.isArray(sanitizedForm.pickupPoints) ? sanitizedForm.pickupPoints.slice() : [];
+            const rawDrops = Array.isArray(sanitizedForm.dropPoints) ? sanitizedForm.dropPoints.slice() : [];
+            const cleanedPickups = rawPickups
+                .map((p) => ({ name: String(p?.name || "").trim(), time: String(p?.time || "").trim() }))
+                .filter((p) => p.name);
+            const cleanedDrops = rawDrops
+                .map((p) => ({ name: String(p?.name || "").trim(), time: String(p?.time || "").trim() }))
+                .filter((p) => p.name);
+            // dedupe by normalized name
+            const dedupeByName = (arr) => {
+                const seen = new Set();
+                return arr.filter((p) => {
+                    const k = String(p.name || "").trim().toLowerCase();
+                    if (!k) return false;
+                    if (seen.has(k)) return false;
+                    seen.add(k);
+                    return true;
+                });
+            };
+
+            const dedupedPickups = dedupeByName(cleanedPickups);
+            const dedupedDrops = dedupeByName(cleanedDrops);
+            const finalPickups = [];
+            if (synthesizedStart.name) finalPickups.push(synthesizedStart);
+            finalPickups.push(...dedupedPickups.slice(0, 20 - (finalPickups.length)));
+            const finalDrops = [];
+            finalDrops.push(...dedupedDrops.slice(0, 20));
+            if (synthesizedEnd.name && finalDrops.length < 20) finalDrops.push(synthesizedEnd);
+            payload.pickupPoints = finalPickups;
+            payload.dropPoints = finalDrops;
+
+            // debug: log payload to help diagnose fare-rule mapping issues
+            // eslint-disable-next-line no-console
+            console.log("[AdminBus] create payload:", payload);
 
             const res = await fetch("/api/bus", {
                 method: "POST",
@@ -724,38 +756,38 @@ export default function AdminBusPage() {
     };
 
     const openEditModal = (bus) => {
+        const resolvePointToString = (p) => {
+            if (!p) return "";
+            if (typeof p === "object") return String(p.name || "").trim();
+            return String(p || "").trim();
+        };
+
         setEditData({
             busId: bus.busId || "",
             busNumber: bus.busNumber || "",
             busName: bus.busName || "",
             busType: bus.busType || "",
             routeName: bus.routeName || "",
-            startPoint: bus.startPoint || "",
-            endPoint: bus.endPoint || "",
+            startPoint: resolvePointToString(bus.startPoint || bus.start),
             startTime: bus.startTime || "",
+            endPoint: resolvePointToString(bus.endPoint || bus.end),
             endTime: bus.endTime || "",
             seatLayout: String(bus.seatLayout || ""),
-            stops: Array.isArray(bus.stops) ? bus.stops : [],
+            pickupPoints: Array.isArray(bus.pickupPoints) ? bus.pickupPoints : [],
+            dropPoints: Array.isArray(bus.dropPoints) ? bus.dropPoints : [],
             cabins: Array.isArray(bus.cabins) ? bus.cabins : [],
-            fareRules: Array.isArray(bus.fareRules)
-                ? bus.fareRules.map((rule) => ({
+            fareRules: Array.isArray(bus.fareRulesRaw)
+                ? bus.fareRulesRaw.map((rule) => ({
                     from: rule.from || "",
                     to: rule.to || "",
                     fare: rule.fare || "",
                     fareStartDate: rule.fareStartDate || "",
                     fareEndDate: rule.fareEndDate || "",
-                    applyToAllNextPickupsBeforeDrop: false,
+                    applyToAllNextPickupsBeforeDrop: !!rule.applyToAllNextPickupsBeforeDrop,
                 }))
                 : [],
         });
 
-        setEditOriginalStartTime(bus.startTime || "");
-        setEditOriginalStops(
-            Array.isArray(bus.stops)
-                ? bus.stops.map((s) => ({ ...(s || {}), time: s.time || s.stopTime || "" }))
-                : []
-        );
-        setEditOriginalEndTime(bus.endTime || "");
         setShowEditModal(true);
     };
 
@@ -763,7 +795,31 @@ export default function AdminBusPage() {
         e.preventDefault();
         if (saving) return;
 
-        const error = validateBusForm(editData);
+        // sanitize and dedupe pickup/drop names before validating
+        const dedupeByName = (arr) => {
+            const seen = new Set();
+            const out = [];
+            for (const p of Array.isArray(arr) ? arr : []) {
+                const name = String(p?.name || "").trim();
+                const time = String(p?.time || "").trim();
+                if (!name) continue;
+                const k = normalizeKey(name);
+                if (seen.has(k)) continue;
+                seen.add(k);
+                out.push({ name, time });
+            }
+            return out;
+        };
+
+        const sanitizedEdit = {
+            ...editData,
+            pickupPoints: dedupeByName(editData.pickupPoints),
+            dropPoints: dedupeByName(editData.dropPoints),
+            startPoint: String(editData.startPoint || "").trim(),
+            endPoint: String(editData.endPoint || "").trim(),
+        };
+
+        const error = validateBusForm(sanitizedEdit);
         if (error) {
             return showAppToast("error", error);
         }
@@ -771,7 +827,46 @@ export default function AdminBusPage() {
         setSaving(true);
 
         try {
-            const payload = { ...editData };
+            const payload = { ...sanitizedEdit };
+            // synthesize startPoint/endPoint objects for server compatibility using sanitizedEdit
+            const synthesizedStartE = { name: (typeof sanitizedEdit.startPoint === "object" ? String(sanitizedEdit.startPoint.name || "") : String(sanitizedEdit.startPoint || "")).trim(), time: sanitizedEdit.startTime || "" };
+            const synthesizedEndE = { name: (typeof sanitizedEdit.endPoint === "object" ? String(sanitizedEdit.endPoint.name || "") : String(sanitizedEdit.endPoint || "")).trim(), time: sanitizedEdit.endTime || "" };
+            payload.startPoint = synthesizedStartE;
+            payload.endPoint = synthesizedEndE;
+
+            // debug: log update payload to help diagnose fare-rule mapping issues
+            // eslint-disable-next-line no-console
+            console.log("[AdminBus] update payload:", payload);
+            // ensure pickupPoints includes startPoint as first element and dropPoints includes endPoint as last element
+            const rawPickupsE = Array.isArray(sanitizedEdit.pickupPoints) ? sanitizedEdit.pickupPoints.slice() : [];
+            const rawDropsE = Array.isArray(sanitizedEdit.dropPoints) ? sanitizedEdit.dropPoints.slice() : [];
+            const cleanedPickupsE = rawPickupsE
+                .map((p) => ({ name: String(p?.name || "").trim(), time: String(p?.time || "").trim() }))
+                .filter((p) => p.name);
+            const cleanedDropsE = rawDropsE
+                .map((p) => ({ name: String(p?.name || "").trim(), time: String(p?.time || "").trim() }))
+                .filter((p) => p.name);
+            const dedupeByNameE = (arr) => {
+                const seen = new Set();
+                return arr.filter((p) => {
+                    const k = String(p.name || "").trim().toLowerCase();
+                    if (!k) return false;
+                    if (seen.has(k)) return false;
+                    seen.add(k);
+                    return true;
+                });
+            };
+
+            const dedupedPickupsE = dedupeByNameE(cleanedPickupsE);
+            const dedupedDropsE = dedupeByNameE(cleanedDropsE);
+            const finalPickupsE = [];
+            if (synthesizedStartE.name) finalPickupsE.push(synthesizedStartE);
+            finalPickupsE.push(...dedupedPickupsE.slice(0, 20 - (finalPickupsE.length)));
+            const finalDropsE = [];
+            finalDropsE.push(...dedupedDropsE.slice(0, 20));
+            if (synthesizedEndE.name && finalDropsE.length < 20) finalDropsE.push(synthesizedEndE);
+            payload.pickupPoints = finalPickupsE;
+            payload.dropPoints = finalDropsE;
 
             const res = await fetch("/api/bus", {
                 method: "PUT",
@@ -838,7 +933,7 @@ export default function AdminBusPage() {
                     </p>
                     <h1 className="mt-1 text-3xl font-bold text-slate-900">Bus Management</h1>
                     <p className="mt-1 text-sm text-slate-500">
-                        Create buses, route timings, stops, cabins, seat layouts and pickup/drop fares.
+                        Create buses, pickup points, drop points, cabins, seat layouts and fare rules.
                     </p>
                 </div>
 
@@ -889,7 +984,7 @@ export default function AdminBusPage() {
                                 <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
                                 <input
                                     type="text"
-                                    placeholder="Search bus number, route, type..."
+                                    placeholder="Search bus number, route, pickup, drop..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm outline-none transition focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
@@ -927,6 +1022,9 @@ export default function AdminBusPage() {
                                     Time
                                 </th>
                                 <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                    Pickup / Drop
+                                </th>
+                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                                     Layout
                                 </th>
                                 <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -941,13 +1039,13 @@ export default function AdminBusPage() {
                         <tbody className="divide-y divide-slate-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
+                                    <td colSpan={7} className="px-5 py-12 text-center text-slate-500">
                                         Loading buses...
                                     </td>
                                 </tr>
                             ) : paginatedBuses.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
+                                    <td colSpan={7} className="px-5 py-12 text-center text-slate-500">
                                         No buses found.
                                     </td>
                                 </tr>
@@ -970,15 +1068,23 @@ export default function AdminBusPage() {
 
                                         <td className="px-5 py-4">
                                             <p className="text-sm font-medium text-slate-800">{bus.routeName}</p>
-                                            <p className="text-xs text-slate-500">
-                                                {bus.startPoint} → {bus.endPoint}
-                                            </p>
                                         </td>
 
                                         <td className="px-5 py-4">
                                             <p className="text-sm text-slate-700">
                                                 {bus.startTime} → {bus.endTime}
                                             </p>
+                                        </td>
+
+                                        <td className="px-5 py-4">
+                                            <div className="space-y-1">
+                                                <p className="text-xs text-slate-600">
+                                                    Pickup: <span className="font-semibold">{bus.pickupPoints?.length || 0}</span>
+                                                </p>
+                                                <p className="text-xs text-slate-600">
+                                                    Drop: <span className="font-semibold">{bus.dropPoints?.length || 0}</span>
+                                                </p>
+                                            </div>
                                         </td>
 
                                         <td className="px-5 py-4">
@@ -998,14 +1104,15 @@ export default function AdminBusPage() {
                                         <td className="px-5 py-4">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                                                    {bus.fareRules?.length || 0} Rules
+                                                    {(bus.fareRulesRaw?.length || bus.fareRules?.length || 0)} Rules
                                                 </span>
 
-                                                {bus.fareRules?.some((r) => r.fareStartDate || r.fareEndDate) && (
-                                                    <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
-                                                        Date Based
-                                                    </span>
-                                                )}
+                                                {(bus.fareRulesRaw?.some((r) => r.fareStartDate || r.fareEndDate) ||
+                                                    bus.fareRules?.some((r) => r.fareStartDate || r.fareEndDate)) && (
+                                                        <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
+                                                            Date Based
+                                                        </span>
+                                                    )}
                                             </div>
                                         </td>
 
@@ -1057,8 +1164,8 @@ export default function AdminBusPage() {
                                     key={page}
                                     onClick={() => goToPage(page)}
                                     className={`h-10 w-10 rounded-xl text-sm font-semibold transition ${currentPage === page
-                                            ? "bg-[#f97316] text-white"
-                                            : "border border-slate-200 text-slate-700 hover:bg-slate-50"
+                                        ? "bg-[#f97316] text-white"
+                                        : "border border-slate-200 text-slate-700 hover:bg-slate-50"
                                         }`}
                                 >
                                     {page}
@@ -1086,13 +1193,13 @@ export default function AdminBusPage() {
                     onSubmit={handleAddBus}
                     saving={saving}
                     handleInputChange={handleInputChange}
-                    handleStopChange={handleStopChange}
+                    handlePointChange={handlePointChange}
                     handleCabinChange={handleCabinChange}
                     handleFareRuleChange={(index, field, value) =>
                         handleFareRuleChange(index, field, value, false)
                     }
-                    addStop={() => addStop(false)}
-                    removeStop={(i) => removeStop(i, false)}
+                    addPoint={addPoint}
+                    removePoint={removePoint}
                     addCabin={() => addCabin(false)}
                     removeCabin={(i) => removeCabin(i, false)}
                     addFareRule={() => addFareRule(false)}
@@ -1109,8 +1216,8 @@ export default function AdminBusPage() {
                     isEdit={true}
                     saving={saving}
                     handleInputChange={(e) => handleInputChange(e, true)}
-                    handleStopChange={(index, field, value) =>
-                        handleStopChange(index, field, value, true)
+                    handlePointChange={(section, index, field, value) =>
+                        handlePointChange(section, index, field, value, true)
                     }
                     handleCabinChange={(index, value) =>
                         handleCabinChange(index, value, true)
@@ -1118,8 +1225,8 @@ export default function AdminBusPage() {
                     handleFareRuleChange={(index, field, value) =>
                         handleFareRuleChange(index, field, value, true)
                     }
-                    addStop={() => addStop(true)}
-                    removeStop={(i) => removeStop(i, true)}
+                    addPoint={(section) => addPoint(section, true)}
+                    removePoint={(section, i) => removePoint(section, i, true)}
                     addCabin={() => addCabin(true)}
                     removeCabin={(i) => removeCabin(i, true)}
                     addFareRule={() => addFareRule(true)}
@@ -1201,121 +1308,150 @@ function BusFormModal({
     onSubmit,
     saving,
     handleInputChange,
-    handleStopChange,
+    handlePointChange,
     handleCabinChange,
     handleFareRuleChange,
-    addStop,
-    removeStop,
+    addPoint,
+    removePoint,
     addCabin,
     removeCabin,
     addFareRule,
     removeFareRule,
     isEdit = false,
 }) {
-    const [visibleStops, setVisibleStops] = useState(10);
+    const [visiblePickups, setVisiblePickups] = useState(10);
+    const [visibleDrops, setVisibleDrops] = useState(10);
     const [expandedFarePreview, setExpandedFarePreview] = useState({});
 
-    const shownStops = (data.stops || []).slice(0, visibleStops);
+    const shownPickups = (data.pickupPoints || []).slice(0, visiblePickups);
+    const shownDrops = (data.dropPoints || []).slice(0, visibleDrops);
 
-    const showMore = () => setVisibleStops((v) => Math.min(20, v + 10));
-    const showLess = () => setVisibleStops(10);
+    const validPickupPoints = useMemo(() => {
+        return (data.pickupPoints || []).filter((p) => p?.name?.trim());
+    }, [data.pickupPoints]);
 
-    const routePoints = useMemo(() => {
-        const points = [];
+    const validDropPoints = useMemo(() => {
+        return (data.dropPoints || []).filter((p) => p?.name?.trim());
+    }, [data.dropPoints]);
+    const pickupOptions = useMemo(() => {
+        const resolvePoint = (p) => {
+            if (!p) return "";
+            if (typeof p === "object") return String(p.name || "").trim();
+            return String(p || "").trim();
+        };
 
-        if (data.startPoint?.trim()) {
-            points.push({
-                id: "start",
-                label: data.startPoint.trim(),
-                time: data.startTime || "",
-                type: "start",
-            });
-        }
-
-        (data.stops || []).forEach((stop, index) => {
-            if (stop?.stopName?.trim()) {
-                points.push({
-                    id: `stop-${index}`,
-                    label: stop.stopName.trim(),
-                    time: stop.time || "",
-                    type: "stop",
-                });
-            }
+        const list = [];
+        const startVal = resolvePoint(data.startPoint);
+        if (startVal) list.push({ name: startVal, time: data.startTime || "" });
+        list.push(...(validPickupPoints || []));
+        const seen = new Set();
+        return list.filter((p) => {
+            const key = String(p?.name || "").trim().toLowerCase();
+            if (!key) return false;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
         });
+    }, [data.startPoint, data.startTime, validPickupPoints]);
 
-        if (data.endPoint?.trim()) {
-            points.push({
-                id: "end",
-                label: data.endPoint.trim(),
-                time: data.endTime || "",
-                type: "end",
-            });
+    const dropOptions = useMemo(() => {
+        const resolvePoint = (p) => {
+            if (!p) return "";
+            if (typeof p === "object") return String(p.name || "").trim();
+            return String(p || "").trim();
+        };
+
+        const list = [];
+        list.push(...(validDropPoints || []));
+        const endVal = resolvePoint(data.endPoint);
+        if (endVal) list.push({ name: endVal, time: data.endTime || "" });
+
+        const seen = new Set();
+        return list.filter((p) => {
+            const key = String(p?.name || "").trim().toLowerCase();
+            if (!key) return false;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }, [data.endPoint, data.endTime, validDropPoints]);
+
+    const previewPickupList = useMemo(() => {
+        const resolvePoint = (p) => {
+            if (!p) return "";
+            if (typeof p === "object") return String(p.name || "").trim();
+            return String(p || "").trim();
+        };
+
+        const list = [];
+        const startVal = resolvePoint(data.startPoint);
+        if (startVal) {
+            list.push({ name: startVal, time: data.startTime || "" });
         }
+        list.push(...(validPickupPoints || []));
+        const seen = new Set();
+        return list.filter((p) => {
+            const key = String(p?.name || "").trim().toLowerCase();
+            if (!key) return false;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }, [data.startPoint, data.startTime, validPickupPoints]);
 
-        return points;
-    }, [data.startPoint, data.startTime, data.stops, data.endPoint, data.endTime]);
+    const previewDropList = useMemo(() => {
+        const resolvePoint = (p) => {
+            if (!p) return "";
+            if (typeof p === "object") return String(p.name || "").trim();
+            return String(p || "").trim();
+        };
 
-    const findPointIndex = (stopLabel) => {
-        return routePoints.findIndex((p) => p.label === stopLabel);
-    };
-
-    const getValidDropOptions = (fromStop) => {
-        const fromIndex = findPointIndex(fromStop);
-        if (fromIndex === -1) return [];
-        return routePoints.filter((_, idx) => idx > fromIndex);
-    };
-
-    const isFareRuleValid = (rule) => {
-        if (!rule?.from || !rule?.to) return true;
-
-        const fromIndex = findPointIndex(rule.from);
-        const toIndex = findPointIndex(rule.to);
-
-        if (fromIndex === -1 || toIndex === -1) return false;
-        if (toIndex <= fromIndex) return false;
-        if (toIndex - fromIndex < MIN_STOP_GAP) return false;
-
-        if (rule.fareStartDate && rule.fareEndDate) {
-            const start = new Date(rule.fareStartDate);
-            const end = new Date(rule.fareEndDate);
-            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
-            if (end < start) return false;
+        const list = [];
+        list.push(...(validDropPoints || []));
+        const endVal = resolvePoint(data.endPoint);
+        if (endVal) {
+            list.push({ name: endVal, time: data.endTime || "" });
         }
-
-        return true;
-    };
+        const seen = new Set();
+        return list.filter((p) => {
+            const key = String(p?.name || "").trim().toLowerCase();
+            if (!key) return false;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }, [data.endPoint, data.endTime, validDropPoints]);
 
     const getExpandedFarePreview = (rule) => {
         if (!rule?.from || !rule?.to || !rule?.fare) return [];
 
-        const fromIndex = findPointIndex(rule.from);
-        const toIndex = findPointIndex(rule.to);
+        const fromIndex = pickupOptions.findIndex((p) => p.name === rule.from);
+        const toIndex = dropOptions.findIndex((p) => p.name === rule.to);
 
         if (fromIndex === -1 || toIndex === -1) return [];
-        if (toIndex <= fromIndex) return [];
-        if (toIndex - fromIndex < MIN_STOP_GAP) return [];
 
         const previewList = [];
 
         if (rule.applyToAllNextPickupsBeforeDrop) {
-            for (let i = fromIndex; i < toIndex; i++) {
-                if (toIndex - i < MIN_STOP_GAP) continue;
+            for (let i = fromIndex; i < pickupOptions.length; i++) {
                 previewList.push({
-                    from: routePoints[i].label,
-                    to: routePoints[toIndex].label,
+                    from: pickupOptions[i].name,
+                    to: dropOptions[toIndex].name,
                     fare: rule.fare,
                 });
             }
         } else {
             previewList.push({
-                from: routePoints[fromIndex].label,
-                to: routePoints[toIndex].label,
+                from: pickupOptions[fromIndex].name,
+                to: dropOptions[toIndex].name,
                 fare: rule.fare,
             });
         }
 
         return previewList;
     };
+
+    const normalizeKeyLocal = (s) => String(s || "").trim().toLowerCase();
 
     const datesOverlap = (startA, endA, startB, endB) => {
         const toDay = (d) => {
@@ -1333,8 +1469,6 @@ function BusFormModal({
         return aStart <= bEnd && bStart <= aEnd;
     };
 
-    const normalizeKeyLocal = (s) => String(s || "").trim().toLowerCase();
-
     const getVisibleFarePreviewForRule = (ruleIndex) => {
         const rules = Array.isArray(data.fareRules) ? data.fareRules : [];
         const rule = rules[ruleIndex];
@@ -1343,8 +1477,6 @@ function BusFormModal({
         const basePairs = getExpandedFarePreview(rule) || [];
         if (!basePairs.length) return [];
 
-        // For each later rule, remove any base pair that the later rule generates
-        // for the same from/to when date ranges overlap.
         const filtered = basePairs.filter((pair) => {
             const pairFrom = normalizeKeyLocal(pair.from);
             const pairTo = normalizeKeyLocal(pair.to);
@@ -1355,14 +1487,14 @@ function BusFormModal({
 
                 const laterPairs = getExpandedFarePreview(later) || [];
 
-                const matchesLater = laterPairs.some((lp) =>
-                    normalizeKeyLocal(lp.from) === pairFrom &&
-                    normalizeKeyLocal(lp.to) === pairTo
+                const matchesLater = laterPairs.some(
+                    (lp) =>
+                        normalizeKeyLocal(lp.from) === pairFrom &&
+                        normalizeKeyLocal(lp.to) === pairTo
                 );
 
                 if (!matchesLater) continue;
 
-                // if later rule's date bucket overlaps current rule's date bucket, it's an override
                 if (
                     datesOverlap(
                         rule.fareStartDate || "",
@@ -1371,7 +1503,7 @@ function BusFormModal({
                         later.fareEndDate || ""
                     )
                 ) {
-                    return false; // overridden
+                    return false;
                 }
             }
 
@@ -1388,7 +1520,7 @@ function BusFormModal({
                     <div>
                         <h3 className="text-xl font-bold text-slate-900">{title}</h3>
                         <p className="text-sm text-slate-500">
-                            Fill bus details, route stops, cabins and pickup/drop fare rules.
+                            Fill bus details, pickup points, drop points, cabins and fare rules.
                         </p>
                     </div>
 
@@ -1488,21 +1620,21 @@ function BusFormModal({
                                     />
 
                                     <InputField
-                                        label="End Point"
-                                        name="endPoint"
-                                        value={data.endPoint}
-                                        onChange={handleInputChange}
-                                        icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
-                                        placeholder="Dongri"
-                                    />
-
-                                    <InputField
                                         label="Start Time"
                                         name="startTime"
                                         type="time"
                                         value={data.startTime}
                                         onChange={handleInputChange}
                                         icon={<Clock3 className="h-5 w-5 text-[#f97316]" />}
+                                    />
+
+                                    <InputField
+                                        label="End Point"
+                                        name="endPoint"
+                                        value={data.endPoint}
+                                        onChange={handleInputChange}
+                                        icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
+                                        placeholder="Dongri"
                                     />
 
                                     <InputField
@@ -1516,147 +1648,64 @@ function BusFormModal({
                                 </div>
                             </div>
 
-                            <div className="rounded-3xl border border-slate-200 p-5">
-                                <div className="mb-4">
-                                    <h4 className="text-lg font-semibold text-slate-900">
-                                        Route Stops & Timing ({data.stops?.length || 0}/20)
-                                    </h4>
-                                    <p className="text-sm text-slate-500">
-                                        Add up to 20 route stops between start and end point.
-                                    </p>
-                                </div>
+                            <PointSection
+                                title={`Pickup Points (${data.pickupPoints?.length || 0}/20)`}
+                                description="Add up to 20 pickup points."
+                                points={shownPickups}
+                                totalCount={data.pickupPoints?.length || 0}
+                                visibleCount={visiblePickups}
+                                setVisibleCount={setVisiblePickups}
+                                onAdd={() => addPoint("pickupPoints")}
+                                onRemove={(i) => removePoint("pickupPoints", i)}
+                                onChange={(index, field, value) =>
+                                    handlePointChange("pickupPoints", index, field, value)
+                                }
+                                pointLabel="Pickup Point"
+                            />
 
-                                {shownStops.length === 0 ? (
-                                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
-                                        <p className="text-sm font-medium text-slate-700">No stops added yet</p>
-                                        <p className="mt-1 text-xs text-slate-500">
-                                            Click “Add Stop” to add route stops.
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                                        {shownStops.map((stop, index) => (
-                                            <div
-                                                key={index}
-                                                className="relative rounded-2xl border border-slate-200 p-4"
-                                            >
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeStop(index)}
-                                                    className="absolute right-3 top-3 rounded-md p-1 text-red-600 hover:bg-red-50"
-                                                    title="Remove stop"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
-
-                                                <p className="mb-3 text-sm font-semibold text-slate-700">
-                                                    Stop {index + 1}
-                                                </p>
-
-                                                <div className="space-y-3">
-                                                    <InputField
-                                                        label="Stop Name"
-                                                        value={stop.stopName}
-                                                        onChange={(e) =>
-                                                            handleStopChange(index, "stopName", e.target.value)
-                                                        }
-                                                        icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
-                                                        placeholder={`Stop ${index + 1} name`}
-                                                    />
-
-                                                    <InputField
-                                                        label="Time"
-                                                        type="time"
-                                                        value={stop.time}
-                                                        onChange={(e) =>
-                                                            handleStopChange(index, "time", e.target.value)
-                                                        }
-                                                        icon={<Clock3 className="h-5 w-5 text-[#f97316]" />}
-                                                    />
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                                    <div className="text-sm text-slate-500">
-                                        Showing {shownStops.length} of {data.stops?.length || 0} stop(s)
-                                    </div>
-
-                                    <div className="flex flex-wrap items-center gap-3">
-                                        <button
-                                            type="button"
-                                            onClick={() => addStop && addStop()}
-                                            disabled={(data.stops?.length || 0) >= 20}
-                                            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                                        >
-                                            Add Stop
-                                        </button>
-
-                                        {(data.stops?.length || 0) > visibleStops && (
-                                            <button
-                                                type="button"
-                                                onClick={showMore}
-                                                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                                            >
-                                                Show more stops
-                                            </button>
-                                        )}
-
-                                        {visibleStops > 10 && (data.stops?.length || 0) > 10 && (
-                                            <button
-                                                type="button"
-                                                onClick={showLess}
-                                                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                                            >
-                                                Show less
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                            <PointSection
+                                title={`Drop Points (${data.dropPoints?.length || 0}/20)`}
+                                description="Add up to 20 drop points."
+                                points={shownDrops}
+                                totalCount={data.dropPoints?.length || 0}
+                                visibleCount={visibleDrops}
+                                setVisibleCount={setVisibleDrops}
+                                onAdd={() => addPoint("dropPoints")}
+                                onRemove={(i) => removePoint("dropPoints", i)}
+                                onChange={(index, field, value) =>
+                                    handlePointChange("dropPoints", index, field, value)
+                                }
+                                pointLabel="Drop Point"
+                            />
 
                             <div className="rounded-3xl border border-slate-200 p-5">
-                                <div className="mb-4">
-                                    <h4 className="text-lg font-semibold text-slate-900">
-                                        Route Points Preview
-                                    </h4>
-                                    <p className="text-sm text-slate-500">
-                                        Start point, intermediate stops and end point with timings.
-                                    </p>
+                                <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <div>
+                                        <h4 className="text-lg font-semibold text-slate-900">Pickup Preview</h4>
+                                        <p className="text-sm text-slate-500">Booking pickup list (start shown first)</p>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="text-lg font-semibold text-slate-900">Drop Preview</h4>
+                                        <p className="text-sm text-slate-500">Booking drop list (end shown last)</p>
+                                    </div>
                                 </div>
 
-                                {routePoints.length === 0 ? (
-                                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                                        Add start point / stops / end point to preview route.
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {routePoints.map((point, idx) => (
-                                            <div
-                                                key={point.id}
-                                                className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-xs font-bold text-[#f97316]">
-                                                        {idx + 1}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-semibold text-slate-900">
-                                                            {point.label}
-                                                        </p>
-                                                        <p className="text-xs text-slate-500 uppercase">{point.type}</p>
-                                                    </div>
-                                                </div>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <PreviewList
+                                        points={previewPickupList}
+                                        emptyText="No pickup points added yet"
+                                        badgeColor="bg-green-100 text-green-700"
+                                        badgeText="Pickup"
+                                    />
 
-                                                <div className="rounded-xl bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
-                                                    {point.time || "--:--"}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                                    <PreviewList
+                                        points={previewDropList}
+                                        emptyText="No drop points added yet"
+                                        badgeColor="bg-red-100 text-red-700"
+                                        badgeText="Drop"
+                                    />
+                                </div>
                             </div>
 
                             <div className="rounded-3xl border border-slate-200 p-5">
@@ -1720,10 +1769,10 @@ function BusFormModal({
                             <div className="rounded-3xl border border-slate-200 p-5">
                                 <div className="mb-4">
                                     <h4 className="text-lg font-semibold text-slate-900">
-                                        Pickup / Drop Fare Rules ({data.fareRules?.length || 0})
+                                        Pickup → Drop Fare Rules ({data.fareRules?.length || 0})
                                     </h4>
                                     <p className="text-sm text-slate-500">
-                                        Add manual fare by pickup and drop point. Nearby stop pairs are blocked automatically.
+                                        Create fare rules from pickup point to drop point.
                                     </p>
                                 </div>
 
@@ -1737,17 +1786,11 @@ function BusFormModal({
                                 ) : (
                                     <div className="space-y-4">
                                         {(data.fareRules || []).map((rule, index) => {
-                                            const validDropOptions = rule.from ? getValidDropOptions(rule.from) : [];
-                                            const validRule = isFareRuleValid(rule);
                                             const previewPairs = getVisibleFarePreviewForRule(index);
                                             const isExpanded = !!expandedFarePreview[index];
 
                                             return (
-                                                <div
-                                                    key={index}
-                                                    className={`rounded-2xl border p-4 ${validRule ? "border-slate-200" : "border-red-300 bg-red-50/40"
-                                                        }`}
-                                                >
+                                                <div key={index} className="rounded-2xl border border-slate-200 p-4">
                                                     <div className="mb-3 flex items-center justify-between">
                                                         <p className="text-sm font-semibold text-slate-700">
                                                             Fare Rule {index + 1}
@@ -1772,21 +1815,15 @@ function BusFormModal({
                                                                 <MapPin className="h-5 w-5 text-[#f97316]" />
                                                                 <select
                                                                     value={rule.from || ""}
-                                                                    onChange={(e) => {
-                                                                        const selectedFrom = e.target.value;
-                                                                        handleFareRuleChange(index, "from", selectedFrom);
-
-                                                                        const nextValidDrops = getValidDropOptions(selectedFrom);
-                                                                        if (!nextValidDrops.some((p) => p.label === rule.to)) {
-                                                                            handleFareRuleChange(index, "to", "");
-                                                                        }
-                                                                    }}
+                                                                    onChange={(e) =>
+                                                                        handleFareRuleChange(index, "from", e.target.value)
+                                                                    }
                                                                     className="w-full bg-transparent outline-none"
                                                                 >
                                                                     <option value="">Select Pickup</option>
-                                                                    {routePoints.slice(0, -1).map((point) => (
-                                                                        <option key={point.id} value={point.label}>
-                                                                            {point.label} ({point.time || "--:--"})
+                                                                    {pickupOptions.map((point, idx) => (
+                                                                        <option key={`${point.name}-${idx}`} value={point.name}>
+                                                                            {point.name} ({point.time || "--:--"})
                                                                         </option>
                                                                     ))}
                                                                 </select>
@@ -1805,14 +1842,11 @@ function BusFormModal({
                                                                         handleFareRuleChange(index, "to", e.target.value)
                                                                     }
                                                                     className="w-full bg-transparent outline-none"
-                                                                    disabled={!rule.from}
                                                                 >
-                                                                    <option value="">
-                                                                        {rule.from ? "Select Drop" : "Select Pickup First"}
-                                                                    </option>
-                                                                    {validDropOptions.map((point) => (
-                                                                        <option key={point.id} value={point.label}>
-                                                                            {point.label} ({point.time || "--:--"})
+                                                                    <option value="">Select Drop</option>
+                                                                    {dropOptions.map((point, idx) => (
+                                                                        <option key={`${point.name}-${idx}`} value={point.name}>
+                                                                            {point.name} ({point.time || "--:--"})
                                                                         </option>
                                                                     ))}
                                                                 </select>
@@ -1881,28 +1915,24 @@ function BusFormModal({
                                                             />
                                                             <div>
                                                                 <p className="text-sm font-semibold text-slate-800">
-                                                                    Apply same fare from this pickup and all next pickup points before drop
+                                                                    Apply same fare from selected pickup and all next pickup points
                                                                 </p>
                                                                 <p className="text-xs text-slate-500">
-                                                                    Example: If pickup is Mendadi and drop is Dongri, same fare will apply for Mendadi and all next stops until just before Dongri.
+                                                                    Example: If pickup is Mendadi and drop is Dongri, same fare applies to Mendadi and all next pickup points for Dongri.
                                                                 </p>
                                                             </div>
                                                         </label>
                                                     </div>
 
-                                                    {!validRule && rule.from && rule.to ? (
-                                                        <p className="mt-3 rounded-xl bg-red-100 px-3 py-2 text-sm font-medium text-red-700">
-                                                            Invalid pair: nearby stops, wrong order, or invalid date range.
-                                                        </p>
-                                                    ) : null}
-
-                                                    {rule.from && rule.to && rule.fare && validRule ? (
+                                                    {rule.from && rule.to && rule.fare ? (
                                                         <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-4">
                                                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                                                 <div>
                                                                     {rule.applyToAllNextPickupsBeforeDrop ? (
                                                                         <div className="text-sm font-semibold text-slate-800">
-                                                                            <span className="font-bold text-[#f97316]">{previewPairs.length}</span>{" "}
+                                                                            <span className="font-bold text-[#f97316]">
+                                                                                {previewPairs.length}
+                                                                            </span>{" "}
                                                                             pickup point{previewPairs.length > 1 ? "s" : ""} →{" "}
                                                                             <span className="font-bold text-slate-900">{rule.to}</span> ={" "}
                                                                             <span className="font-bold text-[#f97316]">₹{rule.fare}</span>
@@ -1940,7 +1970,7 @@ function BusFormModal({
 
                                                             {rule.applyToAllNextPickupsBeforeDrop && (
                                                                 <div className="mt-2 text-xs font-medium text-[#f97316]">
-                                                                    Same fare will be applied from selected pickup and all next stops before drop.
+                                                                    Same fare will be applied from selected pickup and all next pickup points.
                                                                 </div>
                                                             )}
 
@@ -1959,7 +1989,9 @@ function BusFormModal({
                                                                                 <span className="font-medium text-slate-700">
                                                                                     {pair.from} → {pair.to}
                                                                                 </span>
-                                                                                <span className="font-bold text-[#f97316]">₹{pair.fare}</span>
+                                                                                <span className="font-bold text-[#f97316]">
+                                                                                    ₹{pair.fare}
+                                                                                </span>
                                                                             </div>
                                                                         ))}
                                                                     </div>
@@ -2028,6 +2060,153 @@ function BusFormModal({
                     </div>
                 </form>
             </div>
+        </div>
+    );
+}
+
+function PointSection({
+    title,
+    description,
+    points,
+    totalCount,
+    visibleCount,
+    setVisibleCount,
+    onAdd,
+    onRemove,
+    onChange,
+    pointLabel,
+}) {
+    const showMore = () => setVisibleCount((v) => Math.min(20, v + 10));
+    const showLess = () => setVisibleCount(10);
+
+    return (
+        <div className="rounded-3xl border border-slate-200 p-5">
+            <div className="mb-4">
+                <h4 className="text-lg font-semibold text-slate-900">{title}</h4>
+                <p className="text-sm text-slate-500">{description}</p>
+            </div>
+
+            {points.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+                    <p className="text-sm font-medium text-slate-700">No points added yet</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                        Click “Add {pointLabel}” to add route points.
+                    </p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    {points.map((point, index) => (
+                        <div key={index} className="relative rounded-2xl border border-slate-200 p-4">
+                            <button
+                                type="button"
+                                onClick={() => onRemove(index)}
+                                className="absolute right-3 top-3 rounded-md p-1 text-red-600 hover:bg-red-50"
+                                title="Remove point"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+
+                            <p className="mb-3 text-sm font-semibold text-slate-700">
+                                {pointLabel} {index + 1}
+                            </p>
+
+                            <div className="space-y-3">
+                                <InputField
+                                    label={`${pointLabel} Name`}
+                                    value={point.name}
+                                    onChange={(e) => onChange(index, "name", e.target.value)}
+                                    icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
+                                    placeholder={`${pointLabel} ${index + 1}`}
+                                />
+
+                                <InputField
+                                    label="Time"
+                                    type="time"
+                                    value={point.time}
+                                    onChange={(e) => onChange(index, "time", e.target.value)}
+                                    icon={<Clock3 className="h-5 w-5 text-[#f97316]" />}
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm text-slate-500">
+                    Showing {points.length} of {totalCount} point(s)
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={onAdd}
+                        disabled={totalCount >= 20}
+                        className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                        Add {pointLabel}
+                    </button>
+
+                    {totalCount > visibleCount && (
+                        <button
+                            type="button"
+                            onClick={showMore}
+                            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                            Show more
+                        </button>
+                    )}
+
+                    {visibleCount > 10 && totalCount > 10 && (
+                        <button
+                            type="button"
+                            onClick={showLess}
+                            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                            Show less
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function PreviewList({ points, emptyText, badgeColor, badgeText }) {
+    if (!points.length) {
+        return (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                {emptyText}
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-3">
+            {points.map((point, idx) => (
+                <div
+                    key={`${point.name}-${idx}`}
+                    className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-xs font-bold text-[#f97316]">
+                            {idx + 1}
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-slate-900">{point.name}</p>
+                            <span
+                                className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${badgeColor}`}
+                            >
+                                {badgeText}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="rounded-xl bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+                        {point.time || "--:--"}
+                    </div>
+                </div>
+            ))}
         </div>
     );
 }
@@ -2276,7 +2455,7 @@ function InputField({
                 <input
                     type={type}
                     name={name}
-                    value={value}
+                    value={String(value || "")}
                     onChange={onChange}
                     placeholder={placeholder}
                     className="w-full text-slate-900 outline-none"
