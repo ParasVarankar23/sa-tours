@@ -80,7 +80,32 @@ export async function GET(req) {
             return tb - ta;
         });
 
-        return NextResponse.json({ success: true, notifications: out }, { status: 200 });
+        // pagination support via query params: offset (default 0) and limit (default 10)
+        const url = new URL(req.url);
+        const offset = Math.max(0, parseInt(url.searchParams.get("offset") || "0", 100));
+        const limit = Math.max(1, parseInt(url.searchParams.get("limit") || "10", 100));
+
+        const total = out.length;
+        const unreadCount = out.filter((n) => !n.read).length;
+        const readCount = total - unreadCount;
+
+        const latestNotification = out.length ? out[0] : null;
+
+        const sliced = out.slice(offset, offset + limit);
+
+        return NextResponse.json(
+            {
+                success: true,
+                notifications: sliced,
+                total,
+                unreadCount,
+                readCount,
+                offset,
+                limit,
+                latestNotification,
+            },
+            { status: 200 }
+        );
     } catch (err) {
         console.error("GET /api/auth/notifications error:", err);
         return NextResponse.json({ success: false, error: err.message || "Unauthorized" }, { status: 401 });

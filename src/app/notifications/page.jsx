@@ -5,6 +5,8 @@ import {
     Bell,
     CheckCheck,
     CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
     Clock3,
     Copy,
     RefreshCw,
@@ -14,6 +16,9 @@ import { useEffect, useMemo, useState } from "react";
 export default function NotificationsPage() {
     const [loading, setLoading] = useState(true);
     const [notifications, setNotifications] = useState([]);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    const itemsPerPage = 10;
 
     async function load() {
         setLoading(true);
@@ -26,7 +31,9 @@ export default function NotificationsPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Failed to load notifications");
 
-            setNotifications(data.notifications || []);
+            const list = data.notifications || [];
+            setNotifications(list);
+            setCurrentPage(1); // reset to page 1 on refresh
         } catch (err) {
             console.error(err);
             showAppToast("error", err.message || "Failed to load notifications");
@@ -132,10 +139,31 @@ export default function NotificationsPage() {
         try {
             await navigator.clipboard?.writeText(JSON.stringify(n.data || {}, null, 2));
             showAppToast("success", "Notification data copied");
-        } catch (err) {
+        } catch {
             showAppToast("error", "Failed to copy data");
         }
     };
+
+    /* =========================
+       Pagination Logic
+    ========================= */
+    const totalPages = Math.ceil(notifications.length / itemsPerPage);
+
+    const paginatedNotifications = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return notifications.slice(startIndex, endIndex);
+    }, [notifications, currentPage]);
+
+    useEffect(() => {
+        if (currentPage > totalPages && totalPages > 0) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
+
+    const startRecord =
+        notifications.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+    const endRecord = Math.min(currentPage * itemsPerPage, notifications.length);
 
     return (
         <div className="min-h-screen w-full bg-[#f8fafc] p-3 md:p-4 lg:p-5">
@@ -228,7 +256,7 @@ export default function NotificationsPage() {
                                 Recent Notifications
                             </h2>
                             <p className="mt-1 text-xs text-slate-500 md:text-sm">
-                                All recent notifications for your account activity
+                                Showing {startRecord}-{endRecord} of {notifications.length} notifications
                             </p>
                         </div>
 
@@ -262,100 +290,160 @@ export default function NotificationsPage() {
                         </p>
                     </div>
                 ) : (
-                    <div className="space-y-4 p-4 md:p-5">
-                        {notifications.map((n) => (
-                            <div
-                                key={n.id}
-                                className={`rounded-3xl border p-4 transition md:p-5 ${n.read
-                                        ? "border-slate-200 bg-white hover:border-slate-300"
-                                        : "border-orange-100 bg-orange-50/60 hover:border-orange-200"
-                                    }`}
-                            >
-                                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                    {/* Left */}
-                                    <div className="flex min-w-0 flex-1 items-start gap-3">
-                                        <div
-                                            className={`mt-1 h-3 w-3 shrink-0 rounded-full ${n.read ? "bg-slate-300" : "bg-orange-500"
-                                                }`}
-                                        />
+                    <>
+                        <div className="space-y-4 p-4 md:p-5">
+                            {paginatedNotifications.map((n) => (
+                                <div
+                                    key={n.id}
+                                    className={`rounded-3xl border p-4 transition md:p-5 ${n.read
+                                            ? "border-slate-200 bg-white hover:border-slate-300"
+                                            : "border-orange-100 bg-orange-50/60 hover:border-orange-200"
+                                        }`}
+                                >
+                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                        {/* Left */}
+                                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                                            <div
+                                                className={`mt-1 h-3 w-3 shrink-0 rounded-full ${n.read ? "bg-slate-300" : "bg-orange-500"
+                                                    }`}
+                                            />
 
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <h3 className="text-sm font-bold text-slate-900 md:text-base">
-                                                    {n.title || "Notification"}
-                                                </h3>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <h3 className="text-sm font-bold text-slate-900 md:text-base">
+                                                        {n.title || "Notification"}
+                                                    </h3>
 
-                                                <span
-                                                    className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${n.read
-                                                            ? "bg-slate-100 text-slate-600"
-                                                            : "bg-orange-100 text-[#ea580c]"
-                                                        }`}
-                                                >
-                                                    {n.read ? "Read" : "Unread"}
-                                                </span>
-                                            </div>
-
-                                            <p className="mt-2 text-sm leading-6 text-slate-600">
-                                                {n.message || "No message available"}
-                                            </p>
-
-                                            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                                                <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5">
-                                                    <Clock3 className="h-3.5 w-3.5" />
-                                                    {formatDate(n.createdAt)}
+                                                    <span
+                                                        className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${n.read
+                                                                ? "bg-slate-100 text-slate-600"
+                                                                : "bg-orange-100 text-[#ea580c]"
+                                                            }`}
+                                                    >
+                                                        {n.read ? "Read" : "Unread"}
+                                                    </span>
                                                 </div>
 
-                                                <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5">
-                                                    <Clock3 className="h-3.5 w-3.5" />
-                                                    {formatTime(n.createdAt)}
-                                                </div>
+                                                <p className="mt-2 text-sm leading-6 text-slate-600">
+                                                    {n.message || "No message available"}
+                                                </p>
 
-                                                {n.type ? (
-                                                    <div className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 uppercase tracking-wide text-[10px] font-semibold text-slate-500">
-                                                        {n.type}
+                                                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                                    <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5">
+                                                        <Clock3 className="h-3.5 w-3.5" />
+                                                        {formatDate(n.createdAt)}
                                                     </div>
-                                                ) : null}
+
+                                                    <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5">
+                                                        <Clock3 className="h-3.5 w-3.5" />
+                                                        {formatTime(n.createdAt)}
+                                                    </div>
+
+                                                    {n.type ? (
+                                                        <div className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 uppercase tracking-wide text-[10px] font-semibold text-slate-500">
+                                                            {n.type}
+                                                        </div>
+                                                    ) : null}
+                                                </div>
                                             </div>
+                                        </div>
+
+                                        {/* Right Actions */}
+                                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                            <button
+                                                onClick={() => markRead(n, !n.read)}
+                                                className={`inline-flex h-10 items-center justify-center gap-2 rounded-2xl px-4 text-xs font-semibold transition md:text-sm ${n.read
+                                                        ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                                        : "border border-orange-200 bg-white text-[#ea580c] hover:bg-orange-50"
+                                                    }`}
+                                            >
+                                                <CheckCheck className="h-4 w-4" />
+                                                {n.read ? "Mark Unread" : "Mark Read"}
+                                            </button>
+
+                                            <button
+                                                onClick={() => handleCopyData(n)}
+                                                className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 md:text-sm"
+                                            >
+                                                <Copy className="h-4 w-4" />
+                                                Copy Data
+                                            </button>
                                         </div>
                                     </div>
 
-                                    {/* Right Actions */}
-                                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                    {/* Optional Data Preview */}
+                                    {n.data && Object.keys(n.data).length > 0 ? (
+                                        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                                Data Preview
+                                            </p>
+                                            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-700">
+                                                {JSON.stringify(n.data, null, 2)}
+                                            </pre>
+                                        </div>
+                                    ) : null}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="border-t border-slate-200 px-4 py-4 md:px-5">
+                                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <p className="text-xs text-slate-500 md:text-sm">
+                                        Page <span className="font-semibold text-slate-800">{currentPage}</span> of{" "}
+                                        <span className="font-semibold text-slate-800">{totalPages}</span>
+                                    </p>
+
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {/* Prev */}
                                         <button
-                                            onClick={() => markRead(n, !n.read)}
-                                            className={`inline-flex h-10 items-center justify-center gap-2 rounded-2xl px-4 text-xs font-semibold transition md:text-sm ${n.read
-                                                    ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                                                    : "border border-orange-200 bg-white text-[#ea580c] hover:bg-orange-50"
-                                                }`}
+                                            onClick={() =>
+                                                setCurrentPage((prev) => Math.max(prev - 1, 1))
+                                            }
+                                            disabled={currentPage === 1}
+                                            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
-                                            <CheckCheck className="h-4 w-4" />
-                                            {n.read ? "Mark Unread" : "Mark Read"}
+                                            <ChevronLeft className="h-4 w-4" />
+                                            Prev
                                         </button>
 
+                                        {/* Page Numbers */}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                                                (page) => (
+                                                    <button
+                                                        key={page}
+                                                        onClick={() => setCurrentPage(page)}
+                                                        className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-2xl px-3 text-sm font-semibold transition ${currentPage === page
+                                                                ? "bg-[#f97316] text-white shadow-sm"
+                                                                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                                            }`}
+                                                    >
+                                                        {page}
+                                                    </button>
+                                                )
+                                            )}
+                                        </div>
+
+                                        {/* Next */}
                                         <button
-                                            onClick={() => handleCopyData(n)}
-                                            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 md:text-sm"
+                                            onClick={() =>
+                                                setCurrentPage((prev) =>
+                                                    Math.min(prev + 1, totalPages)
+                                                )
+                                            }
+                                            disabled={currentPage === totalPages}
+                                            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
-                                            <Copy className="h-4 w-4" />
-                                            Copy Data
+                                            Next
+                                            <ChevronRight className="h-4 w-4" />
                                         </button>
                                     </div>
                                 </div>
-
-                                {/* Optional Data Preview */}
-                                {n.data && Object.keys(n.data).length > 0 ? (
-                                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                            Data Preview
-                                        </p>
-                                        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-700">
-                                            {JSON.stringify(n.data, null, 2)}
-                                        </pre>
-                                    </div>
-                                ) : null}
                             </div>
-                        ))}
-                    </div>
+                        )}
+                    </>
                 )}
             </div>
         </div>
