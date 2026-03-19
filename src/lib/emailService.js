@@ -514,6 +514,14 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
         else bookingContact = defaultBookingContact;
     }
 
+    // determine a direct bus contact (driver/vehicle) to show in emails
+    let busContact = (busInfo && (busInfo.phone || busInfo.driverContact || busInfo.contact)) || '';
+    if (!busContact) {
+        if (routeKey.includes('borli')) busContact = '9209471309';
+        else if (routeKey.includes('dighi')) busContact = '9273635316';
+        else busContact = helpline || defaultHelpline;
+    }
+
     const bookingCard = createInfoCard(
         "Booking Details",
         `
@@ -530,6 +538,7 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
             ${infoRow("Seat Number", booking.seatNo || "--")}
             ${infoRow("Helpline", helpline || '--')}
             ${infoRow("Bus Booking", bookingContact || '--')}
+            ${infoRow("Bus Contact", busContact || '--')}
             ${infoRow("Pickup Point", `${pickupName || "--"}${booking.pickupTime ? ` (${booking.pickupTime})` : ""}`)}
             ${infoRow("Drop Point", `${dropName || "--"}${booking.dropTime ? ` (${booking.dropTime})` : ""}`)}
         `
@@ -661,6 +670,14 @@ export async function sendBookingCancellation(email, name, booking = {}) {
         else bookingContact = defaultBookingContact;
     }
 
+    // determine a direct bus contact (driver/vehicle) to show in emails
+    let busContact = (busInfo && (busInfo.phone || busInfo.driverContact || busInfo.contact)) || '';
+    if (!busContact) {
+        if (routeKey.includes('borli')) busContact = '9209471309';
+        else if (routeKey.includes('dighi')) busContact = '9273635316';
+        else busContact = helpline || defaultHelpline;
+    }
+
     // add payment info if present
     let paymentRows = '';
     if (booking.payment || booking.paymentMethod || booking.fare) {
@@ -686,6 +703,7 @@ export async function sendBookingCancellation(email, name, booking = {}) {
             ${infoRow("Seat Number", booking.seatNo || "--")}
             ${infoRow("Helpline", helpline || '--')}
             ${infoRow("Bus Booking", bookingContact || '--')}
+            ${infoRow("Bus Contact", busContact || '--')}
             ${infoRow("Pickup Point", `${pickupName || "--"}${booking.pickupTime ? ` (${booking.pickupTime})` : ""}`)}
             ${infoRow("Drop Point", `${dropName || "--"}${booking.dropTime ? ` (${booking.dropTime})` : ""}`)}
         `
