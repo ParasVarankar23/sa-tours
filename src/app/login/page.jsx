@@ -115,9 +115,9 @@ export default function LoginPage() {
                 if (role === "admin") {
                     router.push("/admin");
                 } else if (role === "staff" || position) {
-                    router.push("/staff-portal");
+                    router.push("/staff-portal/booking");
                 } else {
-                    router.push("/user");
+                    router.push("/user/booking");
                 }
             }, 700);
         } catch (error) {
@@ -164,7 +164,7 @@ export default function LoginPage() {
                 if (role === "admin") {
                     router.push("/admin");
                 } else {
-                    router.push("/user");
+                    router.push("/user/booking");
                 }
             }, 700);
         } catch (error) {

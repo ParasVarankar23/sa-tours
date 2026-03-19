@@ -31,6 +31,7 @@ const publicShellRoutes = new Set([
 const commonDashboardRoutes = new Set([
     "/profile",
     "/settings",
+    "/notifications",
 ]);
 
 function decodeJwtPayload(token) {

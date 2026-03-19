@@ -1,60 +1,32 @@
 "use client";
 
-import { showAppToast } from "@/lib/client/toast";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import Link from "next/link";
 
-export default function StaffPortalPage() {
-    const router = useRouter();
-    const [loading, setLoading] = useState(true);
-    const [profile, setProfile] = useState(null);
-
-    useEffect(() => {
-        const fetchProfile = async () => {
-            setLoading(true);
-            try {
-                const token = localStorage.getItem("authToken");
-                const headers = token ? { Authorization: `Bearer ${token}` } : {};
-                const res = await fetch("/api/auth/me", { headers });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    throw new Error(data.error || "Failed to fetch profile");
-                }
-                setProfile(data);
-            } catch (err) {
-                console.error(err);
-                showAppToast("error", err.message || "Failed to load profile");
-                // if unauthorized, go to login
-                if ((err.message || "").toLowerCase().includes("token") || (err.message || "").toLowerCase().includes("missing")) {
-                    router.push("/login");
-                }
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchProfile();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    if (loading) return <div className="p-6">Loading...</div>;
-    if (!profile) return <div className="p-6">No profile found.</div>;
-
+export default function StaffPortalIndex() {
     return (
         <div className="p-6">
-            <h1 className="text-2xl font-bold">Staff Portal</h1>
-            <div className="mt-4 max-w-xl rounded-md border bg-white p-4">
-                <div className="mb-2 text-sm text-slate-500">Name</div>
-                <div className="text-lg font-semibold">{profile.fullName || "—"}</div>
+            <h1 className="mb-4 text-2xl font-bold">Staff Portal (View Only)</h1>
 
-                <div className="mt-4 mb-2 text-sm text-slate-500">Email</div>
-                <div className="text-sm">{profile.email || "—"}</div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Link href="/staff-portal/bus" className="rounded-xl border p-4 hover:shadow">
+                    <h2 className="text-lg font-semibold">Buses</h2>
+                    <p className="text-sm text-slate-500">View bus list and details</p>
+                </Link>
 
-                <div className="mt-4 mb-2 text-sm text-slate-500">Role</div>
-                <div className="text-sm font-medium">{profile.role || "user"}</div>
+                <Link href="/staff-portal/schedule" className="rounded-xl border p-4 hover:shadow">
+                    <h2 className="text-lg font-semibold">Schedules</h2>
+                    <p className="text-sm text-slate-500">View schedules</p>
+                </Link>
 
-                <div className="mt-4 mb-2 text-sm text-slate-500">Position</div>
-                <div className="text-sm font-medium">{profile.position || "—"}</div>
+                <Link href="/staff-portal/booking" className="rounded-xl border p-4 hover:shadow">
+                    <h2 className="text-lg font-semibold">Bookings</h2>
+                    <p className="text-sm text-slate-500">View bookings (no edit)</p>
+                </Link>
+
+                <Link href="/staff-portal/payment" className="rounded-xl border p-4 hover:shadow">
+                    <h2 className="text-lg font-semibold">Payments</h2>
+                    <p className="text-sm text-slate-500">View payments</p>
+                </Link>
             </div>
         </div>
     );

@@ -114,6 +114,7 @@ export default function BookingPage() {
     const [bookingForms, setBookingForms] = useState({});
     const [bookingForm, setBookingForm] = useState({ name: "", phone: "", email: "", pickup: "", pickupTime: "", drop: "", dropTime: "" });
     const [viewBooking, setViewBooking] = useState(null);
+    const [computedFares, setComputedFares] = useState({});
 
     useEffect(() => {
         const fetchAll = async () => {
@@ -172,6 +173,40 @@ export default function BookingPage() {
         fetchBookings();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedBus, date]);
+
+    // compute fares for selected seats whenever forms/selection/bus/schedules change
+    useEffect(() => {
+        const out = {};
+
+        for (const seat of selectedSeats) {
+            const form = bookingForms[String(seat)] || {};
+
+            try {
+                const busForPricing = { ...(selectedBus || {}) };
+                const sched = (schedules && selectedBus && schedules[selectedBus.busId] && schedules[selectedBus.busId][date]) || null;
+                if (sched && sched.pricingOverride) {
+                    busForPricing.pricingRules = {
+                        ...(selectedBus.pricingRules || {}),
+                        ...(sched.pricingOverride || {}),
+                    };
+                }
+                const season = !!(sched && sched.season);
+                const fareRes = calculateFare({
+                    bus: busForPricing,
+                    fromStop: form.pickup,
+                    toStop: form.drop,
+                    busType: selectedBus?.busType || "AC",
+                    season,
+                });
+
+                out[seat] = Number(fareRes?.fare || 0);
+            } catch (err) {
+                out[seat] = 0;
+            }
+        }
+
+        setComputedFares(out);
+    }, [bookingForms, selectedSeats, selectedBus, schedules, date]);
 
     const availableBuses = useMemo(() => {
         if (!date) return [];
@@ -474,94 +509,202 @@ export default function BookingPage() {
                             </div>
 
                             {/* Booking Footer */}
-                            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:items-center">
-                                <div className="sm:col-span-2">
-                                    <div className="flex items-center gap-4">
-                                        <div className="text-sm text-slate-500">Selected Seat(s):</div>
-                                        <div className="font-semibold">{selectedSeats.length ? selectedSeats.join(", ") : "—"}</div>
+                            <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                {/* Header Row */}
+                                <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50">
+                                            <Ticket className="h-5 w-5 text-[#f97316]" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-slate-500">Selected Seat(s)</p>
+                                            <h3 className="text-xl font-bold text-slate-900">
+                                                {selectedSeats.length ? selectedSeats.join(", ") : "—"}
+                                            </h3>
+                                        </div>
                                     </div>
 
-                                    <div className="mt-3 space-y-3">
-                                        {selectedSeats.length === 0 ? (
-                                            <div className="text-sm text-slate-500">No seat selected</div>
-                                        ) : (
-                                            selectedSeats.map((seat) => {
-                                                const form = bookingForms[String(seat)] || { ...bookingForm };
-                                                return (
-                                                    <div key={seat} className="rounded-2xl border p-3">
-                                                        <div className="mb-2 font-semibold">Seat {seat}</div>
-                                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                                            <input
-                                                                placeholder="Name"
-                                                                value={form.name || ""}
-                                                                onChange={(e) => setBookingForms((bf) => ({ ...bf, [seat]: { ...form, name: e.target.value } }))}
-                                                                className="w-full rounded-lg border px-3 py-2"
-                                                            />
-                                                            <input
-                                                                placeholder="Phone"
-                                                                value={form.phone || ""}
-                                                                onChange={(e) => setBookingForms((bf) => ({ ...bf, [seat]: { ...form, phone: e.target.value } }))}
-                                                                className="w-full rounded-lg border px-3 py-2"
-                                                            />
-                                                            <input
-                                                                placeholder="Email "
-                                                                value={form.email || ""}
-                                                                onChange={(e) => setBookingForms((bf) => ({ ...bf, [seat]: { ...form, email: e.target.value } }))}
-                                                                className="w-full rounded-lg border px-3 py-2"
-                                                            />
-                                                        </div>
+                                    <div className="rounded-2xl bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
+                                        {selectedSeats.length
+                                            ? `${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} selected`
+                                            : "No seat selected"}
+                                    </div>
 
-                                                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                    <div className="mt-2 md:mt-0 md:ml-4 text-sm text-slate-700">
+                                        Total fare: <span className="font-semibold">₹{Object.values(computedFares).reduce((s, v) => s + (Number(v) || 0), 0).toFixed(2)}</span>
+                                    </div>
+                                </div>
+
+                                {/* Form Content */}
+                                <div className="mt-5 space-y-4">
+                                    {selectedSeats.length === 0 ? (
+                                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+                                            <p className="text-sm font-medium text-slate-700">No seat selected</p>
+                                            <p className="mt-1 text-xs text-slate-500">
+                                                Please select a seat from the layout to continue booking.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        selectedSeats.map((seat) => {
+                                            const form = bookingForms[String(seat)] || { ...bookingForm };
+
+                                            return (
+                                                <div
+                                                    key={seat}
+                                                    className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 md:p-5 shadow-sm"
+                                                >
+                                                    {/* Seat Header */}
+                                                    <div className="mb-4 flex items-center justify-between">
+                                                        <div className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-sm font-semibold text-slate-900">
+                                                            <Ticket className="h-4 w-4 text-[#f97316]" />
+                                                            Seat {seat}
+                                                        </div>
+                                                        <div className="text-sm font-medium text-slate-700">
+                                                            Fare: <span className="font-semibold">₹{Number(computedFares[String(seat)] || 0).toFixed(2)}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Inputs */}
+                                                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                                                        <input
+                                                            placeholder="Passenger Name"
+                                                            value={form.name || ""}
+                                                            onChange={(e) =>
+                                                                setBookingForms((bf) => ({
+                                                                    ...bf,
+                                                                    [seat]: { ...form, name: e.target.value },
+                                                                }))
+                                                            }
+                                                            className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
+                                                        />
+
+                                                        <input
+                                                            placeholder="Phone Number"
+                                                            value={form.phone || ""}
+                                                            onChange={(e) =>
+                                                                setBookingForms((bf) => ({
+                                                                    ...bf,
+                                                                    [seat]: { ...form, phone: e.target.value },
+                                                                }))
+                                                            }
+                                                            className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
+                                                        />
+
+                                                        <input
+                                                            placeholder="Email Address"
+                                                            value={form.email || ""}
+                                                            onChange={(e) =>
+                                                                setBookingForms((bf) => ({
+                                                                    ...bf,
+                                                                    [seat]: { ...form, email: e.target.value },
+                                                                }))
+                                                            }
+                                                            className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
+                                                        />
+                                                    </div>
+
+                                                    {/* Pickup / Drop */}
+                                                    <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                                                        <div className="space-y-2">
+                                                            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                                Pickup Point
+                                                            </label>
                                                             <select
                                                                 value={form.pickup || ""}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
                                                                     const time = getStopTime(selectedBus, val) || "";
-                                                                    setBookingForms((bf) => ({ ...bf, [seat]: { ...form, pickup: val, pickupTime: time } }));
+                                                                    setBookingForms((bf) => ({
+                                                                        ...bf,
+                                                                        [seat]: {
+                                                                            ...form,
+                                                                            pickup: val,
+                                                                            pickupTime: time,
+                                                                            drop: "",
+                                                                            dropTime: "",
+                                                                        },
+                                                                    }));
                                                                 }}
-                                                                className="w-full rounded-lg border px-3 py-2"
+                                                                className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
                                                             >
                                                                 <option value="">Select pickup</option>
                                                                 {getPickupOptions(selectedBus).map((s, i) => (
-                                                                    <option key={i} value={s}>{s}</option>
+                                                                    <option key={i} value={s}>
+                                                                        {s}
+                                                                    </option>
                                                                 ))}
                                                             </select>
+                                                        </div>
 
+                                                        <div className="space-y-2">
+                                                            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                                Drop Point
+                                                            </label>
                                                             <select
                                                                 value={form.drop || ""}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
                                                                     const time = getStopTime(selectedBus, val) || "";
-                                                                    setBookingForms((bf) => ({ ...bf, [seat]: { ...form, drop: val, dropTime: time } }));
+                                                                    setBookingForms((bf) => ({
+                                                                        ...bf,
+                                                                        [seat]: { ...form, drop: val, dropTime: time },
+                                                                    }));
                                                                 }}
-                                                                className="w-full rounded-lg border px-3 py-2"
+                                                                className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
                                                             >
                                                                 <option value="">Select drop</option>
                                                                 {getDropOptions(selectedBus, form.pickup).map((s, i) => (
-                                                                    <option key={i} value={s}>{s}</option>
+                                                                    <option key={i} value={s}>
+                                                                        {s}
+                                                                    </option>
                                                                 ))}
                                                             </select>
                                                         </div>
+                                                    </div>
 
-                                                        <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-slate-500">
-                                                            <div>Pickup time: <span className="font-medium text-slate-700">{form.pickupTime || "—"}</span></div>
-                                                            <div>Drop time: <span className="font-medium text-slate-700">{form.dropTime || "—"}</span></div>
+                                                    {/* Timing Info */}
+                                                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                                        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                                Pickup Time
+                                                            </p>
+                                                            <p className="mt-1 text-sm font-semibold text-slate-800">
+                                                                {form.pickupTime || "—"}
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                                Drop Time
+                                                            </p>
+                                                            <p className="mt-1 text-sm font-semibold text-slate-800">
+                                                                {form.dropTime || "—"}
+                                                            </p>
                                                         </div>
                                                     </div>
-                                                );
-                                            })
-                                        )}
-                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
                                 </div>
 
-                                <div className="flex items-center justify-end gap-3">
+                                {/* Action Buttons */}
+                                <div className="mt-6 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
                                     <button
                                         onClick={() => {
                                             setSelectedBus(null);
                                             setSelectedSeats([]);
-                                            setBookingForm({ name: "", phone: "", email: "", pickup: "", pickupTime: "", drop: "", dropTime: "" });
+                                            setBookingForm({
+                                                name: "",
+                                                phone: "",
+                                                email: "",
+                                                pickup: "",
+                                                pickupTime: "",
+                                                drop: "",
+                                                dropTime: "",
+                                            });
                                         }}
-                                        className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                        className="h-12 rounded-2xl border border-slate-300 px-6 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                                     >
                                         Close
                                     </button>
@@ -601,13 +744,28 @@ export default function BookingPage() {
 
                                                     try {
                                                         const busForPricing = { ...(selectedBus || {}) };
-                                                        const sched = (schedules && schedules[selectedBus.busId] && schedules[selectedBus.busId][date]) || null;
+                                                        const sched =
+                                                            (schedules &&
+                                                                schedules[selectedBus.busId] &&
+                                                                schedules[selectedBus.busId][date]) ||
+                                                            null;
                                                         if (sched && sched.pricingOverride) {
-                                                            busForPricing.pricingRules = { ...(selectedBus.pricingRules || {}), ...(sched.pricingOverride || {}) };
+                                                            busForPricing.pricingRules = {
+                                                                ...(selectedBus.pricingRules || {}),
+                                                                ...(sched.pricingOverride || {}),
+                                                            };
                                                         }
                                                         const season = !!(sched && sched.season);
-                                                        const fareRes = calculateFare({ bus: busForPricing, fromStop: form.pickup, toStop: form.drop, busType: selectedBus.busType || 'AC', season });
-                                                        if (fareRes && fareRes.fare !== undefined) payload.fare = Number(fareRes.fare) || 0;
+                                                        const fareRes = calculateFare({
+                                                            bus: busForPricing,
+                                                            fromStop: form.pickup,
+                                                            toStop: form.drop,
+                                                            busType: selectedBus.busType || "AC",
+                                                            season,
+                                                        });
+                                                        if (fareRes && fareRes.fare !== undefined) {
+                                                            payload.fare = Number(fareRes.fare) || 0;
+                                                        }
                                                     } catch (err) {
                                                         // ignore fare calculation errors
                                                         payload.fare = 0;
@@ -616,79 +774,129 @@ export default function BookingPage() {
                                                     bookingsPayload.push(payload);
                                                 }
 
-                                                const totalAmount = bookingsPayload.reduce((s, b) => s + (Number(b.fare) || 0), 0);
-                                                if (!totalAmount || totalAmount <= 0) return showAppToast('error', 'Invalid fare amount');
+                                                const totalAmount = bookingsPayload.reduce(
+                                                    (s, b) => s + (Number(b.fare) || 0),
+                                                    0
+                                                );
+                                                if (!totalAmount || totalAmount <= 0) {
+                                                    return showAppToast("error", "Invalid fare amount");
+                                                }
 
                                                 // Create Razorpay order on server
-                                                const orderRes = await fetch('/api/public/create-razorpay-order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: totalAmount, currency: 'INR' }) });
+                                                const orderRes = await fetch("/api/public/create-razorpay-order", {
+                                                    method: "POST",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ amount: totalAmount, currency: "INR" }),
+                                                });
                                                 const orderData = await orderRes.json();
-                                                if (!orderRes.ok) throw new Error(orderData.error || 'Failed to create payment order');
+                                                if (!orderRes.ok) {
+                                                    throw new Error(orderData.error || "Failed to create payment order");
+                                                }
                                                 const order = orderData.order;
 
                                                 // Load Razorpay script
                                                 const loaded = await new Promise((resolve) => {
-                                                    if (typeof window === 'undefined') return resolve(false);
+                                                    if (typeof window === "undefined") return resolve(false);
                                                     if (window.Razorpay) return resolve(true);
-                                                    const s = document.createElement('script');
-                                                    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+                                                    const s = document.createElement("script");
+                                                    s.src = "https://checkout.razorpay.com/v1/checkout.js";
                                                     s.onload = () => resolve(true);
                                                     s.onerror = () => resolve(false);
                                                     document.body.appendChild(s);
                                                 });
 
-                                                if (!loaded) throw new Error('Failed to load payment gateway');
+                                                if (!loaded) throw new Error("Failed to load payment gateway");
 
-                                                const publicKey = orderData?.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
+                                                const publicKey =
+                                                    orderData?.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
 
                                                 const options = {
                                                     key: publicKey,
                                                     amount: order.amount, // in paise
-                                                    currency: order.currency || 'INR',
-                                                    name: 'SA Tours',
-                                                    description: 'Booking payment',
+                                                    currency: order.currency || "INR",
+                                                    name: "SA Tours",
+                                                    description: "Booking payment",
                                                     order_id: order.id,
                                                     handler: async function (resp) {
                                                         try {
                                                             // verify payment on server
-                                                            const vRes = await fetch('/api/public/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId: resp.razorpay_payment_id, orderId: resp.razorpay_order_id, signature: resp.razorpay_signature, amount: totalAmount, currency: 'INR', metadata: { bookings: bookingsPayload, userId: user?.uid || null } }) });
+                                                            const vRes = await fetch("/api/public/verify-payment", {
+                                                                method: "POST",
+                                                                headers: { "Content-Type": "application/json" },
+                                                                body: JSON.stringify({
+                                                                    paymentId: resp.razorpay_payment_id,
+                                                                    orderId: resp.razorpay_order_id,
+                                                                    signature: resp.razorpay_signature,
+                                                                    amount: totalAmount,
+                                                                    currency: "INR",
+                                                                    metadata: {
+                                                                        bookings: bookingsPayload,
+                                                                        userId: user?.uid || null,
+                                                                    },
+                                                                }),
+                                                            });
                                                             const vData = await vRes.json();
-                                                            if (!vRes.ok) throw new Error(vData.error || 'Payment verification failed');
+                                                            if (!vRes.ok) {
+                                                                throw new Error(vData.error || "Payment verification failed");
+                                                            }
 
                                                             const paymentRecord = vData.payment || {};
-                                                            const paymentId = paymentRecord.id || paymentRecord.paymentId || resp.razorpay_payment_id;
+                                                            const paymentId =
+                                                                paymentRecord.id ||
+                                                                paymentRecord.paymentId ||
+                                                                resp.razorpay_payment_id;
 
                                                             // create bookings and attach payment id
                                                             const results = [];
                                                             for (const payload of bookingsPayload) {
-                                                                const withPayment = { ...payload, payment: paymentId, paymentMethod: 'razorpay' };
-                                                                const bRes = await fetch('/api/booking', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withPayment) });
+                                                                const withPayment = {
+                                                                    ...payload,
+                                                                    payment: paymentId,
+                                                                    paymentMethod: "razorpay",
+                                                                };
+                                                                const bRes = await fetch("/api/booking", {
+                                                                    method: "POST",
+                                                                    headers: { "Content-Type": "application/json" },
+                                                                    body: JSON.stringify(withPayment),
+                                                                });
                                                                 const bData = await bRes.json();
                                                                 results.push({ ok: bRes.ok, data: bData });
                                                             }
 
                                                             const failed = results.find((r) => !r.ok);
-                                                            if (failed) throw new Error(failed.data?.error || 'Failed to create booking after payment');
+                                                            if (failed) {
+                                                                throw new Error(
+                                                                    failed.data?.error || "Failed to create booking after payment"
+                                                                );
+                                                            }
 
-                                                            showAppToast('success', 'Payment successful and bookings created');
+                                                            showAppToast("success", "Payment successful and bookings created");
                                                             await fetchBookings();
                                                             setSelectedSeats([]);
                                                             setBookingForms({});
                                                         } catch (err) {
                                                             console.error(err);
-                                                            showAppToast('error', err.message || 'Payment succeeded but booking failed');
+                                                            showAppToast(
+                                                                "error",
+                                                                err.message || "Payment succeeded but booking failed"
+                                                            );
                                                         }
                                                     },
-                                                    modal: { ondismiss: function () { showAppToast('info', 'Payment cancelled'); } }
+                                                    modal: {
+                                                        ondismiss: function () {
+                                                            showAppToast("info", "Payment cancelled");
+                                                        },
+                                                    },
                                                 };
 
                                                 const rzp = new window.Razorpay(options);
                                                 rzp.open();
                                             } catch (err) {
                                                 console.error(err);
-                                                showAppToast('error', err.message || 'Booking/payment failed');
+                                                showAppToast("error", err.message || "Booking/payment failed");
                                             }
                                         }}
-                                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#059669] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition hover:bg-[#047857]"
+                                        className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#059669] px-6 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition hover:bg-[#047857]"
                                     >
                                         <Ticket className="h-5 w-5" />
                                         Book Selected
