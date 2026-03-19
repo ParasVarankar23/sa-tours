@@ -115,6 +115,10 @@ export default function BookingPage() {
     const [bookingForm, setBookingForm] = useState({ name: "", phone: "", email: "", pickup: "", pickupTime: "", drop: "", dropTime: "" });
     const [viewBooking, setViewBooking] = useState(null);
     const [computedFares, setComputedFares] = useState({});
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [confirmLoading, setConfirmLoading] = useState(false);
+    const [confirmMessage, setConfirmMessage] = useState("");
+    const [confirmAction, setConfirmAction] = useState(() => async () => { });
 
     useEffect(() => {
         const fetchAll = async () => {
@@ -922,6 +926,35 @@ export default function BookingPage() {
                                                 Close
                                             </button>
 
+                                            {canCancelBookingForUser(viewBooking.booking, user) && (
+                                                <button
+                                                    onClick={() => {
+                                                        const seat = String(viewBooking.seat);
+                                                        setConfirmMessage(`Cancel booking for seat ${seat}? This will delete the booking record.`);
+                                                        setConfirmAction(() => async () => {
+                                                            try {
+                                                                const s = String(viewBooking.seat);
+                                                                const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`, { method: "DELETE" });
+                                                                const data = await res.json();
+                                                                if (!res.ok) throw new Error(data.error || "Cancel failed");
+
+                                                                showAppToast("success", data.message || "Booking cancelled");
+                                                                setViewBooking(null);
+                                                                await fetchBookings();
+                                                            } catch (err) {
+                                                                console.error(err);
+                                                                showAppToast("error", err.message || "Cancel failed");
+                                                                throw err;
+                                                            }
+                                                        });
+                                                        setConfirmOpen(true);
+                                                    }}
+                                                    className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600"
+                                                >
+                                                    Cancel Booking
+                                                </button>
+                                            )}
+
                                             <button
                                                 onClick={() => {
                                                     // populate form with booking data for reference/edit
@@ -938,6 +971,30 @@ export default function BookingPage() {
                                     </div>
                                 </div>
                             )}
+
+                            {confirmOpen && (
+                                <ConfirmModal
+                                    message={confirmMessage}
+                                    loading={confirmLoading}
+                                    onCancel={() => {
+                                        if (confirmLoading) return;
+                                        setConfirmOpen(false);
+                                    }}
+                                    onConfirm={async () => {
+                                        if (confirmLoading) return;
+                                        setConfirmLoading(true);
+                                        try {
+                                            await confirmAction();
+                                        } catch (e) {
+                                            // already handled inside action
+                                        } finally {
+                                            setConfirmLoading(false);
+                                            setConfirmOpen(false);
+                                        }
+                                    }}
+                                />
+                            )}
+
                         </div>
                     </div>
                 </div>
@@ -1049,4 +1106,51 @@ function getDropOptions(bus, pickup) {
     const pickupIndex = stops.findIndex((s) => normalizeKey(s) === normalizeKey(pickup));
     if (pickupIndex === -1) return [];
     return stops.slice(pickupIndex + 1);
+}
+
+function canCancelBookingForUser(booking, user) {
+    if (!booking || !user) return false;
+    const bEmail = normalizeText(booking.email || "");
+    const bPhone = normalizeText(booking.phone || booking.phoneNumber || "");
+    const uEmail = normalizeText(user.email || "");
+    const uPhone = normalizeText(user.phone || "");
+
+    if (uEmail && bEmail && normalizeKey(uEmail) === normalizeKey(bEmail)) return true;
+    if (uPhone && bPhone && normalizeKey(uPhone) === normalizeKey(bPhone)) return true;
+    return false;
+}
+
+function ConfirmModal({ message, onCancel, onConfirm, loading }) {
+    return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                <h3 className="text-lg font-bold text-slate-900">Confirm action</h3>
+                <p className="mt-3 text-sm text-slate-600">{message}</p>
+
+                <div className="mt-6 flex justify-end gap-3">
+                    <button
+                        onClick={onCancel}
+                        disabled={loading}
+                        className="rounded-xl border px-4 py-2 text-sm"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        onClick={onConfirm}
+                        disabled={loading}
+                        className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white"
+                    >
+                        {loading ? (
+                            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                            </svg>
+                        ) : null}
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 }
