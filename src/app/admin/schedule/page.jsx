@@ -20,6 +20,8 @@ export default function SchedulePage() {
     const [loading, setLoading] = useState(true);
     const [busId, setBusId] = useState("");
     const [date, setDate] = useState("");
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
     const [saving, setSaving] = useState(false);
     const [seasonFlag, setSeasonFlag] = useState(false);
     const [schedules, setSchedules] = useState({});
@@ -177,14 +179,27 @@ export default function SchedulePage() {
 
     const handleSetAvailable = async () => {
         if (!busId) return showAppToast("error", "Select a bus");
-        if (!date) return showAppToast("error", "Select a date");
+
+        const usingSingle = !!date;
+        const usingRange = !!startDate && !!endDate;
+
+        if (!usingSingle && !usingRange) {
+            return showAppToast("error", "Select a date or a start and end date range");
+        }
 
         setSaving(true);
         try {
+            const payload = { busId, season: seasonFlag };
+            if (usingSingle) payload.date = date;
+            if (usingRange) {
+                payload.startDate = startDate;
+                payload.endDate = endDate;
+            }
+
             const res = await fetch("/api/schedule", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ busId, date, season: seasonFlag }),
+                body: JSON.stringify(payload),
             });
 
             const data = await res.json();
@@ -193,9 +208,11 @@ export default function SchedulePage() {
                 throw new Error(data.error || "Failed to set availability");
             }
 
-            showAppToast("success", "Bus marked available on selected date");
+            showAppToast("success", usingRange ? `Bus marked available for ${startDate} → ${endDate}` : "Bus marked available on selected date");
             setBusId("");
             setDate("");
+            setStartDate("");
+            setEndDate("");
             setSeasonFlag(false);
             fetchSchedules();
         } catch (err) {
@@ -427,8 +444,59 @@ export default function SchedulePage() {
                                         className="w-full bg-transparent text-slate-900 outline-none"
                                         type="date"
                                         value={date}
-                                        onChange={(e) => setDate(e.target.value)}
+                                        onChange={(e) => {
+                                            setDate(e.target.value);
+                                            // clear range when single date chosen
+                                            if (e.target.value) {
+                                                setStartDate("");
+                                                setEndDate("");
+                                            }
+                                        }}
                                     />
+                                </div>
+
+                                <div className="mt-2 text-xs text-slate-500">Or mark availability for a date range</div>
+
+                                <div className="mt-4 flex flex-col gap-4 md:flex-row">
+                                    {/* Start Date */}
+                                    <div className="flex-1">
+                                        <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                            Start Date
+                                        </label>
+
+                                        <div className="flex h-14 w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition-all duration-200 focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
+                                            <CalendarDays className="h-5 w-5 shrink-0 text-[#f97316]" />
+                                            <input
+                                                className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-900 outline-none"
+                                                type="date"
+                                                value={startDate}
+                                                onChange={(e) => {
+                                                    setStartDate(e.target.value);
+                                                    if (e.target.value) setDate("");
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* End Date */}
+                                    <div className="flex-1">
+                                        <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                            End Date
+                                        </label>
+
+                                        <div className="flex h-14 w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition-all duration-200 focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
+                                            <CalendarDays className="h-5 w-5 shrink-0 text-[#f97316]" />
+                                            <input
+                                                className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-900 outline-none"
+                                                type="date"
+                                                value={endDate}
+                                                onChange={(e) => {
+                                                    setEndDate(e.target.value);
+                                                    if (e.target.value) setDate("");
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

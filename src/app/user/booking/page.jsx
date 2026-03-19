@@ -2,7 +2,6 @@
 
 import SeatLayout from "@/components/SeatLayout";
 import { showAppToast } from "@/lib/client/toast";
-import { calculateFare } from "@/lib/pricing";
 import {
     BusFront,
     CalendarDays,
@@ -15,8 +14,87 @@ import {
     X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../../../hooks/useAuth";
+
+function normalizeText(v) {
+    return String(v || "").trim();
+}
+
+function normalizeKey(v) {
+    return normalizeText(v).toLowerCase();
+}
+
+function buildRouteStops(bus) {
+    if (!bus) return [];
+    const middleStops = Array.isArray(bus.stops)
+        ? bus.stops
+            .map((s) => (typeof s === "string" ? s : s?.stopName))
+            .filter(Boolean)
+            .map((s) => normalizeText(s))
+        : [];
+
+    return [normalizeText(bus.startPoint), ...middleStops, normalizeText(bus.endPoint)].filter(Boolean);
+}
+
+function getStartEnd(bus) {
+    const stops = buildRouteStops(bus);
+    return { start: stops[0] || "", end: stops.length ? stops[stops.length - 1] : "" };
+}
+
+function getStopTime(bus, stopName) {
+    if (!bus || !stopName) return "";
+    if (normalizeKey(bus.startPoint) === normalizeKey(stopName)) return normalizeText(bus.startTime);
+    if (normalizeKey(bus.endPoint) === normalizeKey(stopName)) return normalizeText(bus.endTime);
+
+    const found = (bus.stops || []).find((s) => {
+        const name = typeof s === "string" ? s : s?.stopName;
+        return normalizeKey(name) === normalizeKey(stopName);
+    });
+
+    if (!found) return "";
+    return typeof found === "string" ? "" : normalizeText(found.time || found.stopTime || "");
+}
+
+function calculateFare({ bus, fromStop, toStop, busType, season }) {
+    if (!bus || !fromStop || !toStop) return { fare: 0 };
+
+    const rules = Array.isArray(bus.fareRules) ? bus.fareRules : [];
+
+    const normalizeForMatch = (s) =>
+        normalizeKey(String(s || "")).replace(/\b(stand|stn|stop)\b/g, "").replace(/\s+/g, " ").trim();
+
+    const inputFrom = normalizeForMatch(fromStop);
+    const inputTo = normalizeForMatch(toStop);
+
+    // Use last-match semantics so later rules override earlier ones.
+    for (let i = rules.length - 1; i >= 0; i--) {
+        const r = rules[i] || {};
+        const rFrom = normalizeForMatch(r.from);
+        const rTo = normalizeForMatch(r.to);
+
+        // exact match
+        if (rFrom === inputFrom && rTo === inputTo) {
+            const fare = Number(r.fare);
+            if (Number.isFinite(fare) && fare > 0) return { fare };
+            return { fare: 0 };
+        }
+
+        // tolerant matches: handle cases like "Borli" vs "Borli Stand"
+        const fromMatch = rFrom === inputFrom || rFrom.includes(inputFrom) || inputFrom.includes(rFrom);
+        const toMatch = rTo === inputTo || rTo.includes(inputTo) || inputTo.includes(rTo);
+
+        if (fromMatch && toMatch) {
+            const fare = Number(r.fare);
+            if (Number.isFinite(fare) && fare > 0) return { fare };
+            return { fare: 0 };
+        }
+    }
+
+    return { fare: 0 };
+}
 
 export default function BookingPage() {
+    const { user } = useAuth();
     const [date, setDate] = useState("");
     const [buses, setBuses] = useState([]);
     const [schedules, setSchedules] = useState({});
@@ -231,7 +309,10 @@ export default function BookingPage() {
                                                 <InfoCard
                                                     icon={<MapPin className="h-4 w-4 text-[#f97316]" />}
                                                     label="Path"
-                                                    value={`${bus.startPoint || "--"} → ${bus.endPoint || "--"}`}
+                                                    value={(() => {
+                                                        const p = getStartEnd(bus);
+                                                        return `${p.start || "--"} → ${p.end || "--"}`;
+                                                    })()}
                                                 />
                                                 <InfoCard
                                                     icon={<Clock3 className="h-4 w-4 text-[#f97316]" />}
@@ -273,7 +354,10 @@ export default function BookingPage() {
                                     {selectedBus.busNumber} — {selectedBus.routeName}
                                 </h2>
                                 <p className="mt-1 text-sm text-slate-500">
-                                    {selectedBus.startPoint} → {selectedBus.endPoint} • {selectedBus.startTime} → {selectedBus.endTime}
+                                    {(() => {
+                                        const p = getStartEnd(selectedBus);
+                                        return `${p.start || "--"} → ${p.end || "--"} • ${selectedBus?.startTime || "--:--"} → ${selectedBus?.endTime || "--:--"}`;
+                                    })()}
                                 </p>
                             </div>
 
@@ -320,7 +404,10 @@ export default function BookingPage() {
                                 <InfoCard
                                     icon={<MapPin className="h-4 w-4 text-[#f97316]" />}
                                     label="From → To"
-                                    value={`${selectedBus.startPoint || "--"} → ${selectedBus.endPoint || "--"}`}
+                                    value={(() => {
+                                        const p = getStartEnd(selectedBus);
+                                        return `${p.start || "--"} → ${p.end || "--"}`;
+                                    })()}
                                 />
                                 <InfoCard
                                     icon={<Clock3 className="h-4 w-4 text-[#f97316]" />}
@@ -420,20 +507,14 @@ export default function BookingPage() {
                                                                 value={form.pickup || ""}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
-                                                                    // resolve pickup time from bus stops
-                                                                    let time = "";
-                                                                    try {
-                                                                        const stops = selectedBus?.stops || [];
-                                                                        const found = Array.isArray(stops) ? stops.find((s) => (s && (s.stopName || s)) === val || (s.stopName && s.stopName === val)) : null;
-                                                                        if (found) time = found.time || found.stopTime || "";
-                                                                    } catch (err) { }
+                                                                    const time = getStopTime(selectedBus, val) || "";
                                                                     setBookingForms((bf) => ({ ...bf, [seat]: { ...form, pickup: val, pickupTime: time } }));
                                                                 }}
                                                                 className="w-full rounded-lg border px-3 py-2"
                                                             >
                                                                 <option value="">Select pickup</option>
-                                                                {(selectedBus?.stops || []).map((s, i) => (
-                                                                    <option key={i} value={s.stopName || s}>{s.stopName || s}</option>
+                                                                {buildRouteStops(selectedBus).map((s, i) => (
+                                                                    <option key={i} value={s}>{s}</option>
                                                                 ))}
                                                             </select>
 
@@ -441,19 +522,14 @@ export default function BookingPage() {
                                                                 value={form.drop || ""}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
-                                                                    let time = "";
-                                                                    try {
-                                                                        const stops = selectedBus?.stops || [];
-                                                                        const found = Array.isArray(stops) ? stops.find((s) => (s && (s.stopName || s)) === val || (s.stopName && s.stopName === val)) : null;
-                                                                        if (found) time = found.time || found.stopTime || "";
-                                                                    } catch (err) { }
+                                                                    const time = getStopTime(selectedBus, val) || "";
                                                                     setBookingForms((bf) => ({ ...bf, [seat]: { ...form, drop: val, dropTime: time } }));
                                                                 }}
                                                                 className="w-full rounded-lg border px-3 py-2"
                                                             >
                                                                 <option value="">Select drop</option>
-                                                                {(selectedBus?.stops || []).map((s, i) => (
-                                                                    <option key={i} value={s.stopName || s}>{s.stopName || s}</option>
+                                                                {buildRouteStops(selectedBus).map((s, i) => (
+                                                                    <option key={i} value={s}>{s}</option>
                                                                 ))}
                                                             </select>
                                                         </div>
@@ -553,8 +629,10 @@ export default function BookingPage() {
 
                                                 if (!loaded) throw new Error('Failed to load payment gateway');
 
+                                                const publicKey = orderData?.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
+
                                                 const options = {
-                                                    key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
+                                                    key: publicKey,
                                                     amount: order.amount, // in paise
                                                     currency: order.currency || 'INR',
                                                     name: 'SA Tours',
@@ -563,7 +641,7 @@ export default function BookingPage() {
                                                     handler: async function (resp) {
                                                         try {
                                                             // verify payment on server
-                                                            const vRes = await fetch('/api/public/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId: resp.razorpay_payment_id, orderId: resp.razorpay_order_id, signature: resp.razorpay_signature, amount: totalAmount, currency: 'INR', metadata: { bookings: bookingsPayload } }) });
+                                                            const vRes = await fetch('/api/public/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId: resp.razorpay_payment_id, orderId: resp.razorpay_order_id, signature: resp.razorpay_signature, amount: totalAmount, currency: 'INR', metadata: { bookings: bookingsPayload, userId: user?.uid || null } }) });
                                                             const vData = await vRes.json();
                                                             if (!vRes.ok) throw new Error(vData.error || 'Payment verification failed');
 

@@ -12,10 +12,14 @@ export async function POST(req) {
     try {
         const body = await req.json();
         const busId = String(body.busId || "").trim();
-        const date = String(body.date || "").trim();
 
-        if (!busId || !date || !validateDate(date)) {
-            return NextResponse.json({ success: false, error: "busId and valid date (YYYY-MM-DD) are required" }, { status: 400 });
+        // Support either single `date` or a `startDate` + `endDate` range
+        const date = String(body.date || "").trim();
+        const startDate = String(body.startDate || "").trim();
+        const endDate = String(body.endDate || "").trim();
+
+        if (!busId) {
+            return NextResponse.json({ success: false, error: "busId is required" }, { status: 400 });
         }
 
         // Allow schedule-specific meta: startTime, endTime, stops, available, season, pricingOverride
@@ -27,22 +31,57 @@ export async function POST(req) {
         const pricingOverride = body.pricingOverride && typeof body.pricingOverride === 'object' ? body.pricingOverride : null;
 
         const db = getAdminDb();
-        const path = `${COLLECTION}/${busId}/${date}`;
 
-        const value = {
+        const valueBase = {
             available,
             updatedAt: new Date().toISOString(),
         };
 
-        if (startTime) value.startTime = startTime;
-        if (endTime) value.endTime = endTime;
-        if (stops) value.stops = stops;
-        if (season) value.season = true;
-        if (pricingOverride) value.pricingOverride = pricingOverride;
+        if (startTime) valueBase.startTime = startTime;
+        if (endTime) valueBase.endTime = endTime;
+        if (stops) valueBase.stops = stops;
+        if (season) valueBase.season = true;
+        if (pricingOverride) valueBase.pricingOverride = pricingOverride;
 
-        await db.ref(path).set(value);
+        const datesCreated = [];
 
-        return NextResponse.json({ success: true, message: "Schedule saved", schedule: value }, { status: 200 });
+        const writeForDate = async (d) => {
+            const path = `${COLLECTION}/${busId}/${d}`;
+            await db.ref(path).set(valueBase);
+            datesCreated.push(d);
+        };
+
+        // Single date
+        if (date) {
+            if (!validateDate(date)) {
+                return NextResponse.json({ success: false, error: "Invalid date format (YYYY-MM-DD)" }, { status: 400 });
+            }
+
+            await writeForDate(date);
+            return NextResponse.json({ success: true, message: "Schedule saved", dates: datesCreated }, { status: 200 });
+        }
+
+        // Range
+        if (startDate && endDate) {
+            if (!validateDate(startDate) || !validateDate(endDate)) {
+                return NextResponse.json({ success: false, error: "Invalid startDate or endDate format (YYYY-MM-DD)" }, { status: 400 });
+            }
+
+            const s = new Date(startDate + 'T00:00:00');
+            const e = new Date(endDate + 'T00:00:00');
+            if (e < s) {
+                return NextResponse.json({ success: false, error: "endDate must be same or after startDate" }, { status: 400 });
+            }
+
+            for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+                const iso = d.toISOString().split('T')[0];
+                await writeForDate(iso);
+            }
+
+            return NextResponse.json({ success: true, message: "Schedule range saved", dates: datesCreated }, { status: 200 });
+        }
+
+        return NextResponse.json({ success: false, error: "Provide either `date` or `startDate` and `endDate`" }, { status: 400 });
     } catch (err) {
         console.error("POST /api/schedule error:", err);
         return NextResponse.json({ success: false, error: "Failed to set availability" }, { status: 500 });

@@ -3,7 +3,7 @@ import { getAdminDb } from "../../../lib/firebaseAdmin";
 
 const COLLECTION_NAME = "buses";
 const seatLayoutOptions = ["31", "27", "23"];
-const MIN_STOP_GAP = 5; // block nearby pairs like Borli -> Mhasala
+const MIN_STOP_GAP = 2; // blocks nearby stop pairs
 
 /* =========================
    Helpers
@@ -15,6 +15,29 @@ function normalizeText(value) {
 
 function normalizeKey(value) {
     return normalizeText(value).toLowerCase();
+}
+
+function normalizeDateOnly(dateStr) {
+    const value = normalizeText(dateStr);
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toISOString().split("T")[0];
+}
+
+function isValidDateString(dateStr) {
+    if (!dateStr) return true;
+    const d = new Date(dateStr);
+    return !Number.isNaN(d.getTime());
+}
+
+function rangesOverlap(startA, endA, startB, endB) {
+    const aStart = startA ? new Date(startA).setHours(0, 0, 0, 0) : -Infinity;
+    const aEnd = endA ? new Date(endA).setHours(0, 0, 0, 0) : Infinity;
+    const bStart = startB ? new Date(startB).setHours(0, 0, 0, 0) : -Infinity;
+    const bEnd = endB ? new Date(endB).setHours(0, 0, 0, 0) : Infinity;
+
+    return aStart <= bEnd && bStart <= aEnd;
 }
 
 function sanitizeStops(stops) {
@@ -79,90 +102,305 @@ function validateRoutePointTimes(startTime, stops, endTime) {
     return null;
 }
 
-function sanitizeFareRules(fareRules, routePoints) {
-    if (!Array.isArray(fareRules)) return [];
+/* =========================
+   Fare Rules Logic
+========================= */
 
-    const uniqueMap = new Map();
+function buildExpandedFareEntries(rawFareRules, routePoints) {
+    if (!Array.isArray(rawFareRules)) return [];
 
-    for (const rule of fareRules.slice(0, 100)) {
+    const expandedEntries = [];
+
+    for (let ruleIndex = 0; ruleIndex < rawFareRules.slice(0, 100).length; ruleIndex++) {
+        const rule = rawFareRules[ruleIndex];
+
         const from = normalizeText(rule?.from);
         const to = normalizeText(rule?.to);
         const fare = Number(rule?.fare);
+        const fareStartDate = normalizeDateOnly(rule?.fareStartDate);
+        const fareEndDate = normalizeDateOnly(rule?.fareEndDate);
 
-        if (!from || !to || Number.isNaN(fare) || fare <= 0) continue;
+        // NEW FLAG
+        const applyToAllNextPickupsBeforeDrop = Boolean(
+            rule?.applyToAllNextPickupsBeforeDrop ?? rule?.applyToAllPreviousPickups
+        );
 
-        const fromIndex = routePoints.findIndex((p) => normalizeKey(p) === normalizeKey(from));
-        const toIndex = routePoints.findIndex((p) => normalizeKey(p) === normalizeKey(to));
-
-        // must exist in route
-        if (fromIndex === -1 || toIndex === -1) continue;
-
-        // drop must come after pickup
-        if (toIndex <= fromIndex) continue;
-
-        // block nearby stops
-        if (toIndex - fromIndex < MIN_STOP_GAP) continue;
-
-        const key = `${normalizeKey(from)}|${normalizeKey(to)}`;
-
-        uniqueMap.set(key, {
-            from: routePoints[fromIndex],
-            to: routePoints[toIndex],
-            fare,
-        });
-    }
-
-    return Array.from(uniqueMap.values());
-}
-
-function validateFareRulesStrict(fareRules, routePoints) {
-    if (!Array.isArray(fareRules)) return null;
-
-    const seenPairs = new Set();
-
-    for (const rule of fareRules.slice(0, 100)) {
-        const from = normalizeText(rule?.from);
-        const to = normalizeText(rule?.to);
-        const fare = Number(rule?.fare);
-
-        // allow empty row to be ignored
-        if (!from && !to && (rule?.fare === "" || rule?.fare === undefined || rule?.fare === null)) {
+        // allow fully empty row
+        if (
+            !from &&
+            !to &&
+            (rule?.fare === "" || rule?.fare === undefined || rule?.fare === null) &&
+            !fareStartDate &&
+            !fareEndDate
+        ) {
             continue;
         }
 
         if (!from || !to) {
-            return "Each fare rule must have pickup and drop";
+            throw new Error("Each fare rule must have pickup and drop");
         }
 
         if (!Number.isFinite(fare) || fare <= 0) {
-            return `Invalid fare for ${from} → ${to}`;
+            throw new Error(`Invalid fare for ${from} → ${to}`);
         }
 
-        const fromIndex = routePoints.findIndex((p) => normalizeKey(p) === normalizeKey(from));
-        const toIndex = routePoints.findIndex((p) => normalizeKey(p) === normalizeKey(to));
+        const fromIndex = routePoints.findIndex(
+            (p) => normalizeKey(p) === normalizeKey(from)
+        );
+        const toIndex = routePoints.findIndex(
+            (p) => normalizeKey(p) === normalizeKey(to)
+        );
 
         if (fromIndex === -1 || toIndex === -1) {
-            return `Invalid fare rule route point: ${from} → ${to}`;
+            throw new Error(`Invalid fare rule route point: ${from} → ${to}`);
         }
 
         if (toIndex <= fromIndex) {
-            return `Drop must come after pickup for ${from} → ${to}`;
+            throw new Error(`Drop must come after pickup for ${from} → ${to}`);
         }
 
         if (toIndex - fromIndex < MIN_STOP_GAP) {
-            return `Nearby stop fare not allowed for ${from} → ${to}`;
+            throw new Error(`Nearby stop fare not allowed for ${from} → ${to}`);
         }
 
-        const pairKey = `${normalizeKey(routePoints[fromIndex])}|${normalizeKey(routePoints[toIndex])}`;
-        if (seenPairs.has(pairKey)) {
-            return `Duplicate fare rule found for ${routePoints[fromIndex]} → ${routePoints[toIndex]}`;
+        if (fareStartDate && !isValidDateString(fareStartDate)) {
+            throw new Error(`Invalid fare start date for ${from} → ${to}`);
         }
 
-        seenPairs.add(pairKey);
+        if (fareEndDate && !isValidDateString(fareEndDate)) {
+            throw new Error(`Invalid fare end date for ${from} → ${to}`);
+        }
+
+        if (fareStartDate && fareEndDate) {
+            const start = new Date(fareStartDate);
+            const end = new Date(fareEndDate);
+
+            if (end < start) {
+                throw new Error(`Fare end date must be after start date for ${from} → ${to}`);
+            }
+        }
+
+        const pushExpanded = (expandedFrom, expandedTo, expandedFromIndex, expandedToIndex) => {
+            expandedEntries.push({
+                from: expandedFrom,
+                to: expandedTo,
+                fare,
+                fareStartDate: fareStartDate || "",
+                fareEndDate: fareEndDate || "",
+                sourceRuleIndex: ruleIndex,
+                sourceFrom: from,
+                sourceTo: to,
+                sourceFromIndex: fromIndex,
+                sourceToIndex: toIndex,
+                expandedFromIndex,
+                expandedToIndex,
+                applyToAllNextPickupsBeforeDrop,
+            });
+        };
+
+        if (applyToAllNextPickupsBeforeDrop) {
+            // NEW LOGIC: selected pickup + all next pickups before drop
+            for (let i = fromIndex; i < toIndex; i++) {
+                if (toIndex - i < MIN_STOP_GAP) continue;
+                pushExpanded(routePoints[i], routePoints[toIndex], i, toIndex);
+            }
+        } else {
+            pushExpanded(routePoints[fromIndex], routePoints[toIndex], fromIndex, toIndex);
+        }
     }
 
-    return null;
+    return expandedEntries;
 }
+
+function validateFareRulesStrict(fareRules, routePoints) {
+    try {
+        const expandedEntries = buildExpandedFareEntries(fareRules, routePoints);
+
+        // Overlap check on SAME FINAL PAIR (for same date ranges)
+        for (let i = 0; i < expandedEntries.length; i++) {
+            for (let j = i + 1; j < expandedEntries.length; j++) {
+                const a = expandedEntries[i];
+                const b = expandedEntries[j];
+
+                const samePair =
+                    normalizeKey(a.from) === normalizeKey(b.from) &&
+                    normalizeKey(a.to) === normalizeKey(b.to);
+
+                if (!samePair) continue;
+
+                const overlap = rangesOverlap(
+                    a.fareStartDate,
+                    a.fareEndDate,
+                    b.fareStartDate,
+                    b.fareEndDate
+                );
+
+                if (overlap) {
+                    const aIdx = Number.isFinite(a.sourceRuleIndex) ? a.sourceRuleIndex : null;
+                    const bIdx = Number.isFinite(b.sourceRuleIndex) ? b.sourceRuleIndex : null;
+
+                    // Debug logging to help trace overlaps
+                    console.log("[fare-validator] Overlap detected between expanded entries:", {
+                        pair: `${a.from} → ${a.to}`,
+                        entryA: {
+                            from: a.from,
+                            to: a.to,
+                            fare: a.fare,
+                            fareStartDate: a.fareStartDate,
+                            fareEndDate: a.fareEndDate,
+                            sourceRuleIndex: aIdx,
+                            sourceFrom: a.sourceFrom,
+                            sourceTo: a.sourceTo,
+                        },
+                        entryB: {
+                            from: b.from,
+                            to: b.to,
+                            fare: b.fare,
+                            fareStartDate: b.fareStartDate,
+                            fareEndDate: b.fareEndDate,
+                            sourceRuleIndex: bIdx,
+                            sourceFrom: b.sourceFrom,
+                            sourceTo: b.sourceTo,
+                        },
+                    });
+
+                    // If entries come from different source rules, let later override earlier
+                    if (aIdx !== null && bIdx !== null && aIdx !== bIdx) {
+                        console.log(
+                            `[fare-validator] Overlap skipped: later rule (index ${Math.max(aIdx, bIdx)}) overrides earlier rule (index ${Math.min(aIdx, bIdx)}) for ${a.from} → ${a.to}`
+                        );
+                        continue;
+                    }
+
+                    console.log(`[fare-validator] Overlap error: same source rule or missing indices for ${a.from} → ${a.to}`);
+
+                    // return structured conflict so caller can include it in API response
+                    return {
+                        message: `Overlapping fare dates found for ${a.from} → ${a.to}`,
+                        conflict: {
+                            pair: `${a.from} → ${a.to}`,
+                            entryA: {
+                                from: a.from,
+                                to: a.to,
+                                fare: a.fare,
+                                fareStartDate: a.fareStartDate,
+                                fareEndDate: a.fareEndDate,
+                                sourceRuleIndex: aIdx,
+                                sourceFrom: a.sourceFrom,
+                                sourceTo: a.sourceTo,
+                            },
+                            entryB: {
+                                from: b.from,
+                                to: b.to,
+                                fare: b.fare,
+                                fareStartDate: b.fareStartDate,
+                                fareEndDate: b.fareEndDate,
+                                sourceRuleIndex: bIdx,
+                                sourceFrom: b.sourceFrom,
+                                sourceTo: b.sourceTo,
+                            },
+                        },
+                    };
+                }
+            }
+        }
+
+        return null;
+    } catch (err) {
+        return err.message || "Invalid fare rules";
+    }
+}
+
+function sanitizeFareRulesRaw(fareRules, routePoints) {
+    if (!Array.isArray(fareRules)) return [];
+
+    const cleaned = [];
+
+    for (const rule of fareRules.slice(0, 100)) {
+        const from = normalizeText(rule?.from);
+        const to = normalizeText(rule?.to);
+        const fare = Number(rule?.fare);
+        const fareStartDate = normalizeDateOnly(rule?.fareStartDate);
+        const fareEndDate = normalizeDateOnly(rule?.fareEndDate);
+
+        const applyToAllNextPickupsBeforeDrop = Boolean(
+            rule?.applyToAllNextPickupsBeforeDrop ?? rule?.applyToAllPreviousPickups
+        );
+
+        // skip fully empty row
+        if (
+            !from &&
+            !to &&
+            (rule?.fare === "" || rule?.fare === undefined || rule?.fare === null) &&
+            !fareStartDate &&
+            !fareEndDate
+        ) {
+            continue;
+        }
+
+        if (!from || !to || !Number.isFinite(fare) || fare <= 0) continue;
+
+        const fromIndex = routePoints.findIndex(
+            (p) => normalizeKey(p) === normalizeKey(from)
+        );
+        const toIndex = routePoints.findIndex(
+            (p) => normalizeKey(p) === normalizeKey(to)
+        );
+
+        if (fromIndex === -1 || toIndex === -1) continue;
+        if (toIndex <= fromIndex) continue;
+        if (toIndex - fromIndex < MIN_STOP_GAP) continue;
+
+        if (fareStartDate && !isValidDateString(fareStartDate)) continue;
+        if (fareEndDate && !isValidDateString(fareEndDate)) continue;
+
+        if (fareStartDate && fareEndDate) {
+            const start = new Date(fareStartDate);
+            const end = new Date(fareEndDate);
+            if (end < start) continue;
+        }
+
+        cleaned.push({
+            from: routePoints[fromIndex],
+            to: routePoints[toIndex],
+            fare,
+            fareStartDate: fareStartDate || "",
+            fareEndDate: fareEndDate || "",
+            applyToAllNextPickupsBeforeDrop,
+        });
+    }
+
+    return cleaned;
+}
+
+function buildEffectiveFareRules(fareRules, routePoints) {
+    const expandedEntries = buildExpandedFareEntries(fareRules, routePoints);
+
+    // latest rule wins for same final pair + same date bucket
+    const effectiveMap = new Map();
+
+    for (const entry of expandedEntries) {
+        const key = `${normalizeKey(entry.from)}|${normalizeKey(entry.to)}|${entry.fareStartDate}|${entry.fareEndDate}`;
+
+        // later rules override earlier rules automatically because Map.set replaces
+        effectiveMap.set(key, {
+            from: entry.from,
+            to: entry.to,
+            fare: entry.fare,
+            fareStartDate: entry.fareStartDate || "",
+            fareEndDate: entry.fareEndDate || "",
+            sourceRuleIndex: entry.sourceRuleIndex,
+            sourceFrom: entry.sourceFrom,
+            sourceTo: entry.sourceTo,
+        });
+    }
+
+    return Array.from(effectiveMap.values());
+}
+
+/* =========================
+   Main Validation
+========================= */
 
 function validateBusPayload(body, isUpdate = false) {
     const requiredFields = [
@@ -227,7 +465,8 @@ export async function GET() {
 
         buses.sort(
             (a, b) =>
-                new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+                new Date(b.createdAt || 0).getTime() -
+                new Date(a.createdAt || 0).getTime()
         );
 
         return NextResponse.json(
@@ -279,7 +518,11 @@ export async function POST(req) {
 
         const sanitizedStops = sanitizeStops(body.stops);
         const sanitizedCabins = sanitizeCabins(body.cabins);
-        const routePoints = buildRoutePointsFromSanitized(startPoint, sanitizedStops, endPoint);
+        const routePoints = buildRoutePointsFromSanitized(
+            startPoint,
+            sanitizedStops,
+            endPoint
+        );
 
         if (hasDuplicateRoutePoints(routePoints)) {
             return NextResponse.json(
@@ -291,7 +534,11 @@ export async function POST(req) {
             );
         }
 
-        const timeValidationError = validateRoutePointTimes(startTime, sanitizedStops, endTime);
+        const timeValidationError = validateRoutePointTimes(
+            startTime,
+            sanitizedStops,
+            endTime
+        );
         if (timeValidationError) {
             return NextResponse.json(
                 {
@@ -304,10 +551,21 @@ export async function POST(req) {
 
         const strictFareError = validateFareRulesStrict(body.fareRules, routePoints);
         if (strictFareError) {
+            if (typeof strictFareError === "string") {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: strictFareError,
+                    },
+                    { status: 400 }
+                );
+            }
+
             return NextResponse.json(
                 {
                     success: false,
-                    error: strictFareError,
+                    error: strictFareError.message || "Overlapping fare rules",
+                    conflict: strictFareError.conflict || null,
                 },
                 { status: 400 }
             );
@@ -340,6 +598,9 @@ export async function POST(req) {
         const busId = generateBusId();
         const now = new Date().toISOString();
 
+        const fareRulesRaw = sanitizeFareRulesRaw(body.fareRules, routePoints);
+        const fareRules = buildEffectiveFareRules(body.fareRules, routePoints);
+
         const newBus = {
             busId,
             busNumber,
@@ -353,7 +614,11 @@ export async function POST(req) {
             seatLayout,
             stops: sanitizedStops,
             cabins: sanitizedCabins,
-            fareRules: sanitizeFareRules(body.fareRules, routePoints),
+
+            // IMPORTANT:
+            fareRulesRaw, // admin original rules
+            fareRules,    // final effective expanded rules for booking
+
             createdAt: now,
             updatedAt: now,
         };
@@ -373,7 +638,7 @@ export async function POST(req) {
         return NextResponse.json(
             {
                 success: false,
-                error: "Failed to create bus",
+                error: error.message || "Failed to create bus",
             },
             { status: 500 }
         );
@@ -411,7 +676,11 @@ export async function PUT(req) {
 
         const sanitizedStops = sanitizeStops(body.stops);
         const sanitizedCabins = sanitizeCabins(body.cabins);
-        const routePoints = buildRoutePointsFromSanitized(startPoint, sanitizedStops, endPoint);
+        const routePoints = buildRoutePointsFromSanitized(
+            startPoint,
+            sanitizedStops,
+            endPoint
+        );
 
         if (hasDuplicateRoutePoints(routePoints)) {
             return NextResponse.json(
@@ -423,7 +692,11 @@ export async function PUT(req) {
             );
         }
 
-        const timeValidationError = validateRoutePointTimes(startTime, sanitizedStops, endTime);
+        const timeValidationError = validateRoutePointTimes(
+            startTime,
+            sanitizedStops,
+            endTime
+        );
         if (timeValidationError) {
             return NextResponse.json(
                 {
@@ -436,10 +709,21 @@ export async function PUT(req) {
 
         const strictFareError = validateFareRulesStrict(body.fareRules, routePoints);
         if (strictFareError) {
+            if (typeof strictFareError === "string") {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: strictFareError,
+                    },
+                    { status: 400 }
+                );
+            }
+
             return NextResponse.json(
                 {
                     success: false,
-                    error: strictFareError,
+                    error: strictFareError.message || "Overlapping fare rules",
+                    conflict: strictFareError.conflict || null,
                 },
                 { status: 400 }
             );
@@ -459,7 +743,9 @@ export async function PUT(req) {
         }
 
         const allSnapshot = await db.ref(COLLECTION_NAME).once("value");
-        const allBuses = allSnapshot.exists() ? Object.entries(allSnapshot.val() || {}) : [];
+        const allBuses = allSnapshot.exists()
+            ? Object.entries(allSnapshot.val() || {})
+            : [];
 
         const duplicateExists = allBuses.some(([key, val]) => {
             return (
@@ -474,13 +760,17 @@ export async function PUT(req) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: "Another bus already exists with this bus number, start point and time",
+                    error:
+                        "Another bus already exists with this bus number, start point and time",
                 },
                 { status: 409 }
             );
         }
 
         const existingData = busSnapshot.val() || {};
+
+        const fareRulesRaw = sanitizeFareRulesRaw(body.fareRules, routePoints);
+        const fareRules = buildEffectiveFareRules(body.fareRules, routePoints);
 
         const updatedBusData = {
             busId,
@@ -495,7 +785,11 @@ export async function PUT(req) {
             seatLayout,
             stops: sanitizedStops,
             cabins: sanitizedCabins,
-            fareRules: sanitizeFareRules(body.fareRules, routePoints),
+
+            // IMPORTANT:
+            fareRulesRaw, // admin original rules
+            fareRules,    // final effective expanded rules for booking
+
             createdAt: existingData.createdAt || null,
             updatedAt: new Date().toISOString(),
         };
@@ -515,7 +809,7 @@ export async function PUT(req) {
         return NextResponse.json(
             {
                 success: false,
-                error: "Failed to update bus",
+                error: error.message || "Failed to update bus",
             },
             { status: 500 }
         );
