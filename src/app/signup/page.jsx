@@ -195,7 +195,7 @@ export default function SignupPage() {
     };
 
     return (
-        <section className="relative overflow-hidden bg-gradient-to-br from-orange-50 via-white to-orange-100 py-12 sm:py-16 lg:py-20">
+        <section className="relative overflow-hidden bg-gradient-to-br from-orange-50 via-white to-orange-100 py-12 sm:py-16 lg:py-12">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div className="grid items-center gap-10 lg:grid-cols-2">
                     {/* LEFT SIDE CONTENT */}

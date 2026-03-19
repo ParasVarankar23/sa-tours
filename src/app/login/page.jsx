@@ -191,9 +191,9 @@ export default function LoginPage() {
     };
 
     return (
-        <section className="min-h-[calc(100vh-88px)] bg-gradient-to-br from-slate-50 via-white to-orange-50/40 flex items-center">
-            <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-8">
-                <div className="grid items-center gap-8 lg:grid-cols-[1.08fr_0.92fr] xl:gap-12">
+        <section className="bg-gradient-to-br from-slate-50 via-white to-orange-50/40 flex items-center">
+            <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-6">
+                <div className="grid items-center gap-6 lg:grid-cols-[1.04fr_0.96fr] xl:gap-10">
                     {/* LEFT SIDE CONTENT */}
                     <motion.div
                         variants={stagger}
@@ -211,16 +211,16 @@ export default function LoginPage() {
 
                         <motion.h1
                             variants={fadeUp}
-                            className="mt-4 max-w-2xl text-4xl font-extrabold leading-tight text-slate-900 xl:text-5xl xl:leading-[1.15]"
+                            className="mt-3 max-w-xl text-3xl lg:text-4xl font-extrabold leading-tight text-slate-900 xl:text-5xl xl:leading-[1.12]"
                         >
-                            Login to manage your{" "}
-                            <span className="text-orange-500">bookings</span> and{" "}
+                            Login to manage your {" "}
+                            <span className="text-orange-500">bookings</span> and {" "}
                             <span className="text-orange-500">travel updates</span>
                         </motion.h1>
 
                         <motion.p
                             variants={fadeUp}
-                            className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-600 xl:text-base"
+                            className="mt-3 max-w-xl text-sm leading-6 text-slate-600 xl:text-base"
                         >
                             Access your account to check booking status, view daily bus schedules,
                             manage travel details and stay updated with route timing information for
@@ -282,29 +282,29 @@ export default function LoginPage() {
                         animate="show"
                         className="mx-auto w-full max-w-md"
                     >
-                        <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:p-6 lg:p-7">
+                        <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)] sm:p-5 lg:p-5">
                             <div className="text-center">
-                                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-orange-500 sm:text-sm">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-orange-500 sm:text-xs">
                                     Welcome Back
                                 </p>
-                                <h2 className="mt-2 text-3xl font-bold text-slate-900">Login</h2>
-                                <p className="mt-2 text-sm leading-6 text-slate-600">
+                                <h2 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">Login</h2>
+                                <p className="mt-1.5 text-sm leading-6 text-slate-600">
                                     Access your account for bookings, schedule details and travel updates.
                                 </p>
                             </div>
 
-                            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+                            <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
                                 {/* Email / Phone */}
                                 <div>
                                     <label
                                         htmlFor="login-id"
-                                        className="mb-2 block text-sm font-medium text-slate-700"
+                                        className="mb-1.5 block text-sm font-medium text-slate-700"
                                     >
                                         Email or Phone Number
                                     </label>
 
-                                    <div className="flex h-12 items-center gap-3 rounded-2xl border border-slate-200 px-4 transition-all focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
-                                        <Mail size={18} className="shrink-0 text-slate-400" />
+                                    <div className="flex h-11 items-center gap-3 rounded-2xl border border-slate-200 px-4 transition-all focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
+                                        <Mail size={17} className="shrink-0 text-slate-400" />
                                         <input
                                             id="login-id"
                                             type="text"
@@ -320,17 +320,15 @@ export default function LoginPage() {
 
                                 {/* Password */}
                                 <div>
-                                    <div className="mb-2 flex items-center justify-between">
-                                        <label
-                                            htmlFor="login-password"
-                                            className="block text-sm font-medium text-slate-700"
-                                        >
-                                            Password
-                                        </label>
-                                    </div>
+                                    <label
+                                        htmlFor="login-password"
+                                        className="mb-1.5 block text-sm font-medium text-slate-700"
+                                    >
+                                        Password
+                                    </label>
 
-                                    <div className="flex h-12 items-center gap-3 rounded-2xl border border-slate-200 px-4 transition-all focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
-                                        <LockKeyhole size={18} className="shrink-0 text-slate-400" />
+                                    <div className="flex h-11 items-center gap-3 rounded-2xl border border-slate-200 px-4 transition-all focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
+                                        <LockKeyhole size={17} className="shrink-0 text-slate-400" />
 
                                         <input
                                             id="login-password"
@@ -349,13 +347,13 @@ export default function LoginPage() {
                                             className="shrink-0 text-slate-400 transition hover:text-orange-500"
                                             aria-label={showPassword ? "Hide password" : "Show password"}
                                         >
-                                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                                         </button>
                                     </div>
 
                                     <Link
                                         href="/forgot-password"
-                                        className="mt-2 block text-right text-xs font-medium text-orange-500 transition hover:text-orange-600"
+                                        className="mt-1.5 block text-right text-[11px] font-medium text-orange-500 transition hover:text-orange-600"
                                     >
                                         Forgot Password?
                                     </Link>
@@ -365,18 +363,18 @@ export default function LoginPage() {
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="mt-1 w-full rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
+                                    className="mt-1 w-full rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
                                 >
                                     {loading ? "Logging in..." : "Login"}
                                 </button>
 
                                 {/* Divider */}
-                                <div className="relative py-1">
+                                <div className="relative py-0.5">
                                     <div className="absolute inset-0 flex items-center">
                                         <div className="w-full border-t border-slate-200" />
                                     </div>
                                     <div className="relative flex justify-center">
-                                        <span className="bg-white px-3 text-[11px] font-semibold tracking-wide text-slate-400">
+                                        <span className="bg-white px-3 text-[10px] font-semibold tracking-wide text-slate-400">
                                             OR CONTINUE WITH
                                         </span>
                                     </div>
@@ -387,11 +385,11 @@ export default function LoginPage() {
                                     type="button"
                                     disabled={googleLoading}
                                     onClick={handleGoogleLogin}
-                                    className="flex w-full items-center justify-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
+                                    className="flex w-full items-center justify-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
                                 >
                                     <svg
-                                        width="18"
-                                        height="18"
+                                        width="17"
+                                        height="17"
                                         viewBox="0 0 48 48"
                                         xmlns="http://www.w3.org/2000/svg"
                                     >
@@ -416,7 +414,7 @@ export default function LoginPage() {
                                 </button>
 
                                 {/* Signup */}
-                                <p className="pt-1 text-center text-sm text-slate-600">
+                                <p className="pt-0.5 text-center text-sm text-slate-600">
                                     Don&apos;t have an account?{" "}
                                     <Link
                                         href="/signup"
