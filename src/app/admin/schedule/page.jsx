@@ -38,6 +38,12 @@ export default function SchedulePage() {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmMessage, setConfirmMessage] = useState("");
     const [confirmAction, setConfirmAction] = useState(() => () => { });
+    const [previewSchedule, setPreviewSchedule] = useState(null);
+    const [editModalOpen, setEditModalOpen] = useState(false);
+    const [editDateValue, setEditDateValue] = useState("");
+    const [editRangeOpen, setEditRangeOpen] = useState(false);
+    const [editRangeStart, setEditRangeStart] = useState("");
+    const [editRangeEnd, setEditRangeEnd] = useState("");
 
     const formatDate = (dateStr) => new Date(dateStr);
 
@@ -87,6 +93,11 @@ export default function SchedulePage() {
             showAppToast("error", err.message || "Failed to load schedules");
         }
     };
+    function resolvePointName(point, fallback = "--") {
+        if (!point) return fallback;
+        if (typeof point === "object") return point.name || fallback;
+        return String(point);
+    }
 
     useEffect(() => {
         const fetchBuses = async () => {
@@ -351,6 +362,10 @@ export default function SchedulePage() {
 
                     showAppToast("success", "Availability removed");
                     fetchSchedules();
+                    // clear preview if deleted
+                    if (previewSchedule && previewSchedule.busId === targetBusId && previewSchedule.date === targetDate) {
+                        setPreviewSchedule(null);
+                    }
                 } catch (err) {
                     console.error(err);
                     showAppToast("error", err.message || "Failed to remove availability");
@@ -360,10 +375,70 @@ export default function SchedulePage() {
     };
 
     const handleEditFor = (targetBusId, targetDate) => {
-        router.push(
-            `/admin/schedule/edit?busId=${encodeURIComponent(
-                targetBusId
-            )}&date=${encodeURIComponent(targetDate)}`
+        // open inline edit modal with this schedule
+        setPreviewSchedule({ busId: targetBusId, date: targetDate });
+        setEditDateValue(targetDate);
+        setEditModalOpen(true);
+    };
+
+    const handleEditRangeFor = (targetBusId, targetDate) => {
+        // open range modal; prefill start=end=targetDate
+        setPreviewSchedule({ busId: targetBusId, date: targetDate });
+        setEditRangeStart(targetDate);
+        setEditRangeEnd(targetDate);
+        setEditRangeOpen(true);
+    };
+
+    const saveEditedRange = async () => {
+        if (!previewSchedule) return showAppToast("error", "No schedule selected");
+        if (!editRangeStart || !editRangeEnd) return showAppToast("error", "Select start and end dates");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(editRangeStart) || !/^\d{4}-\d{2}-\d{2}$/.test(editRangeEnd)) return showAppToast("error", "Invalid date format");
+        if (new Date(editRangeEnd) < new Date(editRangeStart)) return showAppToast("error", "End date cannot be before start date");
+
+        setSaving(true);
+        try {
+            // create range
+            const res = await fetch("/api/schedule", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ busId: previewSchedule.busId, startDate: editRangeStart, endDate: editRangeEnd }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to save schedule range");
+
+            showAppToast("success", "Schedule range saved");
+            setEditRangeOpen(false);
+            setPreviewSchedule(null);
+            fetchSchedules();
+        } catch (err) {
+            console.error(err);
+            showAppToast("error", err.message || "Failed to save schedule range");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDeleteAllFor = (targetBusId) => {
+        const bus = buses.find((b) => b.busId === targetBusId);
+        openConfirm(
+            `Are you sure you want to remove ALL availability for ${bus?.busNumber || targetBusId}? This will delete every scheduled date for this bus.`,
+            async () => {
+                try {
+                    const items = Object.keys(schedules[targetBusId] || {});
+                    // delete each date
+                    const calls = items.map((d) => fetch(`/api/schedule?busId=${encodeURIComponent(targetBusId)}&date=${encodeURIComponent(d)}`, { method: 'DELETE' }).then((r) => r.json().then((j) => ({ ok: r.ok, data: j }))));
+                    const results = await Promise.all(calls);
+                    const failed = results.find((r) => !r.ok);
+                    if (failed) throw new Error(failed.data?.error || 'Failed to delete some schedules');
+
+                    showAppToast('success', 'All schedule dates removed for bus');
+                    fetchSchedules();
+                    if (previewSchedule && previewSchedule.busId === targetBusId) setPreviewSchedule(null);
+                } catch (err) {
+                    console.error(err);
+                    showAppToast('error', err.message || 'Failed to delete all schedules');
+                }
+            }
         );
     };
 
@@ -376,6 +451,46 @@ export default function SchedulePage() {
                 date
             )}`
         );
+    };
+
+    const saveEditedSchedule = async () => {
+        if (!previewSchedule) return showAppToast("error", "No schedule selected");
+        if (!editDateValue) return showAppToast("error", "Select a new date");
+
+        // Basic YYYY-MM-DD check
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(editDateValue)) return showAppToast("error", "Invalid date format");
+
+        setSaving(true);
+        try {
+            // Create new availability for new date
+            const resCreate = await fetch("/api/schedule", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ busId: previewSchedule.busId, date: editDateValue }),
+            });
+            const createData = await resCreate.json();
+            if (!resCreate.ok) throw new Error(createData.error || "Failed to create new schedule date");
+
+            // Remove old date
+            const resDel = await fetch(
+                `/api/schedule?busId=${encodeURIComponent(previewSchedule.busId)}&date=${encodeURIComponent(
+                    previewSchedule.date
+                )}`,
+                { method: "DELETE" }
+            );
+            const delData = await resDel.json();
+            if (!resDel.ok) throw new Error(delData.error || "Failed to remove old schedule date");
+
+            showAppToast("success", "Schedule date updated");
+            setEditModalOpen(false);
+            setPreviewSchedule(null);
+            fetchSchedules();
+        } catch (err) {
+            console.error(err);
+            showAppToast("error", err.message || "Failed to update schedule");
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleReset = () => {
@@ -415,6 +530,88 @@ export default function SchedulePage() {
             </div>
 
             {/* Confirm Modal */}
+            {editModalOpen && (
+                <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 px-4 py-4">
+                    <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                        <h3 className="text-lg font-bold">Edit Schedule Date</h3>
+                        <p className="mt-3 text-sm text-slate-700">Update the scheduled date for the selected bus.</p>
+
+                        <div className="mt-4">
+                            <label className="text-sm text-slate-600">New Date</label>
+                            <input
+                                type="date"
+                                value={editDateValue}
+                                onChange={(e) => setEditDateValue(e.target.value)}
+                                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none"
+                            />
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-end gap-3">
+                            <button
+                                onClick={() => setEditModalOpen(false)}
+                                className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                onClick={saveEditedSchedule}
+                                disabled={saving}
+                                className="rounded-2xl bg-[#059669] px-4 py-2 text-sm font-semibold text-white hover:bg-[#047857] disabled:opacity-50"
+                            >
+                                {saving ? "Saving..." : "Save"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {editRangeOpen && (
+                <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 px-4 py-4">
+                    <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                        <h3 className="text-lg font-bold">Edit Schedule Range</h3>
+                        <p className="mt-3 text-sm text-slate-700">Set a start and end date to add availability for this bus.</p>
+
+                        <div className="mt-4 grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-sm text-slate-600">Start Date</label>
+                                <input
+                                    type="date"
+                                    value={editRangeStart}
+                                    onChange={(e) => setEditRangeStart(e.target.value)}
+                                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-sm text-slate-600">End Date</label>
+                                <input
+                                    type="date"
+                                    value={editRangeEnd}
+                                    onChange={(e) => setEditRangeEnd(e.target.value)}
+                                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-end gap-3">
+                            <button
+                                onClick={() => setEditRangeOpen(false)}
+                                className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                onClick={saveEditedRange}
+                                disabled={saving}
+                                className="rounded-2xl bg-[#059669] px-4 py-2 text-sm font-semibold text-white hover:bg-[#047857] disabled:opacity-50"
+                            >
+                                {saving ? "Saving..." : "Save Range"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {confirmOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-4">
                     <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
@@ -528,8 +725,8 @@ export default function SchedulePage() {
 
                                 <div
                                     className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${singleDateDisabled
-                                            ? "border-slate-100 bg-slate-100"
-                                            : "border-slate-200 bg-white"
+                                        ? "border-slate-100 bg-slate-100"
+                                        : "border-slate-200 bg-white"
                                         }`}
                                 >
                                     <CalendarDays className="h-5 w-5 text-[#f97316]" />
@@ -589,8 +786,8 @@ export default function SchedulePage() {
 
                                     <div
                                         className={`flex h-14 w-full items-center gap-3 rounded-2xl border px-4 transition-all duration-200 ${rangeDisabled
-                                                ? "border-slate-100 bg-slate-100"
-                                                : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
+                                            ? "border-slate-100 bg-slate-100"
+                                            : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
                                             }`}
                                     >
                                         <CalendarDays className="h-5 w-5 shrink-0 text-[#f97316]" />
@@ -615,8 +812,8 @@ export default function SchedulePage() {
 
                                     <div
                                         className={`flex h-14 w-full items-center gap-3 rounded-2xl border px-4 transition-all duration-200 ${rangeDisabled
-                                                ? "border-slate-100 bg-slate-100"
-                                                : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
+                                            ? "border-slate-100 bg-slate-100"
+                                            : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
                                             }`}
                                     >
                                         <CalendarDays className="h-5 w-5 shrink-0 text-[#f97316]" />
@@ -761,16 +958,16 @@ export default function SchedulePage() {
                                     <InfoRow
                                         icon={<MapPin className="h-4 w-4 text-[#f97316]" />}
                                         label="Path"
-                                        value={`${String(selectedBus.startPoint || "--")} → ${String(
-                                            selectedBus.endPoint || "--"
+                                        value={`${resolvePointName(selectedBus.startPoint, "--")} → ${resolvePointName(
+                                            selectedBus.endPoint,
+                                            "--"
                                         )}`}
                                     />
 
                                     <InfoRow
                                         icon={<Clock3 className="h-4 w-4 text-[#f97316]" />}
                                         label="Timing"
-                                        value={`${selectedBus.startTime || "--:--"} → ${selectedBus.endTime || "--:--"
-                                            }`}
+                                        value={`${selectedBus.startTime || "--:--"} → ${selectedBus.endTime || "--:--"}`}
                                     />
 
                                     <InfoRow
@@ -796,6 +993,7 @@ export default function SchedulePage() {
                                         </span>
                                     </div>
 
+                                    {/* Pickup Points */}
                                     {selectedBus.pickupPoints?.length > 0 && (
                                         <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                                             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -805,13 +1003,13 @@ export default function SchedulePage() {
                                                 {selectedBus.pickupPoints.slice(0, 6).map((p, i) => (
                                                     <span
                                                         key={`${p.name}-${i}`}
-                                                        className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 border border-slate-200"
+                                                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700"
                                                     >
                                                         {p.name}
                                                     </span>
                                                 ))}
                                                 {selectedBus.pickupPoints.length > 6 && (
-                                                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 border border-slate-200">
+                                                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500">
                                                         +{selectedBus.pickupPoints.length - 6} more
                                                     </span>
                                                 )}
@@ -819,6 +1017,7 @@ export default function SchedulePage() {
                                         </div>
                                     )}
 
+                                    {/* Drop Points */}
                                     {selectedBus.dropPoints?.length > 0 && (
                                         <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                                             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -828,19 +1027,36 @@ export default function SchedulePage() {
                                                 {selectedBus.dropPoints.slice(0, 6).map((p, i) => (
                                                     <span
                                                         key={`${p.name}-${i}`}
-                                                        className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 border border-slate-200"
+                                                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700"
                                                     >
                                                         {p.name}
                                                     </span>
                                                 ))}
                                                 {selectedBus.dropPoints.length > 6 && (
-                                                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 border border-slate-200">
+                                                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500">
                                                         +{selectedBus.dropPoints.length - 6} more
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* Action Buttons */}
+                                    <div className="flex flex-wrap gap-3 pt-2">
+                                        <button
+                                            onClick={() => handleEditRangeFor(selectedBus.busId, date)}
+                                            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                                        >
+                                            Edit Range
+                                        </button>
+
+                                        <button
+                                            onClick={() => handleDeleteAllFor(selectedBus.busId)}
+                                            className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                                        >
+                                            Delete All
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -913,57 +1129,63 @@ export default function SchedulePage() {
                 </div>
 
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <table className="min-w-full table-auto">
-                        <thead>
-                            <tr className="border-b bg-slate-50 text-left text-sm font-semibold text-slate-600">
-                                <th className="px-3 py-3">Bus</th>
-                                <th className="px-3 py-3">Route</th>
-                                <th className="px-3 py-3">Scheduled Date</th>
-                                <th className="px-3 py-3">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredSchedules.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-500">
-                                        No schedules found
-                                    </td>
-                                </tr>
-                            ) : (
-                                paginatedSchedules.map((item) => (
-                                    <tr
-                                        key={`${item.busId}-${item.date}`}
-                                        className="border-b last:border-b-0 transition hover:bg-slate-50"
-                                    >
-                                        <td className="px-3 py-3 font-medium text-slate-800">{item.busNumber}</td>
-                                        <td className="px-3 py-3 text-slate-700">{item.routeName}</td>
-                                        <td className="px-3 py-3 text-slate-700">{item.date}</td>
-                                        <td className="px-3 py-3">
-                                            {user?.role === "admin" ? (
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => handleEditFor(item.busId, item.date)}
-                                                        className="rounded-2xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                                                    >
-                                                        Edit
-                                                    </button>
-
-                                                    <button
-                                                        onClick={() => handleDeleteFor(item.busId, item.date)}
-                                                        className="rounded-2xl bg-red-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-red-700"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <span className="text-sm text-slate-500">No access</span>
-                                            )}
-                                        </td>
+                    <div className="flex gap-6">
+                        <div className="flex-1">
+                            <table className="min-w-full table-auto">
+                                <thead>
+                                    <tr className="border-b bg-slate-50 text-left text-sm font-semibold text-slate-600">
+                                        <th className="px-3 py-3">Bus</th>
+                                        <th className="px-3 py-3">Route</th>
+                                        <th className="px-3 py-3">Scheduled Date</th>
+                                        <th className="px-3 py-3">Actions</th>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                </thead>
+                                <tbody>
+                                    {filteredSchedules.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-500">
+                                                No schedules found
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        paginatedSchedules.map((item) => (
+                                            <tr
+                                                key={`${item.busId}-${item.date}`}
+                                                className="border-b last:border-b-0 transition hover:bg-slate-50 cursor-pointer"
+                                                onClick={() => handleEditFor(item.busId, item.date)}
+                                            >
+                                                <td className="px-3 py-3 font-medium text-slate-800">{item.busNumber}</td>
+                                                <td className="px-3 py-3 text-slate-700">{item.routeName}</td>
+                                                <td className="px-3 py-3 text-slate-700">{item.date}</td>
+                                                <td className="px-3 py-3">
+                                                    {user?.role === "admin" ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => handleEditFor(item.busId, item.date)}
+                                                                className="rounded-2xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                                                            >
+                                                                Edit
+                                                            </button>
+
+                                                            <button
+                                                                onClick={() => handleDeleteFor(item.busId, item.date)}
+                                                                className="rounded-2xl bg-red-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-red-700"
+                                                            >
+                                                                Delete
+                                                            </button>
+
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-sm text-slate-500">No access</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
 
                     {/* Pagination */}
                     <div className="mt-4 flex items-center justify-between">
