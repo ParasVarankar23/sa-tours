@@ -2,7 +2,7 @@
 
 import SeatLayout from "@/components/SeatLayout";
 import { showAppToast } from "@/lib/client/toast";
-import { getFare } from "@/lib/fare";
+import { BUS_TYPES, getFare, isBorliVillageStop, isCityStop, isDighiVillageStop, normalizeStopName, ROUTES } from "@/lib/fare";
 import {
     BusFront,
     CalendarDays,
@@ -68,9 +68,52 @@ function getStopTime(bus, stopName) {
 function calculateFare({ bus, fromStop, toStop, busType, season }) {
     if (!bus || !fromStop || !toStop) return { fare: 0 };
 
+    // derive canonical route key expected by getFare
+    let routeKey = null;
+    try {
+        const start = normalizeStopName(fromStop || (bus.startPoint && (typeof bus.startPoint === "object" ? bus.startPoint.name : bus.startPoint)));
+        const end = normalizeStopName(toStop || (bus.endPoint && (typeof bus.endPoint === "object" ? bus.endPoint.name : bus.endPoint)));
+
+        if (isBorliVillageStop(start) && isCityStop(end)) routeKey = ROUTES.BORLI_TO_DONGRI;
+        else if (isDighiVillageStop(start) && isCityStop(end)) routeKey = ROUTES.DIGHI_TO_DONGRI;
+        else if (isCityStop(start) && isBorliVillageStop(end)) routeKey = ROUTES.DONGRI_TO_BORLI;
+        else if (isCityStop(start) && isDighiVillageStop(end)) routeKey = ROUTES.DONGRI_TO_DIGHI;
+    } catch (e) {
+        routeKey = null;
+    }
+
+    // fallback: try parsing routeName like "Borli - Dongri"
+    if (!routeKey && bus && bus.routeName) {
+        try {
+            const parts = String(bus.routeName || "").split("-").map((x) => x.trim());
+            if (parts.length === 2) {
+                const a = normalizeStopName(parts[0]);
+                const b = normalizeStopName(parts[1]);
+                if (isBorliVillageStop(a) && isCityStop(b)) routeKey = ROUTES.BORLI_TO_DONGRI;
+                else if (isDighiVillageStop(a) && isCityStop(b)) routeKey = ROUTES.DIGHI_TO_DONGRI;
+                else if (isCityStop(a) && isBorliVillageStop(b)) routeKey = ROUTES.DONGRI_TO_BORLI;
+                else if (isCityStop(a) && isDighiVillageStop(b)) routeKey = ROUTES.DONGRI_TO_DIGHI;
+            }
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    if (!routeKey) return { fare: 0 };
+
+    // normalize bus type to BUS_TYPES
+    const normalizeBusType = (raw) => {
+        if (!raw) return BUS_TYPES.NON_AC;
+        const s = String(raw || "").trim().toLowerCase();
+        if (s === "non-ac" || s === "non ac" || s === "nonac" || s.includes("non")) return BUS_TYPES.NON_AC;
+        if (s === "ac" || s === "a/c" || s.includes("ac")) return BUS_TYPES.AC;
+        return BUS_TYPES.NON_AC;
+    };
+
     // base fare from fare.js
     try {
-        const base = getFare({ route: bus.routeName || bus.route || "", pickup: fromStop, drop: toStop, busType: busType || "NON_AC" });
+        const mappedType = normalizeBusType(busType || bus?.busType || "NON_AC");
+        const base = getFare({ route: routeKey, pickup: fromStop, drop: toStop, busType: mappedType });
         let amount = Number(base?.amount || 0);
 
         // apply any bus-specific fareRules overrides if present and applicable for selected date
@@ -161,6 +204,12 @@ export default function BookingPage() {
     const [bookingForm, setBookingForm] = useState({ name: "", phone: "", email: "", pickup: "", pickupTime: "", drop: "", dropTime: "" });
     const [viewBooking, setViewBooking] = useState(null);
     const [computedFares, setComputedFares] = useState({});
+
+    // cabin/seat counts
+    const totalSeats = Number(selectedBus?.seatLayout) || Number(selectedBus?.seatCount) || 0;
+    const bookedCount = Object.values(bookings || {}).filter((b) => b && String(b.status || "").toLowerCase() === "booked").length;
+    const blockedCount = Object.values(bookings || {}).filter((b) => b && String(b.status || "").toLowerCase() === "blocked").length;
+    const availableCount = Math.max(0, totalSeats - bookedCount - blockedCount);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmLoading, setConfirmLoading] = useState(false);
     const [confirmMessage, setConfirmMessage] = useState("");
@@ -519,6 +568,23 @@ export default function BookingPage() {
                                     <p className="text-sm text-slate-500">
                                         View the full seat layout before starting the booking process.
                                     </p>
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                                            Total: {totalSeats}
+                                        </span>
+                                        <span className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+                                            Cabins: {Array.isArray(selectedBus?.cabins) ? selectedBus.cabins.length : 0}
+                                        </span>
+                                        <span className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                                            Available: {availableCount}
+                                        </span>
+                                        <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                                            Booked: {bookedCount}
+                                        </span>
+                                        <span className="inline-flex items-center gap-2 rounded-full bg-yellow-50 px-3 py-1 text-xs font-semibold text-yellow-700">
+                                            Blocked: {blockedCount}
+                                        </span>
+                                    </div>
                                 </div>
 
                                 <div className="rounded-3xl border border-slate-200 bg-white p-4">
