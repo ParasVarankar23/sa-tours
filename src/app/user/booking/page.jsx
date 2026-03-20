@@ -215,6 +215,8 @@ export default function BookingPage() {
     const [confirmMessage, setConfirmMessage] = useState("");
     const [confirmAction, setConfirmAction] = useState(() => async () => { });
 
+    const todayIso = new Date().toISOString().split("T")[0];
+
     useEffect(() => {
         const fetchAll = async () => {
             setLoading(true);
@@ -246,6 +248,15 @@ export default function BookingPage() {
         };
 
         fetchAll();
+
+        // default date to today so users see today's availability by default
+        try {
+            const today = new Date();
+            const iso = today.toISOString().split("T")[0];
+            if (!date) setDate(iso);
+        } catch (e) {
+            // ignore
+        }
     }, []);
 
     const fetchBookings = async () => {
@@ -310,9 +321,61 @@ export default function BookingPage() {
     const availableBuses = useMemo(() => {
         if (!date) return [];
 
+        const todayIso = new Date().toISOString().split("T")[0];
+        const now = new Date();
+
         return buses.filter((bus) => {
             const busSched = schedules[bus.busId] || {};
-            return busSched[date] && busSched[date].available;
+            const sched = busSched[date] || null;
+
+            // include if admin marked available
+            if (sched && sched.available) return true;
+
+            // if selecting today, allow booking if current time is before (startTime - cutoffMinutes)
+            if (date === todayIso && sched && sched.startTime) {
+                try {
+                    // flexible time parsing for values like "04:00", "4:00 AM", "4:00am", "4:00"
+                    const parseTimeToDate = (dateIso, timeStr) => {
+                        if (!timeStr) return null;
+                        let t = String(timeStr || "").trim().toLowerCase();
+                        // normalize am/pm spacing
+                        t = t.replace(/\s+/g, " ");
+
+                        // detect am/pm
+                        const ampmMatch = t.match(/(am|pm)$/);
+                        let isPM = false;
+                        if (ampmMatch) {
+                            isPM = ampmMatch[1] === "pm";
+                            t = t.replace(/(am|pm)$/, "").trim();
+                        }
+
+                        const parts = t.split(":").map((x) => Number(x));
+                        if (!parts.length || !Number.isFinite(parts[0])) return null;
+                        let hh = parts[0];
+                        const mm = parts.length > 1 && Number.isFinite(parts[1]) ? parts[1] : 0;
+
+                        if (ampmMatch) {
+                            if (hh === 12) hh = isPM ? 12 : 0;
+                            else if (isPM) hh = (hh % 12) + 12;
+                        }
+
+                        const d = new Date(dateIso + "T00:00:00");
+                        d.setHours(hh, mm, 0, 0);
+                        return d;
+                    };
+
+                    const startDt = parseTimeToDate(todayIso, sched.startTime);
+                    if (!startDt) return false;
+
+                    const cutoffMinutes = Number.isFinite(Number(sched.bookingCutoffMinutes)) ? Number(sched.bookingCutoffMinutes) : 30;
+                    const cutoff = new Date(startDt.getTime() - cutoffMinutes * 60 * 1000);
+                    if (now < cutoff) return true;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            return false;
         });
     }, [date, buses, schedules]);
 
@@ -363,10 +426,19 @@ export default function BookingPage() {
                         <CalendarDays className="h-5 w-5 text-[#f97316]" />
                         <input
                             type="date"
+                            min={todayIso}
                             className="w-full bg-transparent text-slate-900 outline-none"
                             value={date}
                             onChange={(e) => {
-                                setDate(e.target.value);
+                                const val = e.target.value;
+                                if (!val) return;
+                                if (val < todayIso) {
+                                    showAppToast("error", "Cannot select past dates");
+                                    setDate(todayIso);
+                                    setSelectedBus(null);
+                                    return;
+                                }
+                                setDate(val);
                                 setSelectedBus(null);
                             }}
                         />
