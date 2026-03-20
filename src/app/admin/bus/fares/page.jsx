@@ -401,6 +401,73 @@ export default function AdminFareViewPage() {
         setValidatedResults((s) => ({ ...(s || {}), [idx]: result }));
     }
 
+    async function handleDeleteRule(idx) {
+        if (!selectedBus) return showAppToast("error", "No bus selected");
+        const ok = window.confirm("Delete this fare rule? This action cannot be undone.");
+        if (!ok) return;
+
+        const updatedRules = Array.isArray(selectedBus.fareRulesRaw)
+            ? selectedBus.fareRulesRaw.slice()
+            : Array.isArray(selectedBus.fareRules)
+                ? selectedBus.fareRules.slice()
+                : [];
+
+        if (idx < 0 || idx >= updatedRules.length) return showAppToast("error", "Invalid rule index");
+
+        updatedRules.splice(idx, 1);
+
+        const payload = {
+            busId: selectedBus.busId,
+            busNumber: selectedBus.busNumber || "",
+            busName: selectedBus.busName || "",
+            busType: selectedBus.busType || "",
+            routeName: selectedBus.routeName || "",
+            startPoint: selectedBus.startPoint || selectedBus.start || { name: selectedBus.startPoint?.name || selectedBus.start || "", time: selectedBus.startTime || "" },
+            startTime: selectedBus.startTime || "",
+            endPoint: selectedBus.endPoint || selectedBus.end || { name: selectedBus.endPoint?.name || selectedBus.end || "", time: selectedBus.endTime || "" },
+            endTime: selectedBus.endTime || "",
+            seatLayout: String(selectedBus.seatLayout || ""),
+            pickupPoints: Array.isArray(selectedBus.pickupPoints) ? selectedBus.pickupPoints : [],
+            dropPoints: Array.isArray(selectedBus.dropPoints) ? selectedBus.dropPoints : [],
+            cabins: Array.isArray(selectedBus.cabins) ? selectedBus.cabins : [],
+            fareRules: updatedRules,
+            fareRulesRaw: updatedRules,
+        };
+
+        try {
+            setLoading(true);
+            const res = await fetch("/api/bus", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to delete rule");
+            showAppToast("success", "Rule deleted");
+
+            // refresh list
+            const listRes = await fetch("/api/bus");
+            const listData = await listRes.json();
+            if (listRes.ok) setBuses(listData.buses || []);
+            try {
+                if (typeof window !== "undefined" && 'BroadcastChannel' in window) {
+                    try {
+                        const ch = new BroadcastChannel('sa-tours-buses');
+                        ch.postMessage({ type: 'bus-updated', busId: selectedBus?.busId || null });
+                        ch.close();
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+            } catch (e) { }
+        } catch (e) {
+            console.error(e);
+            showAppToast("error", e.message || "Failed to delete rule");
+        } finally {
+            setLoading(false);
+        }
+    }
+
     function openEditRule(idx) {
         const r = rawRules[idx] || {};
         setEditingRuleIndex(idx);
@@ -821,6 +888,13 @@ export default function AdminFareViewPage() {
                                                     className="rounded-2xl bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100"
                                                 >
                                                     Edit
+                                                </button>
+
+                                                <button
+                                                    onClick={() => handleDeleteRule(i)}
+                                                    className="rounded-2xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                                                >
+                                                    Delete
                                                 </button>
 
                                                 {validatedResults && validatedResults[i] ? (

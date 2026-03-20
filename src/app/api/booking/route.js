@@ -3,6 +3,14 @@ import {
     sendBookingCancellation,
     sendBookingConfirmation,
 } from "../../../lib/emailService";
+import {
+    getFare,
+    isBorliVillageStop,
+    isCityStop,
+    isDighiVillageStop,
+    normalizeStopName,
+    ROUTES,
+} from "../../../lib/fare";
 import { getAdminDb } from "../../../lib/firebaseAdmin";
 // verifyAuthToken is imported dynamically where needed to avoid startup cost
 
@@ -21,6 +29,27 @@ function normalizeKey(v) {
     return normalizeText(v).toLowerCase();
 }
 
+async function isAdminOrOwnerFromRequest(req) {
+    const authHeader =
+        req.headers.get("authorization") || req.headers.get("Authorization") || "";
+
+    if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
+        return false;
+    }
+
+    const token = authHeader.split(" ")[1];
+    if (!token) return false;
+
+    try {
+        const { verifyAuthToken } = await import("../../../lib/firebaseAdmin");
+        const decoded = await verifyAuthToken(token);
+
+        return !!decoded && (decoded.role === "admin" || decoded.role === "owner");
+    } catch (e) {
+        return false;
+    }
+}
+
 /* =========================
    New Bus Structure Helpers
    Supports:
@@ -32,7 +61,12 @@ function normalizeKey(v) {
 
 function getStartPoint(busData) {
     const sp = busData?.startPoint;
-    if (!sp) return { name: "", time: "" };
+    if (!sp) {
+        return {
+            name: normalizeText(busData?.startPointName || busData?.startStop || busData?.from),
+            time: normalizeText(busData?.startTime),
+        };
+    }
 
     if (typeof sp === "string") {
         return {
@@ -49,7 +83,12 @@ function getStartPoint(busData) {
 
 function getEndPoint(busData) {
     const ep = busData?.endPoint;
-    if (!ep) return { name: "", time: "" };
+    if (!ep) {
+        return {
+            name: normalizeText(busData?.endPointName || busData?.endStop || busData?.to),
+            time: normalizeText(busData?.endTime),
+        };
+    }
 
     if (typeof ep === "string") {
         return {
@@ -146,20 +185,122 @@ function getDropTime(busData, drop) {
 }
 
 function findExactFare(busData, fromStop, toStop) {
+    // Prefer using expanded effective fareRules when available
     const rules = Array.isArray(busData?.fareRules) ? busData.fareRules : [];
+    const raw = Array.isArray(busData?.fareRulesRaw) ? busData.fareRulesRaw : [];
 
+    // 1) exact lookup on expanded fareRules
     const rule = rules.find(
         (r) =>
             normalizeKey(r?.from) === normalizeKey(fromStop) &&
             normalizeKey(r?.to) === normalizeKey(toStop)
     );
 
-    if (!rule) return null;
+    if (rule) {
+        const fare = Number(rule.fare);
+        if (Number.isFinite(fare) && fare > 0) return fare;
+    }
 
-    const fare = Number(rule.fare);
-    if (!Number.isFinite(fare) || fare <= 0) return null;
+    // 2) fallback: expand raw fare rules
+    if (raw.length > 0) {
+        const pickupOptions = getPickupOptions(busData); // [{ name, time }]
+        const expanded = [];
 
-    return fare;
+        for (let i = 0; i < raw.length; i++) {
+            const r = raw[i] || {};
+            const from = normalizeText(r.from);
+            const to = normalizeText(r.to);
+            const fare = Number(r.fare);
+            const apply = !!r.applyToAllNextPickupsBeforeDrop;
+
+            if (!from || !to || !Number.isFinite(fare) || fare <= 0) continue;
+
+            if (apply) {
+                const fromIndex = pickupOptions.findIndex(
+                    (p) => normalizeKey(p?.name) === normalizeKey(from)
+                );
+
+                if (fromIndex !== -1) {
+                    for (let j = fromIndex; j < pickupOptions.length; j++) {
+                        expanded.push({
+                            from: pickupOptions[j].name,
+                            to,
+                            fare,
+                        });
+                    }
+                } else {
+                    expanded.push({ from, to, fare });
+                }
+            } else {
+                expanded.push({ from, to, fare });
+            }
+        }
+
+        const match = expanded.find(
+            (r) =>
+                normalizeKey(r.from) === normalizeKey(fromStop) &&
+                normalizeKey(r.to) === normalizeKey(toStop)
+        );
+
+        if (match) {
+            const fare = Number(match.fare);
+            if (Number.isFinite(fare) && fare > 0) return fare;
+        }
+    }
+
+    // 3) fallback to fare.js route-based calculation
+    try {
+        const pickupNorm = normalizeStopName(fromStop);
+        const dropNorm = normalizeStopName(toStop);
+
+        let routeKey = null;
+
+        if (isBorliVillageStop(pickupNorm) && isCityStop(dropNorm)) {
+            routeKey = ROUTES.BORLI_TO_DONGRI;
+        } else if (isDighiVillageStop(pickupNorm) && isCityStop(dropNorm)) {
+            routeKey = ROUTES.DIGHI_TO_DONGRI;
+        } else if (isCityStop(pickupNorm) && isBorliVillageStop(dropNorm)) {
+            routeKey = ROUTES.DONGRI_TO_BORLI;
+        } else if (isCityStop(pickupNorm) && isDighiVillageStop(dropNorm)) {
+            routeKey = ROUTES.DONGRI_TO_DIGHI;
+        }
+
+        if (routeKey) {
+            const rawType = String(busData?.busType || "").trim();
+
+            const mappedType = (() => {
+                const s = rawType.toLowerCase();
+                if (!s) return "NON_AC";
+                if (
+                    s === "non-ac" ||
+                    s === "non ac" ||
+                    s === "nonac" ||
+                    s.includes("non")
+                ) {
+                    return "NON_AC";
+                }
+                if (s === "ac" || s === "a/c" || s.includes("ac")) {
+                    return "AC";
+                }
+                return "NON_AC";
+            })();
+
+            const base = getFare({
+                route: routeKey,
+                pickup: fromStop,
+                drop: toStop,
+                busType: mappedType,
+            });
+
+            if (base && Number.isFinite(Number(base.amount)) && Number(base.amount) > 0) {
+                return Number(base.amount);
+            }
+        }
+    } catch (e) {
+        console.error("findExactFare base lookup failed", e);
+    }
+
+    return null;
 }
 
 function validatePickupDrop(busData, pickup, drop) {
@@ -276,24 +417,12 @@ export async function POST(req) {
             );
         }
 
-        // exact fare from bus fareRules only
         let exactFare = findExactFare(busData, pickup, drop);
+        let finalFare = exactFare;
+
         // If there is no configured exact fare, allow admin override with a valid fare
         if (exactFare === null) {
-            const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
-            let adminAllowed = false;
-            if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
-                const token = authHeader.split(" ")[1];
-                try {
-                    const { verifyAuthToken } = await import("../../../lib/firebaseAdmin");
-                    const decoded = await verifyAuthToken(token);
-                    if (decoded && (decoded.role === "admin" || decoded.role === "owner")) {
-                        adminAllowed = true;
-                    }
-                } catch (e) {
-                    adminAllowed = false;
-                }
-            }
+            const adminAllowed = await isAdminOrOwnerFromRequest(req);
 
             if (!adminAllowed) {
                 return NextResponse.json(
@@ -301,13 +430,14 @@ export async function POST(req) {
                     { status: 400 }
                 );
             }
-            // admin is allowed — but require body.fare to be provided and valid
+
             if (body.fare === undefined || body.fare === null || body.fare === "") {
                 return NextResponse.json(
                     { success: false, error: "Admin override requires a fare value" },
                     { status: 400 }
                 );
             }
+
             const sentFareOnly = Number(body.fare);
             if (!Number.isFinite(sentFareOnly) || sentFareOnly <= 0) {
                 return NextResponse.json(
@@ -315,36 +445,23 @@ export async function POST(req) {
                     { status: 400 }
                 );
             }
-            // set exactFare to sent value for downstream usage
-            exactFare = sentFareOnly;
+
+            finalFare = sentFareOnly;
         }
 
-        // if frontend sent fare, validate it. Allow override if caller is authenticated admin/owner.
+        // If frontend sent fare, validate it. Allow override if caller is authenticated admin/owner.
         if (body.fare !== undefined && body.fare !== null && body.fare !== "") {
             const sentFare = Number(body.fare);
-            if (!Number.isFinite(sentFare)) {
+
+            if (!Number.isFinite(sentFare) || sentFare <= 0) {
                 return NextResponse.json(
                     { success: false, error: "Invalid fare sent from frontend" },
                     { status: 400 }
                 );
             }
 
-            if (sentFare !== exactFare) {
-                // check Authorization header for admin token
-                const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
-                let allowed = false;
-                if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
-                    const token = authHeader.split(" ")[1];
-                    try {
-                        const { verifyAuthToken } = await import("../../../lib/firebaseAdmin");
-                        const decoded = await verifyAuthToken(token);
-                        if (decoded && (decoded.role === "admin" || decoded.role === "owner")) {
-                            allowed = true;
-                        }
-                    } catch (e) {
-                        allowed = false;
-                    }
-                }
+            if (exactFare !== null && sentFare !== exactFare) {
+                const allowed = await isAdminOrOwnerFromRequest(req);
 
                 if (!allowed) {
                     return NextResponse.json(
@@ -352,12 +469,16 @@ export async function POST(req) {
                         { status: 400 }
                     );
                 }
-                // allowed override; we'll use sent fare when creating booking
             }
+
+            finalFare = sentFare;
         }
 
         const resolvedPickupTime = getPickupTime(busData, pickup) || null;
         const resolvedDropTime = getDropTime(busData, drop) || null;
+
+        const startPointData = getStartPoint(busData);
+        const endPointData = getEndPoint(busData);
 
         const seatRef = db.ref(`bookings/${date}/${busId}/${seatNo}`);
         const existing = await seatRef.once("value");
@@ -382,12 +503,19 @@ export async function POST(req) {
             drop,
             dropTime: resolvedDropTime,
 
-            // prefer frontend-sent fare when admin override is allowed, otherwise use exactFare
-            fare: (body.fare !== undefined && body.fare !== null && body.fare !== "") ? Number(body.fare) : exactFare,
+            fare: finalFare,
 
             busNumber: busNumber || normalizeText(busData.busNumber) || null,
-            startTime: startTime || normalizeText(busData.startTime) || null,
-            endTime: endTime || normalizeText(busData.endTime) || null,
+            startTime:
+                startTime ||
+                startPointData.time ||
+                normalizeText(busData.startTime) ||
+                null,
+            endTime:
+                endTime ||
+                endPointData.time ||
+                normalizeText(busData.endTime) ||
+                null,
 
             createdAt: now,
             updatedAt: now,
@@ -438,6 +566,7 @@ export async function PUT(req) {
         const busId = normalizeText(body.busId);
         const date = normalizeText(body.date);
         const seatNo = normalizeText(body.seatNo);
+
         const name = normalizeText(body.name);
         const phone = normalizeText(body.phone);
         const email = normalizeText(body.email);
@@ -478,13 +607,24 @@ export async function PUT(req) {
             updatedAt: new Date().toISOString(),
         };
 
-        if (name) updates.name = name;
-        if (phone) updates.phone = phone;
-        if (email) updates.email = email;
+        // safer partial updates (supports clearing email)
+        if (body.name !== undefined) {
+            updates.name = name || existingVal.name || "";
+        }
 
-        if (pickup || drop) {
-            const finalPickup = pickup || existingVal.pickup || "";
-            const finalDrop = drop || existingVal.drop || "";
+        if (body.phone !== undefined) {
+            updates.phone = phone || existingVal.phone || "";
+        }
+
+        if (body.email !== undefined) {
+            updates.email = email || null;
+        }
+
+        let finalFare = null;
+
+        if (body.pickup !== undefined || body.drop !== undefined) {
+            const finalPickup = body.pickup !== undefined ? pickup : existingVal.pickup || "";
+            const finalDrop = body.drop !== undefined ? drop : existingVal.drop || "";
 
             const routeValidation = validatePickupDrop(busData, finalPickup, finalDrop);
             if (!routeValidation.ok) {
@@ -495,22 +635,9 @@ export async function PUT(req) {
             }
 
             let exactFare = findExactFare(busData, finalPickup, finalDrop);
+
             if (exactFare === null) {
-                // allow admin override when no exact fare configured
-                const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
-                let adminAllowed = false;
-                if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
-                    const token = authHeader.split(" ")[1];
-                    try {
-                        const { verifyAuthToken } = await import("../../../lib/firebaseAdmin");
-                        const decoded = await verifyAuthToken(token);
-                        if (decoded && (decoded.role === "admin" || decoded.role === "owner")) {
-                            adminAllowed = true;
-                        }
-                    } catch (e) {
-                        adminAllowed = false;
-                    }
-                }
+                const adminAllowed = await isAdminOrOwnerFromRequest(req);
 
                 if (!adminAllowed) {
                     return NextResponse.json(
@@ -519,13 +646,13 @@ export async function PUT(req) {
                     );
                 }
 
-                // admin must provide a fare when overriding
                 if (body.fare === undefined || body.fare === null || body.fare === "") {
                     return NextResponse.json(
                         { success: false, error: "Admin override requires a fare value" },
                         { status: 400 }
                     );
                 }
+
                 const sentFareOnly = Number(body.fare);
                 if (!Number.isFinite(sentFareOnly) || sentFareOnly <= 0) {
                     return NextResponse.json(
@@ -533,6 +660,7 @@ export async function PUT(req) {
                         { status: 400 }
                     );
                 }
+
                 exactFare = sentFareOnly;
             }
 
@@ -540,12 +668,14 @@ export async function PUT(req) {
             updates.drop = finalDrop;
             updates.pickupTime = getPickupTime(busData, finalPickup) || null;
             updates.dropTime = getDropTime(busData, finalDrop) || null;
-            updates.fare = exactFare;
+
+            finalFare = exactFare;
         }
 
         // allow admin to override fare via body.fare even when updating
         if (body.fare !== undefined && body.fare !== null && body.fare !== "") {
             const sentFare = Number(body.fare);
+
             if (!Number.isFinite(sentFare) || sentFare <= 0) {
                 return NextResponse.json(
                     { success: false, error: "Invalid fare sent from frontend" },
@@ -553,23 +683,18 @@ export async function PUT(req) {
                 );
             }
 
-            const currentFare = updates.fare || existingVal.fare || null;
-            if (currentFare === null || Number(sentFare) !== Number(currentFare)) {
-                // require admin token to override
-                const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
-                let allowed = false;
-                if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
-                    const token = authHeader.split(" ")[1];
-                    try {
-                        const { verifyAuthToken } = await import("../../../lib/firebaseAdmin");
-                        const decoded = await verifyAuthToken(token);
-                        if (decoded && (decoded.role === "admin" || decoded.role === "owner")) {
-                            allowed = true;
-                        }
-                    } catch (e) {
-                        allowed = false;
-                    }
-                }
+            const currentFareForCompare =
+                finalFare !== null
+                    ? finalFare
+                    : existingVal.fare !== undefined && existingVal.fare !== null
+                        ? Number(existingVal.fare)
+                        : null;
+
+            if (
+                currentFareForCompare !== null &&
+                Number(sentFare) !== Number(currentFareForCompare)
+            ) {
+                const allowed = await isAdminOrOwnerFromRequest(req);
 
                 if (!allowed) {
                     return NextResponse.json(
@@ -579,7 +704,23 @@ export async function PUT(req) {
                 }
             }
 
-            updates.fare = Number(sentFare);
+            // if there was no fare from route calc and no pickup/drop change, still allow admin override
+            if (currentFareForCompare === null) {
+                const allowed = await isAdminOrOwnerFromRequest(req);
+
+                if (!allowed) {
+                    return NextResponse.json(
+                        { success: false, error: "Invalid fare sent from frontend" },
+                        { status: 400 }
+                    );
+                }
+            }
+
+            finalFare = sentFare;
+        }
+
+        if (finalFare !== null) {
+            updates.fare = finalFare;
         }
 
         // allow payment fields update if sent
@@ -594,13 +735,15 @@ export async function PUT(req) {
         }
 
         if (body.status !== undefined) {
-            updates.status = body.status ? normalizeText(body.status) : existingVal.status || "booked";
+            updates.status = body.status
+                ? normalizeText(body.status)
+                : existingVal.status || "booked";
         }
 
         await seatRef.update(updates);
 
         try {
-            const emailToUse = updates.email || existingVal.email || "";
+            const emailToUse = updates.email ?? existingVal.email ?? "";
             const nameToUse = updates.name || existingVal.name || "Passenger";
 
             if (emailToUse) {
@@ -670,7 +813,11 @@ export async function DELETE(req) {
 
             emailResult.attempted = true;
             try {
-                await sendBookingCancellation(emailTo, nameTo, { seatNo, date, ...existingVal });
+                await sendBookingCancellation(emailTo, nameTo, {
+                    seatNo,
+                    date,
+                    ...existingVal,
+                });
                 emailResult.sent = true;
             } catch (e) {
                 emailResult.error = e?.message || String(e);

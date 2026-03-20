@@ -65,7 +65,7 @@ function getStopTime(bus, stopName) {
     return typeof found === "string" ? "" : normalizeText(found.time || found.stopTime || "");
 }
 
-function calculateFare({ bus, fromStop, toStop, busType, season }) {
+function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
     if (!bus || !fromStop || !toStop) return { fare: 0 };
 
     // derive canonical route key expected by getFare
@@ -115,10 +115,25 @@ function calculateFare({ bus, fromStop, toStop, busType, season }) {
         const mappedType = normalizeBusType(busType || bus?.busType || "NON_AC");
         const base = getFare({ route: routeKey, pickup: fromStop, drop: toStop, busType: mappedType });
         let amount = Number(base?.amount || 0);
+        let ruleApplied = false;
 
         // apply any bus-specific fareRules overrides if present and applicable for selected date
-        const rules = Array.isArray(bus.fareRulesRaw) ? bus.fareRulesRaw : Array.isArray(bus.fareRules) ? bus.fareRules : [];
-        if (rules.length > 0) {
+        const collectRawRules = () => {
+            if (Array.isArray(bus.fareRules) && bus.fareRules.length) return bus.fareRules;
+            if (Array.isArray(bus.fareRulesRaw) && bus.fareRulesRaw.length) return bus.fareRulesRaw;
+            if (bus.pricingRules) {
+                if (Array.isArray(bus.pricingRules.fareRules) && bus.pricingRules.fareRules.length) return bus.pricingRules.fareRules;
+                if (Array.isArray(bus.pricingRules.fareRulesRaw) && bus.pricingRules.fareRulesRaw.length) return bus.pricingRules.fareRulesRaw;
+                if (Array.isArray(bus.pricingRules) && bus.pricingRules.length) return bus.pricingRules;
+            }
+            return [];
+        };
+
+        const rawRules = collectRawRules();
+        if (typeof window !== "undefined" && window && window.location) {
+            console.debug && console.debug("[fare-debug] collectRawRules", { fromStop, toStop, dateStr, rawRules });
+        }
+        if (rawRules.length > 0) {
             const pickupOptions = (() => {
                 if (Array.isArray(bus.pickupPoints)) {
                     const resolve = (p) => (typeof p === "object" ? normalizeText(p.name) : normalizeText(p));
@@ -134,15 +149,26 @@ function calculateFare({ bus, fromStop, toStop, busType, season }) {
                 return stops.slice(0, stops.length - 1);
             })();
 
+            const toDateOnly = (v) => {
+                if (!v) return "";
+                try {
+                    const d = new Date(String(v));
+                    if (Number.isNaN(d.getTime())) return "";
+                    return d.toISOString().split("T")[0];
+                } catch (e) {
+                    return "";
+                }
+            };
+
             const expanded = [];
-            for (let i = 0; i < rules.length; i++) {
-                const r = rules[i] || {};
+            for (let i = 0; i < rawRules.length; i++) {
+                const r = rawRules[i] || {};
                 const from = String(r.from || "").trim();
                 const to = String(r.to || "").trim();
-                const fareVal = r.fare;
-                const fareStartDate = r.fareStartDate || "";
-                const fareEndDate = r.fareEndDate || "";
-                const apply = !!r.applyToAllNextPickupsBeforeDrop;
+                const fareVal = r.fare !== undefined ? r.fare : r.amount;
+                const fareStartDate = toDateOnly(r.fareStartDate || r.startDate || "");
+                const fareEndDate = toDateOnly(r.fareEndDate || r.endDate || "");
+                const apply = Boolean(r.applyToAllNextPickupsBeforeDrop || r.applyToAllPreviousPickups || r.apply);
                 if (!from && !to && (fareVal === undefined || fareVal === "")) continue;
                 if (apply) {
                     const fromIndex = pickupOptions.findIndex((p) => normalizeKey(p) === normalizeKey(from));
@@ -161,15 +187,12 @@ function calculateFare({ bus, fromStop, toStop, busType, season }) {
                 try {
                     const d = new Date(dateStr);
                     if (Number.isNaN(d.getTime())) return false;
+                    const target = d.toISOString().split("T")[0];
                     if (rule.fareStartDate) {
-                        const s = new Date(rule.fareStartDate);
-                        if (Number.isNaN(s.getTime())) return false;
-                        if (d < new Date(s.getFullYear(), s.getMonth(), s.getDate())) return false;
+                        if (target < rule.fareStartDate) return false;
                     }
                     if (rule.fareEndDate) {
-                        const e = new Date(rule.fareEndDate);
-                        if (Number.isNaN(e.getTime())) return false;
-                        if (d > new Date(e.getFullYear(), e.getMonth(), e.getDate())) return false;
+                        if (target > rule.fareEndDate) return false;
                     }
                     return true;
                 } catch (e) {
@@ -177,17 +200,33 @@ function calculateFare({ bus, fromStop, toStop, busType, season }) {
                 }
             };
 
-            const matches = expanded.filter((r) => normalizeKey(r.from) === normalizeKey(fromStop) && normalizeKey(r.to) === normalizeKey(toStop) && ruleAppliesOnDate(r, date));
+            if (typeof window !== "undefined" && window && window.location) {
+                console.debug && console.debug("[fare-debug] expandedRules", { expanded });
+            }
+
+            const matches = expanded.filter((r) => normalizeKey(r.from) === normalizeKey(fromStop) && normalizeKey(r.to) === normalizeKey(toStop) && ruleAppliesOnDate(r, dateStr));
+            if (typeof window !== "undefined" && window && window.location) {
+                console.debug && console.debug("[fare-debug] matches", { matches, dateStr });
+            }
             if (matches && matches.length > 0) {
                 const chosen = matches[matches.length - 1];
+                if (typeof window !== "undefined" && window && window.location) {
+                    console.debug && console.debug("[fare-debug] chosen", { chosen });
+                }
                 const overrideFare = Number(chosen.fare);
-                if (Number.isFinite(overrideFare) && overrideFare > 0) amount = overrideFare;
+                if (Number.isFinite(overrideFare) && overrideFare > 0) {
+                    amount = overrideFare;
+                    ruleApplied = true;
+                    if (typeof window !== "undefined" && window && window.location) {
+                        console.debug && console.debug("[fare-debug] overrideApplied", { amount, ruleApplied });
+                    }
+                }
             }
         }
 
-        return { fare: amount };
+        return { fare: amount, ruleApplied };
     } catch (e) {
-        return { fare: 0 };
+        return { fare: 0, ruleApplied: false };
     }
 }
 
@@ -214,40 +253,39 @@ export default function BookingPage() {
     const [confirmLoading, setConfirmLoading] = useState(false);
     const [confirmMessage, setConfirmMessage] = useState("");
     const [confirmAction, setConfirmAction] = useState(() => async () => { });
+    const [contactOpen, setContactOpen] = useState(false);
+    const CONTACT_PHONE = "9209471601";
 
     const todayIso = new Date().toISOString().split("T")[0];
 
-    useEffect(() => {
-        const fetchAll = async () => {
-            setLoading(true);
-            try {
-                const [bRes, sRes] = await Promise.all([
-                    fetch("/api/bus"),
-                    fetch("/api/schedule"),
-                ]);
+    async function fetchAllData() {
+        setLoading(true);
+        try {
+            const [bRes, sRes] = await Promise.all([fetch("/api/bus"), fetch("/api/schedule")]);
 
-                const bData = await bRes.json();
-                const sData = await sRes.json();
+            const bData = await bRes.json();
+            const sData = await sRes.json();
 
-                if (!bRes.ok) {
-                    throw new Error(bData.error || "Failed to load buses");
-                }
-
-                if (!sRes.ok) {
-                    throw new Error(sData.error || "Failed to load schedules");
-                }
-
-                setBuses(bData.buses || []);
-                setSchedules(sData.schedules || {});
-            } catch (err) {
-                console.error(err);
-                showAppToast("error", err.message || "Failed to load data");
-            } finally {
-                setLoading(false);
+            if (!bRes.ok) {
+                throw new Error(bData.error || "Failed to load buses");
             }
-        };
 
-        fetchAll();
+            if (!sRes.ok) {
+                throw new Error(sData.error || "Failed to load schedules");
+            }
+
+            setBuses(bData.buses || []);
+            setSchedules(sData.schedules || {});
+        } catch (err) {
+            console.error(err);
+            showAppToast("error", err.message || "Failed to load data");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    useEffect(() => {
+        fetchAllData();
 
         // default date to today so users see today's availability by default
         try {
@@ -258,6 +296,31 @@ export default function BookingPage() {
             // ignore
         }
     }, []);
+
+    // listen for bus updates from admin actions in other tabs
+    useEffect(() => {
+        if (typeof window === "undefined" || !('BroadcastChannel' in window)) return;
+        const ch = new BroadcastChannel('sa-tours-buses');
+        const onMsg = (ev) => {
+            try {
+                const data = ev.data || {};
+                if (data && data.type === 'bus-updated') {
+                    // refetch buses/schedules so fares reflect latest rules
+                    fetchAllData();
+                    // also refetch bookings for selected bus/date if open
+                    fetchBookings();
+                }
+            } catch (e) {
+                // ignore
+            }
+        };
+        ch.addEventListener('message', onMsg);
+        return () => {
+            ch.removeEventListener('message', onMsg);
+            try { ch.close(); } catch (e) { }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedBus, date]);
 
     const fetchBookings = async () => {
         try {
@@ -307,6 +370,7 @@ export default function BookingPage() {
                     toStop: form.drop,
                     busType: selectedBus?.busType || "AC",
                     season,
+                    dateStr: date,
                 });
 
                 out[seat] = Number(fareRes?.fare || 0);
@@ -950,6 +1014,7 @@ export default function BookingPage() {
                                                             toStop: form.drop,
                                                             busType: selectedBus.busType || "AC",
                                                             season,
+                                                            dateStr: date,
                                                         });
                                                         if (fareRes && fareRes.fare !== undefined) {
                                                             payload.fare = Number(fareRes.fare) || 0;
@@ -1110,34 +1175,118 @@ export default function BookingPage() {
                                                 Close
                                             </button>
 
-                                            {canCancelBookingForUser(viewBooking.booking, user) && (
-                                                <button
-                                                    onClick={() => {
-                                                        const seat = String(viewBooking.seat);
-                                                        setConfirmMessage(`Cancel booking for seat ${seat}? This will delete the booking record.`);
-                                                        setConfirmAction(() => async () => {
-                                                            try {
-                                                                const s = String(viewBooking.seat);
-                                                                const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`, { method: "DELETE" });
-                                                                const data = await res.json();
-                                                                if (!res.ok) throw new Error(data.error || "Cancel failed");
+                                            {canCancelBookingForUser(viewBooking.booking, user) && (() => {
+                                                // determine if booking fare matches the regular fare
+                                                try {
+                                                    const bookingObj = viewBooking.booking || {};
+                                                    const busForPricing = { ...(selectedBus || {}) };
+                                                    const sched = (schedules && selectedBus && schedules[selectedBus.busId] && schedules[selectedBus.busId][date]) || null;
+                                                    if (sched && sched.pricingOverride) {
+                                                        busForPricing.pricingRules = {
+                                                            ...(selectedBus.pricingRules || {}),
+                                                            ...(sched.pricingOverride || {}),
+                                                        };
+                                                    }
+                                                    const season = !!(sched && sched.season);
+                                                    const fareRes = calculateFare({
+                                                        bus: busForPricing,
+                                                        fromStop: bookingObj.pickup,
+                                                        toStop: bookingObj.drop,
+                                                        busType: selectedBus?.busType || "AC",
+                                                        season,
+                                                        dateStr: date,
+                                                    }) || { fare: 0, ruleApplied: false };
 
-                                                                showAppToast("success", data.message || "Booking cancelled");
-                                                                setViewBooking(null);
-                                                                await fetchBookings();
-                                                            } catch (err) {
-                                                                console.error(err);
-                                                                showAppToast("error", err.message || "Cancel failed");
-                                                                throw err;
-                                                            }
-                                                        });
-                                                        setConfirmOpen(true);
-                                                    }}
-                                                    className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600"
-                                                >
-                                                    Cancel Booking
-                                                </button>
-                                            )}
+                                                    const expectedFare = Number(fareRes.fare || 0);
+                                                    const ruleApplied = Boolean(fareRes.ruleApplied);
+                                                    const actualFare = Number(bookingObj.fare || 0);
+
+                                                    // If a fare rule/override applies, block cancel and show contact
+                                                    if (ruleApplied) {
+                                                        return (
+                                                            <button
+                                                                onClick={() => setContactOpen(true)}
+                                                                className="rounded-2xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700"
+                                                            >
+                                                                Contact Support
+                                                            </button>
+                                                        );
+                                                    }
+
+                                                    const faresMatch = Number.isFinite(expectedFare) && Number.isFinite(actualFare) && Math.abs(expectedFare - actualFare) < 0.01;
+
+                                                    if (faresMatch) {
+                                                        return (
+                                                            <button
+                                                                onClick={() => {
+                                                                    const seat = String(viewBooking.seat);
+                                                                    setConfirmMessage(`Cancel booking for seat ${seat}? This will delete the booking record.`);
+                                                                    setConfirmAction(() => async () => {
+                                                                        try {
+                                                                            const s = String(viewBooking.seat);
+                                                                            const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`, { method: "DELETE" });
+                                                                            const data = await res.json();
+                                                                            if (!res.ok) throw new Error(data.error || "Cancel failed");
+
+                                                                            showAppToast("success", data.message || "Booking cancelled");
+                                                                            setViewBooking(null);
+                                                                            await fetchBookings();
+                                                                        } catch (err) {
+                                                                            console.error(err);
+                                                                            showAppToast("error", err.message || "Cancel failed");
+                                                                            throw err;
+                                                                        }
+                                                                    });
+                                                                    setConfirmOpen(true);
+                                                                }}
+                                                                className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600"
+                                                            >
+                                                                Cancel Booking
+                                                            </button>
+                                                        );
+                                                    }
+
+                                                    // fares differ (or mismatch) — show contact as fallback
+                                                    return (
+                                                        <button
+                                                            onClick={() => setContactOpen(true)}
+                                                            className="rounded-2xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700"
+                                                        >
+                                                            Contact Support
+                                                        </button>
+                                                    );
+                                                } catch (e) {
+                                                    // fallback: allow cancel if any error occurs
+                                                    return (
+                                                        <button
+                                                            onClick={() => {
+                                                                const seat = String(viewBooking.seat);
+                                                                setConfirmMessage(`Cancel booking for seat ${seat}? This will delete the booking record.`);
+                                                                setConfirmAction(() => async () => {
+                                                                    try {
+                                                                        const s = String(viewBooking.seat);
+                                                                        const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`, { method: "DELETE" });
+                                                                        const data = await res.json();
+                                                                        if (!res.ok) throw new Error(data.error || "Cancel failed");
+
+                                                                        showAppToast("success", data.message || "Booking cancelled");
+                                                                        setViewBooking(null);
+                                                                        await fetchBookings();
+                                                                    } catch (err) {
+                                                                        console.error(err);
+                                                                        showAppToast("error", err.message || "Cancel failed");
+                                                                        throw err;
+                                                                    }
+                                                                });
+                                                                setConfirmOpen(true);
+                                                            }}
+                                                            className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600"
+                                                        >
+                                                            Cancel Booking
+                                                        </button>
+                                                    );
+                                                }
+                                            })()}
 
                                             <button
                                                 onClick={() => {
@@ -1177,6 +1326,20 @@ export default function BookingPage() {
                                         }
                                     }}
                                 />
+                            )}
+
+                            {contactOpen && (
+                                <div className="fixed inset-0 z-[61] flex items-center justify-center bg-black/50 px-4">
+                                    <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+                                        <h3 className="text-lg font-bold text-slate-900">Contact Support</h3>
+                                        <p className="mt-3 text-sm text-slate-700">This booking has a non-standard fare. To modify or cancel, please contact support:</p>
+                                        <p className="mt-4 text-xl font-semibold text-amber-700">{CONTACT_PHONE}</p>
+                                        <div className="mt-6 flex justify-end gap-3">
+                                            <a href={`tel:${CONTACT_PHONE}`} className="rounded-2xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white">Call Now</a>
+                                            <button onClick={() => setContactOpen(false)} className="rounded-2xl border px-4 py-2 text-sm">Close</button>
+                                        </div>
+                                    </div>
+                                </div>
                             )}
 
                         </div>
