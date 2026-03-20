@@ -411,7 +411,17 @@ function buildEffectiveFareRules(fareRules, pickupPoints, dropPoints) {
 function getSanitizedBusData(body) {
     const busNumber = normalizeText(body.busNumber);
     const busName = normalizeText(body.busName);
-    const busType = normalizeText(body.busType);
+    // normalize busType to canonical server values: 'AC' or 'Non-AC'
+    const rawBusType = normalizeText(body.busType);
+    let busType = "Non-AC";
+    if (rawBusType) {
+        const lower = rawBusType.toLowerCase();
+        if (lower.includes("non") || lower.includes("non-ac") || lower.includes("non ac") || lower.includes("nonac")) {
+            busType = "Non-AC";
+        } else if (lower.includes("ac")) {
+            busType = "AC";
+        }
+    }
     const routeName = normalizeText(body.routeName);
     const startTime = normalizeText(body.startTime);
     const endTime = normalizeText(body.endTime);

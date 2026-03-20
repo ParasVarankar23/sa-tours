@@ -2,6 +2,7 @@
 
 import SeatLayout from "@/components/SeatLayout";
 import { showAppToast } from "@/lib/client/toast";
+import { BUS_TYPES, getFare, isBorliVillageStop, isCityStop, isDighiVillageStop, normalizeStopName, ROUTES } from "@/lib/fare";
 import {
     Armchair,
     Building2,
@@ -19,6 +20,7 @@ import {
     Trash2,
     X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 const seatLayoutOptions = ["31", "27", "23"];
@@ -60,9 +62,149 @@ export default function AdminBusPage() {
 
     const normalizeKey = (s) => String(s || "").trim().toLowerCase();
 
+    function computeBaseFareForBus(bus) {
+        if (!bus) return null;
+        const resolve = (p) => {
+            if (!p) return "";
+            if (typeof p === "object") return String(p.name || "").trim();
+            return String(p || "").trim();
+        };
+
+        // prefer explicit start/end, fallback to first pickup / last drop
+        let pickup = resolve(bus.startPoint || bus.start);
+        let drop = resolve(bus.endPoint || bus.end);
+        if (!pickup && Array.isArray(bus.pickupPoints) && bus.pickupPoints.length) pickup = resolve(bus.pickupPoints[0]);
+        if (!drop && Array.isArray(bus.dropPoints) && bus.dropPoints.length) drop = resolve(bus.dropPoints[bus.dropPoints.length - 1]);
+
+        // try route detection
+        let routeKey = null;
+        try {
+            const pNorm = normalizeStopName(pickup);
+            const dNorm = normalizeStopName(drop);
+            if (isBorliVillageStop(pNorm) && isCityStop(dNorm)) routeKey = ROUTES.BORLI_TO_DONGRI;
+            else if (isDighiVillageStop(pNorm) && isCityStop(dNorm)) routeKey = ROUTES.DIGHI_TO_DONGRI;
+            else if (isCityStop(pNorm) && isBorliVillageStop(dNorm)) routeKey = ROUTES.DONGRI_TO_BORLI;
+            else if (isCityStop(pNorm) && isDighiVillageStop(dNorm)) routeKey = ROUTES.DONGRI_TO_DIGHI;
+        } catch (e) {
+            routeKey = null;
+        }
+
+        // fallback parse routeName like "Borli - Dongri"
+        if (!routeKey && bus.routeName) {
+            try {
+                const parts = String(bus.routeName || "").split("-").map((x) => x.trim());
+                if (parts.length === 2) {
+                    const a = normalizeStopName(parts[0]);
+                    const b = normalizeStopName(parts[1]);
+                    if (isBorliVillageStop(a) && isCityStop(b)) routeKey = ROUTES.BORLI_TO_DONGRI;
+                    else if (isDighiVillageStop(a) && isCityStop(b)) routeKey = ROUTES.DIGHI_TO_DONGRI;
+                    else if (isCityStop(a) && isBorliVillageStop(b)) routeKey = ROUTES.DONGRI_TO_BORLI;
+                    else if (isCityStop(a) && isDighiVillageStop(b)) routeKey = ROUTES.DONGRI_TO_DIGHI;
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        if (!routeKey) return null;
+
+        try {
+            const mappedType = normalizeBusType(bus.busType);
+            // eslint-disable-next-line no-console
+            console.debug("[computeBaseFareForBus]", { busId: bus.busId, pickup, drop, routeKey, rawBusType: bus.busType, mappedType });
+            const base = getFare({ route: routeKey, pickup, drop, busType: mappedType });
+            // eslint-disable-next-line no-console
+            console.debug("[computeBaseFareForBus] getFare", base);
+            const amt = Number(base?.amount || 0);
+            return amt > 0 ? amt : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function normalizeBusType(raw) {
+        if (!raw) return BUS_TYPES.NON_AC;
+        const s = String(raw || "").trim().toLowerCase();
+        // detect explicit non-ac forms first to avoid matching the substring "ac" inside "non-ac"
+        if (s === "non-ac" || s === "non ac" || s === "nonac" || s.includes("non")) return BUS_TYPES.NON_AC;
+        if (s === "ac" || s === "a/c" || s.includes("ac")) return BUS_TYPES.AC;
+        return BUS_TYPES.NON_AC;
+    }
+
+    function inspectBus(bus) {
+        try {
+            console.groupCollapsed("[InspectBus]", bus?.busId || "(no-id)");
+            console.debug("raw bus:", bus);
+
+            const resolve = (p) => {
+                if (!p) return "";
+                if (typeof p === "object") return String(p.name || "").trim();
+                return String(p || "").trim();
+            };
+
+            const start = resolve(bus.startPoint || bus.start);
+            const end = resolve(bus.endPoint || bus.end);
+            const firstPickup = (Array.isArray(bus.pickupPoints) && bus.pickupPoints[0]) ? resolve(bus.pickupPoints[0]) : "";
+            const lastDrop = (Array.isArray(bus.dropPoints) && bus.dropPoints.length) ? resolve(bus.dropPoints[bus.dropPoints.length - 1]) : "";
+
+            console.debug({ start, end, firstPickup, lastDrop });
+
+            const mappedType = normalizeBusType(bus.busType);
+            console.debug("busType raw => mapped", { raw: bus.busType, mapped: mappedType });
+
+            // route detection attempts
+            const sNorm = normalizeStopName(start || firstPickup);
+            const eNorm = normalizeStopName(end || lastDrop);
+            let routeKey = null;
+            if (isBorliVillageStop(sNorm) && isCityStop(eNorm)) routeKey = ROUTES.BORLI_TO_DONGRI;
+            else if (isDighiVillageStop(sNorm) && isCityStop(eNorm)) routeKey = ROUTES.DIGHI_TO_DONGRI;
+            else if (isCityStop(sNorm) && isBorliVillageStop(eNorm)) routeKey = ROUTES.DONGRI_TO_BORLI;
+            else if (isCityStop(sNorm) && isDighiVillageStop(eNorm)) routeKey = ROUTES.DONGRI_TO_DIGHI;
+
+            console.debug("route detection", { sNorm, eNorm, routeKey, routeName: bus.routeName });
+
+            if (!routeKey && bus.routeName) {
+                try {
+                    const parts = String(bus.routeName || "").split("-").map((x) => x.trim());
+                    if (parts.length === 2) {
+                        const a = normalizeStopName(parts[0]);
+                        const b = normalizeStopName(parts[1]);
+                        const tryKey = (() => {
+                            if (isBorliVillageStop(a) && isCityStop(b)) return ROUTES.BORLI_TO_DONGRI;
+                            if (isDighiVillageStop(a) && isCityStop(b)) return ROUTES.DIGHI_TO_DONGRI;
+                            if (isCityStop(a) && isBorliVillageStop(b)) return ROUTES.DONGRI_TO_BORLI;
+                            if (isCityStop(a) && isDighiVillageStop(b)) return ROUTES.DONGRI_TO_DIGHI;
+                            return null;
+                        })();
+                        if (tryKey) routeKey = tryKey;
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            }
+
+            console.debug("final routeKey", routeKey);
+
+            if (routeKey) {
+                try {
+                    const base = getFare({ route: routeKey, pickup: start || firstPickup, drop: end || lastDrop, busType: mappedType });
+                    console.debug("getFare result:", base);
+                } catch (e) {
+                    console.error("getFare failed", e);
+                }
+            }
+
+            console.groupEnd();
+        } catch (e) {
+            console.error("inspectBus error", e);
+        }
+    }
+
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmMessage, setConfirmMessage] = useState("");
     const [confirmAction, setConfirmAction] = useState(() => () => { });
+
+    const router = useRouter();
 
     const openConfirm = (message, action) => {
         setConfirmMessage(message);
@@ -1113,6 +1255,16 @@ export default function AdminBusPage() {
                                                             Date Based
                                                         </span>
                                                     )}
+
+                                                {/* show a base fare preview derived from fare.js when available */}
+                                                {(() => {
+                                                    const bf = computeBaseFareForBus(bus);
+                                                    return (
+                                                        <span className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                                                            Base: {bf ? `₹${bf}` : "N/A"}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </div>
                                         </td>
 
@@ -1124,6 +1276,23 @@ export default function AdminBusPage() {
                                                 >
                                                     <Pencil className="h-4 w-4" />
                                                     Edit
+                                                </button>
+
+                                                <button
+                                                    onClick={() => inspectBus(bus)}
+                                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                                >
+                                                    Inspect
+                                                </button>
+
+                                                <button
+                                                    onClick={() => {
+                                                        // navigate to fare viewer with preselected bus
+                                                        router.push(`/admin/bus/fares?busId=${encodeURIComponent(bus.busId)}`);
+                                                    }}
+                                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                                >
+                                                    View fares
                                                 </button>
 
                                                 <button

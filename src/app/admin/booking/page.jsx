@@ -2,6 +2,7 @@
 
 import SeatLayout from "@/components/SeatLayout";
 import { showAppToast } from "@/lib/client/toast";
+import { BUS_TYPES, getFare, isBorliVillageStop, isCityStop, isDighiVillageStop, ROUTES } from "@/lib/fare";
 import {
   BusFront,
   CalendarDays,
@@ -174,23 +175,102 @@ function getDropOptions(bus, pickup) {
   return stops.slice(pickupIndex + 1);
 }
 
-function calculateFare(bus, pickup, drop) {
+function ruleAppliesOnDate(rule, dateStr) {
+  if (!dateStr) return true;
+  try {
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return false;
+
+    if (rule.fareStartDate) {
+      const s = new Date(rule.fareStartDate);
+      if (Number.isNaN(s.getTime())) return false;
+      if (d < new Date(s.getFullYear(), s.getMonth(), s.getDate())) return false;
+    }
+
+    if (rule.fareEndDate) {
+      const e = new Date(rule.fareEndDate);
+      if (Number.isNaN(e.getTime())) return false;
+      if (d > new Date(e.getFullYear(), e.getMonth(), e.getDate())) return false;
+    }
+
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function calculateFare(bus, pickup, drop, dateStr) {
   if (!bus || !pickup || !drop) return null;
 
-  const rules = Array.isArray(bus.fareRules) ? bus.fareRules : [];
+  // Determine route constant from pickup/drop if possible
+  let routeKey = null;
+  try {
+    if (isBorliVillageStop(pickup) && isCityStop(drop)) routeKey = ROUTES.BORLI_TO_DONGRI;
+    else if (isDighiVillageStop(pickup) && isCityStop(drop)) routeKey = ROUTES.DIGHI_TO_DONGRI;
+    else if (isCityStop(pickup) && isBorliVillageStop(drop)) routeKey = ROUTES.DONGRI_TO_BORLI;
+    else if (isCityStop(pickup) && isDighiVillageStop(drop)) routeKey = ROUTES.DONGRI_TO_DIGHI;
+  } catch (e) {
+    routeKey = null;
+  }
 
-  const exact = rules.find(
-    (r) =>
-      normalizeKey(r?.from) === normalizeKey(pickup) &&
-      normalizeKey(r?.to) === normalizeKey(drop)
-  );
+  // Get base fare via fare.js only when we have a route constant
+  let baseAmount = 0;
+  if (routeKey) {
+    try {
+      const mappedType = (function normalizeBusTypeLocal(raw) {
+        if (!raw) return BUS_TYPES.NON_AC;
+        const s = String(raw || "").trim().toLowerCase();
+        if (s === "non-ac" || s === "non ac" || s === "nonac" || s.includes("non")) return BUS_TYPES.NON_AC;
+        if (s === "ac" || s === "a/c" || s.includes("ac")) return BUS_TYPES.AC;
+        return BUS_TYPES.NON_AC;
+      })(bus?.busType);
+      const base = getFare({ route: routeKey, pickup, drop, busType: mappedType });
+      baseAmount = Number(base?.amount || 0);
+    } catch (e) {
+      baseAmount = 0;
+    }
+  }
 
-  if (!exact) return null;
+  // Apply any bus-specific date-aware overrides (last-match wins)
+  const rules = Array.isArray(bus.fareRulesRaw) ? bus.fareRulesRaw : Array.isArray(bus.fareRules) ? bus.fareRules : [];
+  if (!rules || rules.length === 0) {
+    return baseAmount > 0 ? baseAmount : null;
+  }
 
-  const fare = Number(exact.fare);
-  if (!Number.isFinite(fare) || fare <= 0) return null;
+  const pickupOptions = getPickupOptions(bus);
+  const expanded = [];
+  for (let i = 0; i < rules.length; i++) {
+    const r = rules[i] || {};
+    const from = String(r.from || "").trim();
+    const to = String(r.to || "").trim();
+    const fareVal = r.fare;
+    const fareStartDate = r.fareStartDate || "";
+    const fareEndDate = r.fareEndDate || "";
+    const apply = !!r.applyToAllNextPickupsBeforeDrop;
 
-  return fare;
+    if (!from && !to && (fareVal === undefined || fareVal === "")) continue;
+
+    if (apply) {
+      const fromIndex = pickupOptions.findIndex((p) => normalizeKey(p) === normalizeKey(from));
+      const startIdx = fromIndex === -1 ? 0 : fromIndex;
+      for (let j = startIdx; j < pickupOptions.length; j++) {
+        expanded.push({ from: pickupOptions[j], to, fare: fareVal, fareStartDate, fareEndDate, sourceIndex: i });
+      }
+    } else {
+      expanded.push({ from, to, fare: fareVal, fareStartDate, fareEndDate, sourceIndex: i });
+    }
+  }
+
+  const matches = expanded.filter((r) => normalizeKey(r.from) === normalizeKey(pickup) && normalizeKey(r.to) === normalizeKey(drop) && ruleAppliesOnDate(r, dateStr));
+  if (!matches || matches.length === 0) {
+    return baseAmount > 0 ? baseAmount : null;
+  }
+
+  const chosen = matches[matches.length - 1];
+  const override = Number(chosen.fare);
+  if (Number.isFinite(override) && override > 0) return override;
+
+  return baseAmount > 0 ? baseAmount : null;
 }
 
 export default function BookingPage() {
@@ -211,6 +291,7 @@ export default function BookingPage() {
     pickupTime: "",
     drop: "",
     dropTime: "",
+    fareOverride: "",
   });
   const [editingSeat, setEditingSeat] = useState(null);
 
@@ -324,9 +405,9 @@ export default function BookingPage() {
       return;
     }
 
-    const fare = calculateFare(selectedBus, bookingForm.pickup, bookingForm.drop);
+    const fare = calculateFare(selectedBus, bookingForm.pickup, bookingForm.drop, date);
     setComputedFare(fare);
-  }, [selectedBus, bookingForm.pickup, bookingForm.drop]);
+  }, [selectedBus, bookingForm.pickup, bookingForm.drop, date]);
 
   /* =========================
      Available buses for date
@@ -417,6 +498,7 @@ export default function BookingPage() {
       pickupTime: "",
       drop: "",
       dropTime: "",
+      fareOverride: "",
     });
     setComputedFare(null);
   };
@@ -447,7 +529,12 @@ export default function BookingPage() {
       return showAppToast("error", "Select pickup and drop");
     }
 
-    if (computedFare === null) {
+    // re-calculate fare at submit time to avoid stale state (race conditions)
+    const currentFare = calculateFare(selectedBus, bookingForm.pickup, bookingForm.drop, date);
+    // allow admin to override fare even if computedFare is not available
+    const overrideVal = String(bookingForm.fareOverride || "").trim();
+    const overrideNum = overrideVal === "" ? null : Number(overrideVal);
+    if (currentFare === null && (overrideNum === null || !Number.isFinite(overrideNum) || overrideNum <= 0)) {
       return showAppToast("error", "Fare not available for selected pickup and drop");
     }
 
@@ -455,6 +542,8 @@ export default function BookingPage() {
       const results = [];
 
       for (const seatNo of seatsToProcess) {
+        const finalFare = overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0 ? overrideNum : Number(currentFare ?? computedFare);
+
         const payload = {
           busId: selectedBus.busId,
           busNumber: selectedBus.busNumber || "",
@@ -469,14 +558,18 @@ export default function BookingPage() {
           pickupTime: bookingForm.pickupTime || "",
           drop: bookingForm.drop,
           dropTime: bookingForm.dropTime || "",
-          fare: Number(computedFare),
+          fare: Number(finalFare),
         };
 
         const method = editingSeat ? "PUT" : "POST";
 
+        const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers.Authorization = `Bearer ${token}`;
+
         const res = await fetch("/api/booking", {
           method,
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(payload),
         });
 
@@ -513,11 +606,18 @@ export default function BookingPage() {
       return showAppToast("error", "Select pickup and drop");
     }
 
-    if (computedFare === null) {
+    // re-calculate fare at submit time to avoid stale state (race conditions)
+    const currentFare = calculateFare(selectedBus, bookingForm.pickup, bookingForm.drop, date);
+    // allow admin to override fare even if computedFare is not available
+    const overrideVal = String(bookingForm.fareOverride || "").trim();
+    const overrideNum = overrideVal === "" ? null : Number(overrideVal);
+    if (currentFare === null && (overrideNum === null || !Number.isFinite(overrideNum) || overrideNum <= 0)) {
       return showAppToast("error", "Fare not available for selected pickup and drop");
     }
 
     try {
+      const finalFareForBooking = overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0 ? overrideNum : Number(currentFare ?? computedFare);
+
       const bookingsPayload = seats.map((seatNo) => ({
         busId: selectedBus.busId,
         busNumber: selectedBus.busNumber || "",
@@ -532,7 +632,7 @@ export default function BookingPage() {
         pickupTime: bookingForm.pickupTime || "",
         drop: bookingForm.drop,
         dropTime: bookingForm.dropTime || "",
-        fare: Number(computedFare),
+        fare: Number(finalFareForBooking),
       }));
 
       const totalAmount = bookingsPayload.reduce((sum, item) => sum + (Number(item.fare) || 0), 0);
@@ -610,9 +710,13 @@ export default function BookingPage() {
                 paymentMethod: "razorpay",
               };
 
+              const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+              const headers = { "Content-Type": "application/json" };
+              if (token) headers.Authorization = `Bearer ${token}`;
+
               const bRes = await fetch("/api/booking", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers,
                 body: JSON.stringify(withPayment),
               });
 
@@ -665,7 +769,10 @@ export default function BookingPage() {
       return showAppToast("error", "Select pickup and drop");
     }
 
-    if (computedFare === null) {
+    // allow admin to override fare even if computedFare is not available
+    const overrideVal = String(bookingForm.fareOverride || "").trim();
+    const overrideNum = overrideVal === "" ? null : Number(overrideVal);
+    if (computedFare === null && (overrideNum === null || !Number.isFinite(overrideNum) || overrideNum <= 0)) {
       return showAppToast("error", "Fare not available for selected pickup and drop");
     }
 
@@ -673,6 +780,8 @@ export default function BookingPage() {
       const created = [];
 
       for (const seatNo of seats) {
+        const finalFare = overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0 ? overrideNum : Number(computedFare);
+
         const payload = {
           busId: selectedBus.busId,
           busNumber: selectedBus.busNumber || "",
@@ -687,12 +796,16 @@ export default function BookingPage() {
           pickupTime: bookingForm.pickupTime || "",
           drop: bookingForm.drop,
           dropTime: bookingForm.dropTime || "",
-          fare: Number(computedFare),
+          fare: Number(finalFare),
         };
+
+        const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers.Authorization = `Bearer ${token}`;
 
         const res = await fetch("/api/booking", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(payload),
         });
 
@@ -706,8 +819,9 @@ export default function BookingPage() {
 
       if (token) {
         for (const c of created) {
+          const amountForRecord = overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0 ? Number(overrideNum) : Number(computedFare);
           const payload = {
-            amount: Number(computedFare) || 0,
+            amount: Number(amountForRecord) || 0,
             currency: "INR",
             userId: null,
             metadata: {
@@ -1169,6 +1283,7 @@ export default function BookingPage() {
                         pickupTime: "",
                         drop: "",
                         dropTime: "",
+                        fareOverride: "",
                       });
 
                       setSelectedSeats((prev) => {
@@ -1309,7 +1424,8 @@ export default function BookingPage() {
                               const fare = calculateFare(
                                 selectedBus,
                                 bookingForm.pickup,
-                                stop
+                                stop,
+                                date
                               );
                               return (
                                 <option key={i} value={stop}>
@@ -1350,29 +1466,39 @@ export default function BookingPage() {
                       {/* Fare Summary */}
                       {(editingSeat ? 1 : selectedSeats.length) > 0 && (
                         <div className="mt-2 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
-                          {computedFare !== null ? (
-                            <div className="flex flex-wrap items-center gap-6">
-                              <div className="text-sm text-slate-600">
-                                Fare per seat:{" "}
-                                <span className="font-semibold">
-                                  ₹{Number(computedFare).toFixed(2)}
-                                </span>
-                              </div>
-                              <div className="text-sm text-slate-700">
-                                Total:{" "}
-                                <span className="text-lg font-bold">
-                                  ₹
-                                  {(
-                                    Number(computedFare) *
-                                    (editingSeat ? 1 : selectedSeats.length)
-                                  ).toFixed(2)}
-                                </span>
-                              </div>
-                            </div>
+                          {computedFare !== null || bookingForm.fareOverride ? (
+                            (() => {
+                              const perSeat = bookingForm.fareOverride && String(bookingForm.fareOverride).trim() !== "" ? Number(bookingForm.fareOverride) : Number(computedFare);
+                              const seatsCount = editingSeat ? 1 : selectedSeats.length;
+                              const total = Number(perSeat) * seatsCount;
+                              return (
+                                <div className="flex flex-wrap items-center gap-6">
+                                  <div className="text-sm text-slate-600">
+                                    Fare per seat:{" "}
+                                    <span className="font-semibold">{perSeat && !Number.isNaN(perSeat) ? `₹${perSeat.toFixed(2)}` : "—"}</span>
+                                  </div>
+
+                                  <div className="text-sm text-slate-700">
+                                    Total:{" "}
+                                    <span className="text-lg font-bold">{!Number.isNaN(total) ? `₹${total.toFixed(2)}` : "—"}</span>
+                                  </div>
+
+                                  <div className="ml-2">
+                                    <label className="block text-xs text-slate-500">Override fare</label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={bookingForm.fareOverride ?? ""}
+                                      onChange={(e) => setBookingForm((p) => ({ ...p, fareOverride: e.target.value }))}
+                                      className="mt-1 w-40 rounded-lg border px-3 py-2 text-sm"
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })()
                           ) : (
-                            <div className="text-sm font-medium text-red-600">
-                              Fare not available for selected pickup & drop
-                            </div>
+                            <div className="text-sm font-medium text-red-600">Fare not available for selected pickup & drop</div>
                           )}
                         </div>
                       )}
@@ -1478,12 +1604,14 @@ export default function BookingPage() {
                                       pickupTime: b.pickupTime || "",
                                       drop: b.drop || "",
                                       dropTime: b.dropTime || "",
+                                      fareOverride: b.fare !== undefined && b.fare !== null ? String(b.fare) : "",
                                     });
 
                                     const fare = calculateFare(
                                       selectedBus,
                                       b.pickup || "",
-                                      b.drop || ""
+                                      b.drop || "",
+                                      date
                                     );
                                     setComputedFare(fare);
                                   }}
@@ -1720,7 +1848,7 @@ export default function BookingPage() {
                         dropTime: b.dropTime || "",
                       });
 
-                      const fare = calculateFare(selectedBus, b.pickup || "", b.drop || "");
+                      const fare = calculateFare(selectedBus, b.pickup || "", b.drop || "", date);
                       setComputedFare(fare);
 
                       setViewBooking(null);

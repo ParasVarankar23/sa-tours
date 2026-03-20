@@ -4,6 +4,7 @@ import {
     sendBookingConfirmation,
 } from "../../../lib/emailService";
 import { getAdminDb } from "../../../lib/firebaseAdmin";
+// verifyAuthToken is imported dynamically where needed to avoid startup cost
 
 /* =========================
    Helpers
@@ -276,22 +277,82 @@ export async function POST(req) {
         }
 
         // exact fare from bus fareRules only
-        const exactFare = findExactFare(busData, pickup, drop);
+        let exactFare = findExactFare(busData, pickup, drop);
+        // If there is no configured exact fare, allow admin override with a valid fare
         if (exactFare === null) {
-            return NextResponse.json(
-                { success: false, error: "Fare not available for selected pickup and drop" },
-                { status: 400 }
-            );
-        }
+            const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
+            let adminAllowed = false;
+            if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+                const token = authHeader.split(" ")[1];
+                try {
+                    const { verifyAuthToken } = await import("../../../lib/firebaseAdmin");
+                    const decoded = await verifyAuthToken(token);
+                    if (decoded && (decoded.role === "admin" || decoded.role === "owner")) {
+                        adminAllowed = true;
+                    }
+                } catch (e) {
+                    adminAllowed = false;
+                }
+            }
 
-        // if frontend sent fare, validate it
-        if (body.fare !== undefined && body.fare !== null && body.fare !== "") {
-            const sentFare = Number(body.fare);
-            if (!Number.isFinite(sentFare) || sentFare !== exactFare) {
+            if (!adminAllowed) {
+                return NextResponse.json(
+                    { success: false, error: "Fare not available for selected pickup and drop" },
+                    { status: 400 }
+                );
+            }
+            // admin is allowed — but require body.fare to be provided and valid
+            if (body.fare === undefined || body.fare === null || body.fare === "") {
+                return NextResponse.json(
+                    { success: false, error: "Admin override requires a fare value" },
+                    { status: 400 }
+                );
+            }
+            const sentFareOnly = Number(body.fare);
+            if (!Number.isFinite(sentFareOnly) || sentFareOnly <= 0) {
                 return NextResponse.json(
                     { success: false, error: "Invalid fare sent from frontend" },
                     { status: 400 }
                 );
+            }
+            // set exactFare to sent value for downstream usage
+            exactFare = sentFareOnly;
+        }
+
+        // if frontend sent fare, validate it. Allow override if caller is authenticated admin/owner.
+        if (body.fare !== undefined && body.fare !== null && body.fare !== "") {
+            const sentFare = Number(body.fare);
+            if (!Number.isFinite(sentFare)) {
+                return NextResponse.json(
+                    { success: false, error: "Invalid fare sent from frontend" },
+                    { status: 400 }
+                );
+            }
+
+            if (sentFare !== exactFare) {
+                // check Authorization header for admin token
+                const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
+                let allowed = false;
+                if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+                    const token = authHeader.split(" ")[1];
+                    try {
+                        const { verifyAuthToken } = await import("../../../lib/firebaseAdmin");
+                        const decoded = await verifyAuthToken(token);
+                        if (decoded && (decoded.role === "admin" || decoded.role === "owner")) {
+                            allowed = true;
+                        }
+                    } catch (e) {
+                        allowed = false;
+                    }
+                }
+
+                if (!allowed) {
+                    return NextResponse.json(
+                        { success: false, error: "Invalid fare sent from frontend" },
+                        { status: 400 }
+                    );
+                }
+                // allowed override; we'll use sent fare when creating booking
             }
         }
 
@@ -321,7 +382,8 @@ export async function POST(req) {
             drop,
             dropTime: resolvedDropTime,
 
-            fare: exactFare,
+            // prefer frontend-sent fare when admin override is allowed, otherwise use exactFare
+            fare: (body.fare !== undefined && body.fare !== null && body.fare !== "") ? Number(body.fare) : exactFare,
 
             busNumber: busNumber || normalizeText(busData.busNumber) || null,
             startTime: startTime || normalizeText(busData.startTime) || null,
@@ -432,12 +494,46 @@ export async function PUT(req) {
                 );
             }
 
-            const exactFare = findExactFare(busData, finalPickup, finalDrop);
+            let exactFare = findExactFare(busData, finalPickup, finalDrop);
             if (exactFare === null) {
-                return NextResponse.json(
-                    { success: false, error: "Fare not available for selected pickup and drop" },
-                    { status: 400 }
-                );
+                // allow admin override when no exact fare configured
+                const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
+                let adminAllowed = false;
+                if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+                    const token = authHeader.split(" ")[1];
+                    try {
+                        const { verifyAuthToken } = await import("../../../lib/firebaseAdmin");
+                        const decoded = await verifyAuthToken(token);
+                        if (decoded && (decoded.role === "admin" || decoded.role === "owner")) {
+                            adminAllowed = true;
+                        }
+                    } catch (e) {
+                        adminAllowed = false;
+                    }
+                }
+
+                if (!adminAllowed) {
+                    return NextResponse.json(
+                        { success: false, error: "Fare not available for selected pickup and drop" },
+                        { status: 400 }
+                    );
+                }
+
+                // admin must provide a fare when overriding
+                if (body.fare === undefined || body.fare === null || body.fare === "") {
+                    return NextResponse.json(
+                        { success: false, error: "Admin override requires a fare value" },
+                        { status: 400 }
+                    );
+                }
+                const sentFareOnly = Number(body.fare);
+                if (!Number.isFinite(sentFareOnly) || sentFareOnly <= 0) {
+                    return NextResponse.json(
+                        { success: false, error: "Invalid fare sent from frontend" },
+                        { status: 400 }
+                    );
+                }
+                exactFare = sentFareOnly;
             }
 
             updates.pickup = finalPickup;
@@ -445,6 +541,45 @@ export async function PUT(req) {
             updates.pickupTime = getPickupTime(busData, finalPickup) || null;
             updates.dropTime = getDropTime(busData, finalDrop) || null;
             updates.fare = exactFare;
+        }
+
+        // allow admin to override fare via body.fare even when updating
+        if (body.fare !== undefined && body.fare !== null && body.fare !== "") {
+            const sentFare = Number(body.fare);
+            if (!Number.isFinite(sentFare) || sentFare <= 0) {
+                return NextResponse.json(
+                    { success: false, error: "Invalid fare sent from frontend" },
+                    { status: 400 }
+                );
+            }
+
+            const currentFare = updates.fare || existingVal.fare || null;
+            if (currentFare === null || Number(sentFare) !== Number(currentFare)) {
+                // require admin token to override
+                const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
+                let allowed = false;
+                if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+                    const token = authHeader.split(" ")[1];
+                    try {
+                        const { verifyAuthToken } = await import("../../../lib/firebaseAdmin");
+                        const decoded = await verifyAuthToken(token);
+                        if (decoded && (decoded.role === "admin" || decoded.role === "owner")) {
+                            allowed = true;
+                        }
+                    } catch (e) {
+                        allowed = false;
+                    }
+                }
+
+                if (!allowed) {
+                    return NextResponse.json(
+                        { success: false, error: "Invalid fare sent from frontend" },
+                        { status: 400 }
+                    );
+                }
+            }
+
+            updates.fare = Number(sentFare);
         }
 
         // allow payment fields update if sent

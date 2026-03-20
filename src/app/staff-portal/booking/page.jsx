@@ -144,16 +144,71 @@ export default function StaffBookingPage() {
 
     function calculateFare(bus, pickupVal, dropVal) {
         if (!bus || !pickupVal || !dropVal) return null;
-        const rules = Array.isArray(bus.fareRules) ? bus.fareRules : [];
 
-        const exact = rules.find(
-            (r) => normalizeKey(r?.from) === normalizeKey(pickupVal) && normalizeKey(r?.to) === normalizeKey(dropVal)
-        );
+        // base fare from fare.js
+        try {
+            const base = getFare({ route: bus.routeName || bus.route || "", pickup: pickupVal, drop: dropVal, busType: bus.busType || "NON_AC" });
+            let amount = Number(base?.amount || 0);
 
-        if (!exact) return null;
-        const fare = Number(exact.fare);
-        if (!Number.isFinite(fare) || fare <= 0) return null;
-        return fare;
+            const rules = Array.isArray(bus.fareRulesRaw) ? bus.fareRulesRaw : Array.isArray(bus.fareRules) ? bus.fareRules : [];
+            if (rules.length > 0) {
+                const pickupOptions = getPickupOptions(bus);
+                const expanded = [];
+                for (let i = 0; i < rules.length; i++) {
+                    const r = rules[i] || {};
+                    const from = String(r.from || "").trim();
+                    const to = String(r.to || "").trim();
+                    const fareVal = r.fare;
+                    const fareStartDate = r.fareStartDate || "";
+                    const fareEndDate = r.fareEndDate || "";
+                    const apply = !!r.applyToAllNextPickupsBeforeDrop;
+                    if (!from && !to && (fareVal === undefined || fareVal === "")) continue;
+                    if (apply) {
+                        const fromIndex = pickupOptions.findIndex((p) => normalizeKey(p) === normalizeKey(from));
+                        const endIndex = pickupOptions.length;
+                        const startIdx = fromIndex === -1 ? 0 : fromIndex;
+                        for (let j = startIdx; j < endIndex; j++) {
+                            expanded.push({ from: pickupOptions[j], to, fare: fareVal, fareStartDate, fareEndDate, sourceIndex: i });
+                        }
+                    } else {
+                        expanded.push({ from, to, fare: fareVal, fareStartDate, fareEndDate, sourceIndex: i });
+                    }
+                }
+
+                const ruleAppliesOnDate = (rule, dateStr) => {
+                    if (!dateStr) return true;
+                    try {
+                        const d = new Date(dateStr);
+                        if (Number.isNaN(d.getTime())) return false;
+                        if (rule.fareStartDate) {
+                            const s = new Date(rule.fareStartDate);
+                            if (Number.isNaN(s.getTime())) return false;
+                            if (d < new Date(s.getFullYear(), s.getMonth(), s.getDate())) return false;
+                        }
+                        if (rule.fareEndDate) {
+                            const e = new Date(rule.fareEndDate);
+                            if (Number.isNaN(e.getTime())) return false;
+                            if (d > new Date(e.getFullYear(), e.getMonth(), e.getDate())) return false;
+                        }
+                        return true;
+                    } catch (e) {
+                        return false;
+                    }
+                };
+
+                const dateStr = String(date || "");
+                const matches = expanded.filter((r) => normalizeKey(r.from) === normalizeKey(pickupVal) && normalizeKey(r.to) === normalizeKey(dropVal) && ruleAppliesOnDate(r, dateStr));
+                if (matches && matches.length > 0) {
+                    const chosen = matches[matches.length - 1];
+                    const overrideFare = Number(chosen.fare);
+                    if (Number.isFinite(overrideFare) && overrideFare > 0) amount = overrideFare;
+                }
+            }
+
+            return amount;
+        } catch (e) {
+            return null;
+        }
     }
 
     useEffect(() => {

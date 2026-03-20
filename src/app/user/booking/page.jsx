@@ -2,6 +2,7 @@
 
 import SeatLayout from "@/components/SeatLayout";
 import { showAppToast } from "@/lib/client/toast";
+import { getFare } from "@/lib/fare";
 import {
     BusFront,
     CalendarDays,
@@ -67,39 +68,84 @@ function getStopTime(bus, stopName) {
 function calculateFare({ bus, fromStop, toStop, busType, season }) {
     if (!bus || !fromStop || !toStop) return { fare: 0 };
 
-    const rules = Array.isArray(bus.fareRules) ? bus.fareRules : [];
+    // base fare from fare.js
+    try {
+        const base = getFare({ route: bus.routeName || bus.route || "", pickup: fromStop, drop: toStop, busType: busType || "NON_AC" });
+        let amount = Number(base?.amount || 0);
 
-    const normalizeForMatch = (s) =>
-        normalizeKey(String(s || "")).replace(/\b(stand|stn|stop)\b/g, "").replace(/\s+/g, " ").trim();
+        // apply any bus-specific fareRules overrides if present and applicable for selected date
+        const rules = Array.isArray(bus.fareRulesRaw) ? bus.fareRulesRaw : Array.isArray(bus.fareRules) ? bus.fareRules : [];
+        if (rules.length > 0) {
+            const pickupOptions = (() => {
+                if (Array.isArray(bus.pickupPoints)) {
+                    const resolve = (p) => (typeof p === "object" ? normalizeText(p.name) : normalizeText(p));
+                    const start = resolve(bus.startPoint);
+                    const pickups = bus.pickupPoints.map((p) => resolve(p)).filter(Boolean);
+                    const out = [];
+                    if (start) out.push(start);
+                    for (const p of pickups) if (!out.some((x) => normalizeKey(x) === normalizeKey(p))) out.push(p);
+                    return out;
+                }
+                const stops = buildRouteStops(bus);
+                if (stops.length <= 1) return [];
+                return stops.slice(0, stops.length - 1);
+            })();
 
-    const inputFrom = normalizeForMatch(fromStop);
-    const inputTo = normalizeForMatch(toStop);
+            const expanded = [];
+            for (let i = 0; i < rules.length; i++) {
+                const r = rules[i] || {};
+                const from = String(r.from || "").trim();
+                const to = String(r.to || "").trim();
+                const fareVal = r.fare;
+                const fareStartDate = r.fareStartDate || "";
+                const fareEndDate = r.fareEndDate || "";
+                const apply = !!r.applyToAllNextPickupsBeforeDrop;
+                if (!from && !to && (fareVal === undefined || fareVal === "")) continue;
+                if (apply) {
+                    const fromIndex = pickupOptions.findIndex((p) => normalizeKey(p) === normalizeKey(from));
+                    const endIndex = pickupOptions.length;
+                    const startIdx = fromIndex === -1 ? 0 : fromIndex;
+                    for (let j = startIdx; j < endIndex; j++) {
+                        expanded.push({ from: pickupOptions[j], to, fare: fareVal, fareStartDate, fareEndDate, sourceIndex: i });
+                    }
+                } else {
+                    expanded.push({ from, to, fare: fareVal, fareStartDate, fareEndDate, sourceIndex: i });
+                }
+            }
 
-    // Use last-match semantics so later rules override earlier ones.
-    for (let i = rules.length - 1; i >= 0; i--) {
-        const r = rules[i] || {};
-        const rFrom = normalizeForMatch(r.from);
-        const rTo = normalizeForMatch(r.to);
+            const ruleAppliesOnDate = (rule, dateStr) => {
+                if (!dateStr) return true;
+                try {
+                    const d = new Date(dateStr);
+                    if (Number.isNaN(d.getTime())) return false;
+                    if (rule.fareStartDate) {
+                        const s = new Date(rule.fareStartDate);
+                        if (Number.isNaN(s.getTime())) return false;
+                        if (d < new Date(s.getFullYear(), s.getMonth(), s.getDate())) return false;
+                    }
+                    if (rule.fareEndDate) {
+                        const e = new Date(rule.fareEndDate);
+                        if (Number.isNaN(e.getTime())) return false;
+                        if (d > new Date(e.getFullYear(), e.getMonth(), e.getDate())) return false;
+                    }
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            };
 
-        // exact match
-        if (rFrom === inputFrom && rTo === inputTo) {
-            const fare = Number(r.fare);
-            if (Number.isFinite(fare) && fare > 0) return { fare };
-            return { fare: 0 };
+            const matches = expanded.filter((r) => normalizeKey(r.from) === normalizeKey(fromStop) && normalizeKey(r.to) === normalizeKey(toStop) && ruleAppliesOnDate(r, date));
+            if (matches && matches.length > 0) {
+                const chosen = matches[matches.length - 1];
+                const overrideFare = Number(chosen.fare);
+                if (Number.isFinite(overrideFare) && overrideFare > 0) amount = overrideFare;
+            }
         }
 
-        // tolerant matches: handle cases like "Borli" vs "Borli Stand"
-        const fromMatch = rFrom === inputFrom || rFrom.includes(inputFrom) || inputFrom.includes(rFrom);
-        const toMatch = rTo === inputTo || rTo.includes(inputTo) || inputTo.includes(rTo);
-
-        if (fromMatch && toMatch) {
-            const fare = Number(r.fare);
-            if (Number.isFinite(fare) && fare > 0) return { fare };
-            return { fare: 0 };
-        }
+        return { fare: amount };
+    } catch (e) {
+        return { fare: 0 };
     }
-
-    return { fare: 0 };
 }
 
 export default function BookingPage() {
