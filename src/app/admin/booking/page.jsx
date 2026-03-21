@@ -10,7 +10,6 @@ import {
   isDighiVillageStop,
   ROUTES,
 } from "@/lib/fare";
-import html2pdf from "html2pdf.js";
 import {
   BusFront,
   CalendarDays,
@@ -1556,169 +1555,29 @@ export default function BookingPage() {
       pdfContainer.style.background = "#ffffff";
       pdfContainer.style.padding = "0";
       pdfContainer.style.zIndex = "99999";
-      // keep it invisible to users but renderable by html2canvas
-      pdfContainer.style.opacity = "0";
+      // keep it visually hidden but renderable by html2canvas
+      pdfContainer.style.opacity = "0.01";
       pdfContainer.style.pointerEvents = "none";
 
-      const style = document.createElement("style");
-      style.innerHTML = `
-      * { box-sizing: border-box; }
-      body { margin: 0; font-family: "Times New Roman", serif; }
-      .sheet {
-        width: 794px;
-        min-height: 1123px;
-        padding: 18px;
-        background: #fff;
-        color: #111;
-        font-family: "Times New Roman", serif;
+      // prefer using the built HTML's own styles so preview and PDF match
+      const headStyle = wrapper.querySelector("head > style, style");
+      if (headStyle) {
+        pdfContainer.appendChild(headStyle.cloneNode(true));
+      } else {
+        const style = document.createElement("style");
+        style.innerHTML = `* { box-sizing: border-box; } body { margin: 0; font-family: "Times New Roman", serif; } .sheet { width: 794px; min-height: 1123px; padding: 18px; background: #fff; color: #111; font-family: "Times New Roman", serif; } .line-row, .value { line-height: 1.15; }`;
+        pdfContainer.appendChild(style);
       }
-      .header-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 14px;
-        font-weight: 700;
-        margin-bottom: 6px;
-      }
-      .header-mid {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-      }
-      .bus-left {
-        width: 160px;
-        font-size: 14px;
-        font-weight: 700;
-      }
-      .bus-center {
-        flex: 1;
-        text-align: center;
-      }
-      .bus-center .company {
-        font-size: 22px;
-        font-weight: 700;
-        text-transform: uppercase;
-      }
-      .bus-right {
-        width: 240px;
-        font-size: 14px;
-        font-weight: 700;
-        text-align: left;
-      }
-      .divider {
-        border-top: 1px solid #777;
-        margin: 8px 0 10px;
-      }
-      .grid-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 8px;
-        margin-bottom: 8px;
-        align-items: start;
-      }
-      .col {
-        min-height: 128px;
-      }
-      .seat-box {
-        border: 1px solid #777;
-        min-height: 128px;
-        padding: 5px;
-        width: 100%;
-        background: #fff;
-      }
-      .seat-box.blocked {
-        background: #fff7ed;
-        border-color: #ea580c;
-      }
-      .seat-title {
-        font-size: 13px;
-        font-weight: 700;
-        margin-bottom: 4px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex-wrap: wrap;
-      }
-      .blocked-tag {
-        font-size: 9px;
-        border: 1px solid #ea580c;
-        color: #ea580c;
-        padding: 1px 4px;
-        border-radius: 10px;
-        font-weight: 700;
-      }
-      .line-row {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        margin: 2px 0;
-        min-height: 16px;
-      }
-      .label {
-        min-width: 46px;
-        white-space: nowrap;
-        font-size: 10px;
-        font-weight: 700;
-      }
-      .line {
-        flex: 1;
-        border-bottom: 1px solid #777;
-        min-height: 10px;
-      }
-      .value {
-        flex: 1;
-        border-bottom: 1px solid #777;
-        min-height: 12px;
-        font-size: 10px;
-        padding-left: 2px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .seat-placeholder {
-        min-height: 128px;
-      }
-      .bottom-row {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 8px;
-        margin-top: 8px;
-        margin-bottom: 12px;
-      }
-      .bottom-col .seat-box {
-        min-height: 112px;
-      }
-      .cabin-title {
-        text-align: center;
-        font-size: 16px;
-        font-weight: 700;
-        margin: 8px 0 6px;
-        text-transform: uppercase;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-      }
-      th, td {
-        border: 1px solid #777;
-        padding: 4px;
-        font-size: 9px;
-        text-align: left;
-        word-wrap: break-word;
-      }
-      th {
-        background: #f8fafc;
-      }
-      .blocked-row td {
-        background: #fff7ed;
-      }
-    `;
-
-      pdfContainer.appendChild(style);
       pdfContainer.appendChild(sheet.cloneNode(true));
       document.body.appendChild(pdfContainer);
+
+      // allow browser to paint so html2canvas captures layout
+      await new Promise((r) => setTimeout(r, 80));
+
+      // briefly make it fully visible for capture (still offscreen to user)
+      pdfContainer.style.opacity = "1";
+      pdfContainer.style.pointerEvents = "none";
+      await new Promise((r) => setTimeout(r, 80));
 
       const element = pdfContainer;
 
@@ -1743,7 +1602,74 @@ export default function BookingPage() {
         },
       };
 
-      await html2pdf().set(opt).from(element).save();
+      // Use html2canvas + jsPDF directly to avoid blank PDFs from html2pdf
+      const [html2canvasModule, jsPdfModule] = await Promise.all([
+        import("html2canvas"),
+        import(/* webpackChunkName: 'jspdf' */ "jspdf"),
+      ]);
+      const html2canvas = html2canvasModule?.default || html2canvasModule;
+      const { jsPDF } = jsPdfModule;
+
+      const canvas = await html2canvas(element, {
+        scale: opt.html2canvas.scale || 2,
+        useCORS: true,
+        backgroundColor: opt.html2canvas.backgroundColor || "#ffffff",
+        scrollX: 0,
+        scrollY: 0,
+      });
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.98);
+
+      // A4 sizes in mm
+      const A4_WIDTH_MM = 210;
+      const A4_HEIGHT_MM = 297;
+      const marginTop = (opt.margin && opt.margin[0]) || 5;
+      const marginRight = (opt.margin && opt.margin[1]) || 5;
+      const marginBottom = (opt.margin && opt.margin[2]) || 5;
+      const marginLeft = (opt.margin && opt.margin[3]) || 5;
+
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+
+      const pdfWidth = A4_WIDTH_MM - marginLeft - marginRight;
+      const pdfHeight = A4_HEIGHT_MM - marginTop - marginBottom;
+
+      // convert canvas px -> mm at ratio
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+      const imgWidthMm = pdfWidth;
+      const imgHeightMm = (canvasHeight * imgWidthMm) / canvasWidth;
+
+      // If image fits on one page
+      if (imgHeightMm <= pdfHeight) {
+        pdf.addImage(imgData, "JPEG", marginLeft, marginTop, imgWidthMm, imgHeightMm);
+      } else {
+        // split into pages
+        const pxPerMm = canvasWidth / imgWidthMm;
+        const pageHeightPx = Math.floor(pdfHeight * pxPerMm);
+        let remainingHeightPx = canvasHeight;
+        let positionY = 0;
+        const tmpCanvas = document.createElement("canvas");
+        const tmpCtx = tmpCanvas.getContext("2d");
+
+        while (remainingHeightPx > 0) {
+          const sliceHeightPx = Math.min(pageHeightPx, remainingHeightPx);
+          tmpCanvas.width = canvasWidth;
+          tmpCanvas.height = sliceHeightPx;
+          tmpCtx.clearRect(0, 0, tmpCanvas.width, tmpCanvas.height);
+          tmpCtx.drawImage(canvas, 0, positionY, canvasWidth, sliceHeightPx, 0, 0, canvasWidth, sliceHeightPx);
+
+          const sliceData = tmpCanvas.toDataURL("image/jpeg", 0.98);
+          const sliceHeightMm = (sliceHeightPx * imgWidthMm) / canvasWidth;
+
+          if (positionY > 0) pdf.addPage();
+          pdf.addImage(sliceData, "JPEG", marginLeft, marginTop, imgWidthMm, sliceHeightMm);
+
+          positionY += sliceHeightPx;
+          remainingHeightPx -= sliceHeightPx;
+        }
+      }
+
+      pdf.save(opt.filename);
 
       document.body.removeChild(pdfContainer);
       showAppToast("success", "Seat template PDF downloaded");
