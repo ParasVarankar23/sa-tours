@@ -10,6 +10,7 @@ import {
   isDighiVillageStop,
   ROUTES,
 } from "@/lib/fare";
+import html2pdf from "html2pdf.js";
 import {
   BusFront,
   CalendarDays,
@@ -89,11 +90,7 @@ function buildRouteStops(bus) {
       .map((s) => normalizeText(s))
     : [];
 
-  return [
-    resolve(bus.startPoint),
-    ...middleStops,
-    resolve(bus.endPoint),
-  ].filter(Boolean);
+  return [resolve(bus.startPoint), ...middleStops, resolve(bus.endPoint)].filter(Boolean);
 }
 
 function getStopTime(bus, stopName) {
@@ -386,15 +383,13 @@ export default function BookingPage() {
     name: "",
     phone: "",
     email: "",
+    pickup: "",
+    drop: "",
     note: "",
   });
 
   const visibleBookings = useMemo(() => {
-    return Object.entries(bookings || {}).filter(([, b]) => {
-      if (!b) return false;
-      if (b.status === "blocked") return false;
-      return true;
-    });
+    return Object.entries(bookings || {}).filter(([, b]) => !!b);
   }, [bookings]);
 
   const { user } = useAuth();
@@ -439,17 +434,20 @@ export default function BookingPage() {
 
       const raw = data.bookings || {};
       const entries = Object.entries(raw).filter(([k, v]) => {
-        if (!/^[0-9]+$/.test(k)) return false;
-        if (Number(k) < 1) return false;
+        if (!/^[0-9]+$/.test(k) && !/^CB[0-9]+$/i.test(k)) return false;
+        if (/^[0-9]+$/.test(k) && Number(k) < 1) return false;
         if (!v || typeof v !== "object") return false;
 
         const hasMeaningful = Boolean(
           (v.name && String(v.name).trim()) ||
           (v.phone && String(v.phone).trim()) ||
           (v.email && String(v.email).trim()) ||
+          (v.pickup && String(v.pickup).trim()) ||
+          (v.drop && String(v.drop).trim()) ||
           v.status ||
           v.payment ||
-          v.fare
+          v.fare ||
+          v.note
         );
 
         return hasMeaningful;
@@ -465,6 +463,7 @@ export default function BookingPage() {
 
   useEffect(() => {
     fetchBookings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBus, date]);
 
   useEffect(() => {
@@ -503,8 +502,7 @@ export default function BookingPage() {
               let blocked = 0;
 
               for (const key of Object.keys(raw)) {
-                if (!/^[0-9]+$/.test(key)) continue;
-                if (Number(key) < 1) continue;
+                if (!/^[0-9]+$/.test(key) && !/^CB[0-9]+$/i.test(key)) continue;
 
                 const rec = raw[key] || {};
                 if (rec && rec.status === "blocked") {
@@ -769,9 +767,7 @@ export default function BookingPage() {
 
             const paymentRecord = verifyData.payment || {};
             const paymentId =
-              paymentRecord.id ||
-              paymentRecord.paymentId ||
-              resp.razorpay_payment_id;
+              paymentRecord.id || paymentRecord.paymentId || resp.razorpay_payment_id;
 
             for (const payload of bookingsPayload) {
               const withPayment = {
@@ -989,24 +985,28 @@ export default function BookingPage() {
         return showAppToast("error", "Unauthorized — please login as admin");
       }
 
+      const payload = {
+        busId: selectedBus.busId,
+        date,
+        seats,
+        action: "block",
+        note: blockDetails.note || null,
+        details: {
+          name: blockDetails.name || null,
+          phone: blockDetails.phone || null,
+          email: blockDetails.email || null,
+          pickup: blockDetails.pickup || null,
+          drop: blockDetails.drop || null,
+        },
+      };
+
       const res = await fetch("/api/admin/block-seats", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          busId: selectedBus.busId,
-          date,
-          seats,
-          action: "block",
-          note: blockDetails.note || null,
-          details: {
-            name: blockDetails.name || null,
-            phone: blockDetails.phone || null,
-            email: blockDetails.email || null,
-          },
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -1023,6 +1023,14 @@ export default function BookingPage() {
 
       showAppToast("success", "Seats blocked for admin");
       setBlockModalOpen(false);
+      setBlockDetails({
+        name: "",
+        phone: "",
+        email: "",
+        pickup: "",
+        drop: "",
+        note: "",
+      });
       resetBookingForm();
       await fetchBookings();
     } catch (err) {
@@ -1079,6 +1087,672 @@ export default function BookingPage() {
     }
   };
 
+  /* =========================
+     Seat Template (Print / Download)
+  ========================= */
+  const formatDisplayDate = (value) => {
+    if (!value) return "__ / __ / ____";
+    try {
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return value;
+      return d.toLocaleDateString("en-GB");
+    } catch {
+      return value;
+    }
+  };
+
+  const buildSeatTemplateHtml = () => {
+    if (!selectedBus) {
+      showAppToast("error", "Please open a bus first");
+      return "";
+    }
+
+    const safe = (v) =>
+      String(v ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+    const totalSeats = Number(selectedBus?.seatLayout || selectedBus?.seatCount || 31) || 31;
+    // don't assume 5 cabins by default — use 0 when none provided
+    const cabinCount = Array.isArray(selectedBus?.cabins) ? selectedBus.cabins.length : 0;
+
+    const seatMap = {};
+    Object.entries(bookings || {}).forEach(([seat, b]) => {
+      if (!b) return;
+      seatMap[String(seat)] = b;
+    });
+
+    const renderSeatCard = (seatNo) => {
+      const data = seatMap[String(seatNo)] || {};
+      const isBlocked = data?.status === "blocked";
+
+      // prefer explicit fare fields, fall back to booking fare
+      const amount = data?.amount ?? data?.fare ?? "";
+
+      return `
+          <div class="seat-box ${isBlocked ? "blocked" : ""}">
+            <div class="seat-title">
+              ${safe(seatNo)}W ${isBlocked ? '<span class="blocked-tag">BLOCKED</span>' : ""}
+            </div>
+            <div class="line-row"><span class="label">Name:-</span><span class="value">${safe(data.name || "")}</span></div>
+            <div class="line-row"><span class="label">Email:-</span><span class="value">${safe(data.email || "")}</span></div>
+            <div class="line-row"><span class="label">Phone:-</span><span class="value">${safe(data.phone || "")}</span></div>
+            <div class="line-row"><span class="label">Pickup:-</span><span class="value">${safe(data.pickup || "")}</span></div>
+            <div class="line-row"><span class="label">Drop:-</span><span class="value">${safe(data.drop || "")}</span></div>
+            <div class="line-row"><span class="label">Amount:-</span><span class="value">${safe(amount)}</span></div>
+          </div>
+        `;
+    };
+
+    // layout: top part in 3 columns, last 5 seats in bottom row
+    const allSeatNumbers = Array.from({ length: totalSeats }, (_, i) => i + 1);
+    const topSeats = allSeatNumbers.slice(0, Math.max(totalSeats - 5, 0));
+    const bottomSeats = allSeatNumbers.slice(Math.max(totalSeats - 5, 0));
+
+    const leftColumnSeats = [];
+    const middleColumnSeats = [];
+    const rightColumnSeats = [];
+
+    for (let i = 0; i < topSeats.length; i++) {
+      if (i % 3 === 0) middleColumnSeats.push(topSeats[i]);
+      else if (i % 3 === 1) rightColumnSeats.push(topSeats[i]);
+      else leftColumnSeats.push(topSeats[i]);
+    }
+
+    const maxRows = Math.max(
+      leftColumnSeats.length,
+      middleColumnSeats.length,
+      rightColumnSeats.length
+    );
+
+    let gridRows = "";
+    for (let i = 0; i < maxRows; i++) {
+      gridRows += `
+        <div class="grid-row">
+          <div class="col">${leftColumnSeats[i]
+          ? renderSeatCard(leftColumnSeats[i])
+          : `<div class="seat-placeholder"></div>`
+        }</div>
+          <div class="col">${middleColumnSeats[i]
+          ? renderSeatCard(middleColumnSeats[i])
+          : `<div class="seat-placeholder"></div>`
+        }</div>
+          <div class="col">${rightColumnSeats[i]
+          ? renderSeatCard(rightColumnSeats[i])
+          : `<div class="seat-placeholder"></div>`
+        }</div>
+        </div>
+      `;
+    }
+
+    const bottomRowHtml = bottomSeats
+      .map((seat) => `<div class="bottom-col">${renderSeatCard(seat)}</div>`)
+      .join("");
+
+    const cabinRows = Array.from({ length: cabinCount }, (_, i) => {
+      const cabinSeat = selectedBus?.cabins?.[i]?.seatNo || `CB${i + 1}`;
+      const data = seatMap[String(cabinSeat)] || {};
+      const isBlocked = data?.status === "blocked";
+      const amount = data?.amount ?? data?.fare ?? "";
+
+      return `
+          <tr class="${isBlocked ? "blocked-row" : ""}">
+            <td>${safe(cabinSeat)}</td>
+            <td>${safe(data.name || "")}</td>
+            <td>${safe(data.email || "")}</td>
+            <td>${safe(data.phone || "")}</td>
+            <td>${safe(data.pickup || "")}</td>
+            <td>${safe(data.drop || "")}</td>
+            <td>${safe(amount)}</td>
+            <td>${isBlocked ? "Blocked" : data?.name ? "Booked" : ""}</td>
+          </tr>
+        `;
+    }).join("");
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Seat Template - ${safe(selectedBus.busNumber || "Bus")}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 8mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Times New Roman", serif;
+      color: #111;
+      background: #fff;
+      font-size: 10px;
+      padding: 8px;
+    }
+
+    .sheet {
+      width: 100%;
+      border: 1px solid #888;
+      padding: 8px;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .btn {
+      border: 1px solid #111;
+      background: #fff;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-weight: 700;
+      border-radius: 6px;
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .header-mid {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .bus-left {
+      width: 150px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .bus-center {
+      flex: 1;
+      text-align: center;
+    }
+
+    .bus-center .company {
+      font-size: 20px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .bus-right {
+      width: 220px;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: left;
+    }
+
+    .divider {
+      border-top: 1px solid #999;
+      margin: 6px 0 8px;
+    }
+
+    .grid-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 6px;
+      align-items: start;
+    }
+
+    .col {
+      min-height: 120px;
+    }
+
+    .seat-box {
+      border: 1px solid #777;
+      min-height: 120px;
+      padding: 4px;
+      width: 100%;
+      background: #fff;
+    }
+
+    .seat-box.blocked {
+      background: #fff7ed;
+      border-color: #ea580c;
+    }
+
+    .seat-title {
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .blocked-tag {
+      font-size: 9px;
+      border: 1px solid #ea580c;
+      color: #ea580c;
+      padding: 1px 4px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+
+    .line-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin: 2px 0;
+      min-height: 15px;
+    }
+
+    .label {
+      min-width: 40px;
+      white-space: nowrap;
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .line {
+      flex: 1;
+      border-bottom: 1px solid #777;
+      min-height: 10px;
+    }
+
+    .value {
+      flex: 1;
+      border-bottom: 1px solid #777;
+      min-height: 12px;
+      font-size: 9px;
+      padding-left: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .seat-placeholder {
+      min-height: 120px;
+    }
+
+    .bottom-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-top: 8px;
+      margin-bottom: 10px;
+    }
+
+    .bottom-col .seat-box {
+      min-height: 105px;
+    }
+
+    .cabin-title {
+      text-align: center;
+      font-size: 14px;
+      font-weight: 700;
+      margin: 8px 0 4px;
+      text-transform: uppercase;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th, td {
+      border: 1px solid #777;
+      padding: 4px;
+      font-size: 9px;
+      text-align: left;
+      word-wrap: break-word;
+    }
+
+    th {
+      background: #f8fafc;
+    }
+
+    .blocked-row td {
+      background: #fff7ed;
+    }
+
+    @media print {
+      .actions {
+        display: none;
+      }
+      body {
+        padding: 0;
+      }
+      .sheet {
+        border: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="sheet">
+    <div class="header-top">
+      <div>Date:- ${safe(formatDisplayDate(date))}</div>
+      <div>||श्री||</div>
+      <div>Time:- ${safe(selectedBus.startTime || "--:--")}</div>
+    </div>
+
+    <div class="header-mid">
+      <div class="bus-left">${safe(selectedBus.busNumber || "BUS NO")}</div>
+      <div class="bus-center">
+        <div class="company">SA TRAVEL'S</div>
+      </div>
+      <div class="bus-right">
+        <div>Route:- ${safe(selectedBus.routeName || "")}</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    ${gridRows}
+
+    <div class="bottom-row">
+      ${bottomRowHtml}
+    </div>
+
+    <div class="cabin-title">CABIN</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 10%;">Seat</th>
+          <th style="width: 16%;">Name</th>
+          <th style="width: 18%;">Email</th>
+          <th style="width: 12%;">Phone</th>
+          <th style="width: 14%;">Pickup</th>
+          <th style="width: 14%;">Drop</th>
+          <th style="width: 10%;">Amount</th>
+
+        </tr>
+      </thead>
+      <tbody>
+        ${cabinRows}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
+    `;
+  };
+
+  const handlePrintSeatTemplate = () => {
+    const html = buildSeatTemplateHtml();
+    if (!html) return;
+
+    const printWindow = window.open("", "_blank", "width=1200,height=900");
+    if (!printWindow) {
+      showAppToast("error", "Popup blocked. Please allow popups.");
+      return;
+    }
+
+    const printHtml = html.replace(
+      "</style>",
+      `
+    @page {
+      size: A4 portrait;
+      margin: 8mm;
+    }
+    body {
+      margin: 0;
+      background: #fff;
+    }
+    .sheet {
+      width: 100%;
+      max-width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      box-sizing: border-box;
+    }
+    </style>`
+    );
+
+    printWindow.document.open();
+    printWindow.document.write(printHtml);
+    printWindow.document.close();
+  };
+
+  const handleDownloadSeatTemplate = async () => {
+    try {
+      const html = buildSeatTemplateHtml();
+      if (!html) return;
+
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = html;
+
+      // remove action buttons from PDF
+      const actions = wrapper.querySelector(".actions");
+      if (actions) actions.remove();
+
+      const sheet = wrapper.querySelector(".sheet");
+      if (!sheet) {
+        showAppToast("error", "Template content not found");
+        return;
+      }
+
+      // create a hidden-but-in-viewport container for clean PDF render
+      // (placing it offscreen or with negative z-index can cause html2canvas to capture a blank page)
+      const pdfContainer = document.createElement("div");
+      pdfContainer.style.position = "fixed";
+      pdfContainer.style.left = "0";
+      pdfContainer.style.top = "0";
+      pdfContainer.style.width = "794px"; // A4 width approx at 96dpi
+      pdfContainer.style.background = "#ffffff";
+      pdfContainer.style.padding = "0";
+      pdfContainer.style.zIndex = "99999";
+      // keep it invisible to users but renderable by html2canvas
+      pdfContainer.style.opacity = "0";
+      pdfContainer.style.pointerEvents = "none";
+
+      const style = document.createElement("style");
+      style.innerHTML = `
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: "Times New Roman", serif; }
+      .sheet {
+        width: 794px;
+        min-height: 1123px;
+        padding: 18px;
+        background: #fff;
+        color: #111;
+        font-family: "Times New Roman", serif;
+      }
+      .header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .header-mid {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .bus-left {
+        width: 160px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .bus-center {
+        flex: 1;
+        text-align: center;
+      }
+      .bus-center .company {
+        font-size: 22px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .bus-right {
+        width: 240px;
+        font-size: 14px;
+        font-weight: 700;
+        text-align: left;
+      }
+      .divider {
+        border-top: 1px solid #777;
+        margin: 8px 0 10px;
+      }
+      .grid-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 8px;
+        align-items: start;
+      }
+      .col {
+        min-height: 128px;
+      }
+      .seat-box {
+        border: 1px solid #777;
+        min-height: 128px;
+        padding: 5px;
+        width: 100%;
+        background: #fff;
+      }
+      .seat-box.blocked {
+        background: #fff7ed;
+        border-color: #ea580c;
+      }
+      .seat-title {
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .blocked-tag {
+        font-size: 9px;
+        border: 1px solid #ea580c;
+        color: #ea580c;
+        padding: 1px 4px;
+        border-radius: 10px;
+        font-weight: 700;
+      }
+      .line-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin: 2px 0;
+        min-height: 16px;
+      }
+      .label {
+        min-width: 46px;
+        white-space: nowrap;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .line {
+        flex: 1;
+        border-bottom: 1px solid #777;
+        min-height: 10px;
+      }
+      .value {
+        flex: 1;
+        border-bottom: 1px solid #777;
+        min-height: 12px;
+        font-size: 10px;
+        padding-left: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .seat-placeholder {
+        min-height: 128px;
+      }
+      .bottom-row {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        margin-top: 8px;
+        margin-bottom: 12px;
+      }
+      .bottom-col .seat-box {
+        min-height: 112px;
+      }
+      .cabin-title {
+        text-align: center;
+        font-size: 16px;
+        font-weight: 700;
+        margin: 8px 0 6px;
+        text-transform: uppercase;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      th, td {
+        border: 1px solid #777;
+        padding: 4px;
+        font-size: 9px;
+        text-align: left;
+        word-wrap: break-word;
+      }
+      th {
+        background: #f8fafc;
+      }
+      .blocked-row td {
+        background: #fff7ed;
+      }
+    `;
+
+      pdfContainer.appendChild(style);
+      pdfContainer.appendChild(sheet.cloneNode(true));
+      document.body.appendChild(pdfContainer);
+
+      const element = pdfContainer;
+
+      const opt = {
+        margin: [5, 5, 5, 5],
+        filename: `seat-template-${selectedBus?.busNumber || "bus"}-${date || "date"}.pdf`,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          scrollX: 0,
+          scrollY: 0,
+        },
+        jsPDF: {
+          unit: "mm",
+          format: "a4",
+          orientation: "portrait",
+        },
+        pagebreak: {
+          mode: ["avoid-all", "css", "legacy"],
+        },
+      };
+
+      await html2pdf().set(opt).from(element).save();
+
+      document.body.removeChild(pdfContainer);
+      showAppToast("success", "Seat template PDF downloaded");
+    } catch (error) {
+      console.error(error);
+      showAppToast("error", "Failed to download PDF");
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-[#f8fafc] p-4 md:p-6 lg:p-8">
       {/* Header */}
@@ -1087,9 +1761,7 @@ export default function BookingPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#f97316]">
             SA TOURS BOOKING
           </p>
-          <h1 className="mt-1 text-3xl font-bold text-slate-900">
-            Select Bus & View Seats
-          </h1>
+          <h1 className="mt-1 text-3xl font-bold text-slate-900">Select Bus & View Seats</h1>
           <p className="mt-1 text-sm text-slate-500">
             Choose a date to see available buses, then open the seat layout.
           </p>
@@ -1097,9 +1769,7 @@ export default function BookingPage() {
 
         <div className="inline-flex items-center gap-2 rounded-2xl border border-orange-100 bg-white px-4 py-3 shadow-sm">
           <ShieldCheck className="h-5 w-5 text-[#f97316]" />
-          <span className="text-sm font-semibold text-slate-700">
-            Live Availability View
-          </span>
+          <span className="text-sm font-semibold text-slate-700">Live Availability View</span>
         </div>
       </div>
 
@@ -1117,9 +1787,7 @@ export default function BookingPage() {
         />
 
         <div className="xl:col-span-2 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <label className="mb-3 block text-sm font-semibold text-slate-700">
-            Select Travel Date
-          </label>
+          <label className="mb-3 block text-sm font-semibold text-slate-700">Select Travel Date</label>
 
           <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
             <CalendarDays className="h-5 w-5 text-[#f97316]" />
@@ -1140,9 +1808,7 @@ export default function BookingPage() {
       {/* Bus List */}
       <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-xl font-bold text-slate-900 md:text-2xl">
-            Available Buses
-          </h2>
+          <h2 className="text-xl font-bold text-slate-900 md:text-2xl">Available Buses</h2>
           <p className="mt-1 text-sm text-slate-500">
             {date
               ? `Showing ${availableBuses.length} available bus(es) for ${date}`
@@ -1153,21 +1819,15 @@ export default function BookingPage() {
         <div className="p-4 md:p-5">
           {loading ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-              <p className="text-sm font-medium text-slate-700">
-                Loading buses and schedules...
-              </p>
+              <p className="text-sm font-medium text-slate-700">Loading buses and schedules...</p>
             </div>
           ) : !date ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-              <p className="text-sm font-medium text-slate-700">
-                Please select a date first
-              </p>
+              <p className="text-sm font-medium text-slate-700">Please select a date first</p>
             </div>
           ) : availableBuses.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-              <p className="text-sm font-medium text-slate-700">
-                No buses available for this date
-              </p>
+              <p className="text-sm font-medium text-slate-700">No buses available for this date</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4">
@@ -1179,7 +1839,7 @@ export default function BookingPage() {
                 const booked = bookedCounts[bus.busId]?.booked ?? 0;
                 const blocked = bookedCounts[bus.busId]?.blocked ?? 0;
                 const cabins = Array.isArray(bus.cabins) ? bus.cabins.length : 0;
-                const available = Math.max(totalSeats - booked, 0);
+                const available = Math.max(totalSeats - booked - blocked, 0);
 
                 return (
                   <div
@@ -1231,7 +1891,12 @@ export default function BookingPage() {
                           <MiniStat label="Booked" value={booked} bg="bg-slate-100" text="text-slate-700" />
                           <MiniStat label="Blocked" value={blocked} bg="bg-amber-50" text="text-amber-700" />
                           <MiniStat label="Cabins" value={cabins} bg="bg-indigo-50" text="text-indigo-700" />
-                          <MiniStat label="Available" value={available} bg="bg-green-50" text="text-green-700" />
+                          <MiniStat
+                            label="Available"
+                            value={available}
+                            bg="bg-green-50"
+                            text="text-green-700"
+                          />
                         </div>
                       </div>
                     </div>
@@ -1284,7 +1949,21 @@ export default function BookingPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handlePrintSeatTemplate}
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Print Template
+                </button>
+
+                <button
+                  onClick={handleDownloadSeatTemplate}
+                  className="rounded-2xl bg-[#f97316] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea580c]"
+                >
+                  Download PDF
+                </button>
+
                 <button
                   onClick={closeBusModal}
                   className="rounded-2xl p-2 text-slate-500 transition hover:bg-slate-100"
@@ -1363,7 +2042,14 @@ export default function BookingPage() {
                           if (!seats.length) {
                             return showAppToast("error", "Select seats to block");
                           }
-                          setBlockDetails({ name: "", phone: "", email: "", note: "" });
+                          setBlockDetails({
+                            name: "",
+                            phone: "",
+                            email: "",
+                            pickup: "",
+                            drop: "",
+                            note: "",
+                          });
                           setBlockModalOpen(true);
                         }}
                         className="rounded-xl bg-yellow-500 px-3 py-2 text-sm text-white"
@@ -1390,9 +2076,7 @@ export default function BookingPage() {
                       <input
                         placeholder="Name"
                         value={bookingForm.name ?? ""}
-                        onChange={(e) =>
-                          setBookingForm((p) => ({ ...p, name: e.target.value }))
-                        }
+                        onChange={(e) => setBookingForm((p) => ({ ...p, name: e.target.value }))}
                         className="w-full rounded-lg border px-3 py-2"
                         disabled={!editingSeat && selectedSeats.length === 0}
                       />
@@ -1400,9 +2084,7 @@ export default function BookingPage() {
                       <input
                         placeholder="Phone number"
                         value={bookingForm.phone ?? ""}
-                        onChange={(e) =>
-                          setBookingForm((p) => ({ ...p, phone: e.target.value }))
-                        }
+                        onChange={(e) => setBookingForm((p) => ({ ...p, phone: e.target.value }))}
                         className="w-full rounded-lg border px-3 py-2"
                         disabled={!editingSeat && selectedSeats.length === 0}
                       />
@@ -1410,9 +2092,7 @@ export default function BookingPage() {
                       <input
                         placeholder="Email"
                         value={bookingForm.email ?? ""}
-                        onChange={(e) =>
-                          setBookingForm((p) => ({ ...p, email: e.target.value }))
-                        }
+                        onChange={(e) => setBookingForm((p) => ({ ...p, email: e.target.value }))}
                         className="w-full rounded-lg border px-3 py-2"
                         disabled={!editingSeat && selectedSeats.length === 0}
                       />
@@ -1474,18 +2154,11 @@ export default function BookingPage() {
                               }));
                             }}
                             className="w-full rounded-lg border px-3 py-2"
-                            disabled={
-                              (!editingSeat && selectedSeats.length === 0) || !bookingForm.pickup
-                            }
+                            disabled={(!editingSeat && selectedSeats.length === 0) || !bookingForm.pickup}
                           >
                             <option value="">Select drop</option>
                             {dropOptions.map((stop, i) => {
-                              const fare = calculateFare(
-                                selectedBus,
-                                bookingForm.pickup,
-                                stop,
-                                date
-                              );
+                              const fare = calculateFare(selectedBus, bookingForm.pickup, stop, date);
 
                               return (
                                 <option key={i} value={stop}>
@@ -1553,9 +2226,7 @@ export default function BookingPage() {
                                   </div>
 
                                   <div className="ml-2">
-                                    <label className="block text-xs text-slate-500">
-                                      Override fare
-                                    </label>
+                                    <label className="block text-xs text-slate-500">Override fare</label>
                                     <input
                                       type="number"
                                       step="0.01"
@@ -1626,9 +2297,7 @@ export default function BookingPage() {
 
                     <div className="space-y-2">
                       {visibleBookings.length === 0 ? (
-                        <div className="text-sm text-slate-500">
-                          No bookings for this bus/date.
-                        </div>
+                        <div className="text-sm text-slate-500">No bookings for this bus/date.</div>
                       ) : (
                         visibleBookings.map(([seat, b]) => (
                           <div
@@ -1637,12 +2306,21 @@ export default function BookingPage() {
                           >
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
-                                <div className="text-lg font-bold text-slate-900">
-                                  Seat {seat}
+                                <div className="flex flex-wrap items-center gap-2 text-lg font-bold text-slate-900">
+                                  <span>Seat {seat}</span>
+                                  {b.status === "blocked" ? (
+                                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                                      BLOCKED
+                                    </span>
+                                  ) : (
+                                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                                      BOOKED
+                                    </span>
+                                  )}
                                 </div>
+
                                 <div className="mt-1 text-sm text-slate-700">
-                                  {b.name || "—"}{" "}
-                                  <span className="mx-2 text-slate-400">•</span>{" "}
+                                  {b.name || "—"} <span className="mx-2 text-slate-400">•</span>{" "}
                                   {b.phone || "—"}
                                 </div>
 
@@ -1655,6 +2333,10 @@ export default function BookingPage() {
                                   {b.pickupTime ? ` (${b.pickupTime})` : ""} → {b.drop || "-"}
                                   {b.dropTime ? ` (${b.dropTime})` : ""}
                                 </div>
+
+                                {b.status === "blocked" && b.note ? (
+                                  <div className="mt-1 text-xs text-orange-600">Note: {b.note}</div>
+                                ) : null}
 
                                 {b.fare !== undefined && b.fare !== null ? (
                                   <div className="mt-1 text-sm font-medium text-slate-700">
@@ -1683,9 +2365,7 @@ export default function BookingPage() {
                                       drop: b.drop || "",
                                       dropTime: b.dropTime || "",
                                       fareOverride:
-                                        b.fare !== undefined && b.fare !== null
-                                          ? String(b.fare)
-                                          : "",
+                                        b.fare !== undefined && b.fare !== null ? String(b.fare) : "",
                                     });
 
                                     const fare = calculateFare(
@@ -1757,36 +2437,42 @@ export default function BookingPage() {
                 <input
                   placeholder="Name"
                   value={blockDetails.name}
-                  onChange={(e) =>
-                    setBlockDetails((p) => ({ ...p, name: e.target.value }))
-                  }
+                  onChange={(e) => setBlockDetails((p) => ({ ...p, name: e.target.value }))}
                   className="w-full rounded-lg border px-3 py-2"
                 />
 
                 <input
                   placeholder="Phone"
                   value={blockDetails.phone}
-                  onChange={(e) =>
-                    setBlockDetails((p) => ({ ...p, phone: e.target.value }))
-                  }
+                  onChange={(e) => setBlockDetails((p) => ({ ...p, phone: e.target.value }))}
                   className="w-full rounded-lg border px-3 py-2"
                 />
 
                 <input
                   placeholder="Email"
                   value={blockDetails.email}
-                  onChange={(e) =>
-                    setBlockDetails((p) => ({ ...p, email: e.target.value }))
-                  }
+                  onChange={(e) => setBlockDetails((p) => ({ ...p, email: e.target.value }))}
+                  className="w-full rounded-lg border px-3 py-2"
+                />
+
+                <input
+                  placeholder="Pickup Stop"
+                  value={blockDetails.pickup}
+                  onChange={(e) => setBlockDetails((p) => ({ ...p, pickup: e.target.value }))}
+                  className="w-full rounded-lg border px-3 py-2"
+                />
+
+                <input
+                  placeholder="Drop Stop"
+                  value={blockDetails.drop}
+                  onChange={(e) => setBlockDetails((p) => ({ ...p, drop: e.target.value }))}
                   className="w-full rounded-lg border px-3 py-2"
                 />
 
                 <textarea
                   placeholder="Note (optional)"
                   value={blockDetails.note}
-                  onChange={(e) =>
-                    setBlockDetails((p) => ({ ...p, note: e.target.value }))
-                  }
+                  onChange={(e) => setBlockDetails((p) => ({ ...p, note: e.target.value }))}
                   className="w-full rounded-lg border px-3 py-2"
                   rows={3}
                 />
@@ -1819,9 +2505,7 @@ export default function BookingPage() {
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="text-lg font-bold text-slate-900">
-                    Seat {viewBooking.seat}
-                  </div>
+                  <div className="text-lg font-bold text-slate-900">Seat {viewBooking.seat}</div>
                   <div className="mt-2 text-sm font-semibold text-slate-700">
                     {viewBooking.booking?.name || "—"}
                   </div>
@@ -1835,19 +2519,28 @@ export default function BookingPage() {
                     ) : null}
                   </div>
 
+                  {viewBooking.booking?.status === "blocked" ? (
+                    <div className="mt-2 inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
+                      BLOCKED SEAT
+                    </div>
+                  ) : (
+                    <div className="mt-2 inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                      BOOKED SEAT
+                    </div>
+                  )}
+
                   <div className="mt-3 text-sm text-slate-400">
                     {viewBooking.booking?.pickup || "-"}
-                    {viewBooking.booking?.pickupTime
-                      ? ` (${viewBooking.booking?.pickupTime})`
-                      : ""}{" "}
-                    → {viewBooking.booking?.drop || "-"}
-                    {viewBooking.booking?.dropTime
-                      ? ` (${viewBooking.booking?.dropTime})`
-                      : ""}
+                    {viewBooking.booking?.pickupTime ? ` (${viewBooking.booking?.pickupTime})` : ""} →{" "}
+                    {viewBooking.booking?.drop || "-"}
+                    {viewBooking.booking?.dropTime ? ` (${viewBooking.booking?.dropTime})` : ""}
                   </div>
 
-                  {viewBooking.booking?.fare !== undefined &&
-                    viewBooking.booking?.fare !== null ? (
+                  {viewBooking.booking?.status === "blocked" && viewBooking.booking?.note ? (
+                    <div className="mt-2 text-sm text-orange-600">Note: {viewBooking.booking?.note}</div>
+                  ) : null}
+
+                  {viewBooking.booking?.fare !== undefined && viewBooking.booking?.fare !== null ? (
                     <div className="mt-2 text-sm font-medium text-slate-700">
                       Fare: ₹{Number(viewBooking.booking.fare).toFixed(2)}
                     </div>
@@ -1870,10 +2563,7 @@ export default function BookingPage() {
                           try {
                             const token = localStorage.getItem("authToken");
                             if (!token) {
-                              return showAppToast(
-                                "error",
-                                "Unauthorized — please login as admin"
-                              );
+                              return showAppToast("error", "Unauthorized — please login as admin");
                             }
 
                             const seat = String(viewBooking.seat);
@@ -1927,8 +2617,7 @@ export default function BookingPage() {
                         pickupTime: b.pickupTime || "",
                         drop: b.drop || "",
                         dropTime: b.dropTime || "",
-                        fareOverride:
-                          b.fare !== undefined && b.fare !== null ? String(b.fare) : "",
+                        fareOverride: b.fare !== undefined && b.fare !== null ? String(b.fare) : "",
                       });
 
                       const fare = calculateFare(selectedBus, b.pickup || "", b.drop || "", date);
@@ -2031,9 +2720,7 @@ function ConfirmModal({ message, onCancel, onConfirm, loading }) {
 function MiniStat({ label, value, bg, text }) {
   return (
     <div className={`rounded-2xl px-3 py-3 ${bg}`}>
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-        {label}
-      </p>
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">{label}</p>
       <p className={`mt-1 text-lg font-bold ${text}`}>{value}</p>
     </div>
   );
@@ -2044,9 +2731,7 @@ function CompactInfoCard({ icon, label, value }) {
     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
       <div className="mb-1.5 flex items-center gap-2">
         {icon}
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
-          {label}
-        </p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">{label}</p>
       </div>
       <p className="text-base font-semibold text-slate-900 md:text-lg">{value}</p>
     </div>

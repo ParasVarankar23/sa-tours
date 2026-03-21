@@ -45,12 +45,16 @@ export default function ChatWidget() {
     const [messages, setMessages] = useState(DEFAULT_MESSAGES);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
+    const [modelInfo, setModelInfo] = useState(null);
 
     const modalRef = useRef(null);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
-    const canSend = useMemo(() => input.trim().length > 0 && !loading, [input, loading]);
+    const canSend = useMemo(
+        () => input.trim().length > 0 && !loading,
+        [input, loading]
+    );
 
     /* -------------------------------------------------------
        LOAD CHAT HISTORY
@@ -130,6 +134,64 @@ export default function ChatWidget() {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, loading, isOpen]);
 
+    // Render assistant message content: detect simple lists and render with icons/numbers
+    function renderMessageContent(text) {
+        if (!text) return null;
+
+        const lines = String(text)
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter(Boolean);
+
+        // If it's a short multi-line message, render as list with icons
+        if (lines.length > 1) {
+            return (
+                <div className="space-y-2">
+                    {lines.map((line, idx) => {
+                        // strip leading bullets or markdown
+                        const clean = line.replace(/^[\*\-\d\.\s]+/, "").replace(/\*\*/g, "").trim();
+
+                        // choose icon: route (has arrow), time (contains AM/PM), contact/phone (contains call/phone/helpline)
+                        let Icon = MapPin;
+                        if (/→|->|to|\bto\b/i.test(clean)) Icon = MapPin;
+                        else if (/\bAM\b|\bPM\b|time|timings|schedule/i.test(clean)) Icon = Clock3;
+                        else if (/call|helpline|booking|phone|contact/i.test(clean)) Icon = Phone;
+
+                        // split title and detail by ':' if present
+                        const [title, ...rest] = clean.split(":");
+                        const detail = rest.join(":").trim();
+
+                        return (
+                            <div key={idx} className="flex items-start gap-3">
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                    <span className="text-[10px] font-semibold">{idx + 1}</span>
+                                </div>
+
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <Icon className="h-4 w-4 text-orange-500" />
+                                        <div className="text-sm font-semibold text-slate-900">
+                                            {title}
+                                        </div>
+                                    </div>
+
+                                    {detail && (
+                                        <div className="mt-1 text-sm text-slate-600">
+                                            {detail}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        }
+
+        // single-line or fallback: preserve line breaks
+        return <p className="whitespace-pre-wrap break-words">{text}</p>;
+    }
+
     /* -------------------------------------------------------
        SEND MESSAGE
     ------------------------------------------------------- */
@@ -158,6 +220,12 @@ export default function ChatWidget() {
             });
 
             const data = await res.json();
+
+            setModelInfo({
+                source: data?.source || null,
+                modelUsed: data?.modelUsed || data?.modelTried || null,
+                error: data?.error || null,
+            });
 
             setMessages((prev) => [
                 ...prev,
@@ -188,6 +256,8 @@ export default function ChatWidget() {
 
     const clearChat = () => {
         setMessages(DEFAULT_MESSAGES);
+        setModelInfo(null);
+
         try {
             localStorage.removeItem(STORAGE_KEY);
         } catch (error) {
@@ -252,9 +322,22 @@ export default function ChatWidget() {
                                             <h3 className="truncate text-lg font-bold text-slate-900 sm:text-xl">
                                                 Live Help Chat
                                             </h3>
-                                            <p className="text-xs font-medium text-emerald-600 sm:text-sm">
-                                                Online now
-                                            </p>
+
+                                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                <p className="text-xs font-medium text-emerald-600 sm:text-sm">
+                                                    Online now
+                                                </p>
+
+                                                {modelInfo?.source && (
+                                                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600 sm:text-xs">
+                                                        {modelInfo.source === "gemini"
+                                                            ? `Powered by ${modelInfo.modelUsed || "Gemini"}`
+                                                            : modelInfo.source === "local-fallback"
+                                                                ? "Local fallback"
+                                                                : "Chat support"}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 
@@ -267,6 +350,7 @@ export default function ChatWidget() {
                                         <X className="h-5 w-5 sm:h-6 sm:w-6" />
                                     </button>
                                 </div>
+
 
                             </div>
 
@@ -281,8 +365,8 @@ export default function ChatWidget() {
                                         >
                                             <div
                                                 className={`max-w-[88%] rounded-3xl px-4 py-3 text-sm leading-6 shadow-sm sm:max-w-[84%] ${message.role === "user"
-                                                        ? "rounded-br-md bg-orange-500 text-white"
-                                                        : "rounded-bl-md border border-slate-200 bg-white text-slate-800"
+                                                    ? "rounded-br-md bg-orange-500 text-white"
+                                                    : "rounded-bl-md border border-slate-200 bg-white text-slate-800"
                                                     }`}
                                             >
                                                 <p className="whitespace-pre-wrap break-words">
@@ -321,6 +405,32 @@ export default function ChatWidget() {
                                     ))}
                                 </div>
 
+                                {/* Action Buttons */}
+                                <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                    <Link
+                                        href="/login"
+                                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                                    >
+                                        <Ticket className="h-4 w-4 text-orange-500" />
+                                        Book Now
+                                    </Link>
+
+                                    <Link
+                                        href="/schedule"
+                                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                                    >
+                                        <CalendarDays className="h-4 w-4 text-orange-500" />
+                                        Schedule
+                                    </Link>
+
+                                    <button
+                                        type="button"
+                                        onClick={clearChat}
+                                        className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                                    >
+                                        Clear Chat
+                                    </button>
+                                </div>
 
                                 {/* Input */}
                                 <form onSubmit={handleSubmit} className="flex items-center gap-2">

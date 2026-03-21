@@ -8,11 +8,14 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 ------------------------------------------------------- */
 const CONTACTS = {
     helpline: "8805718986",
-    dighiBus: "9273635316",
-    borliBus: "9209471309",
     booking: "9209471601",
+    borliBus: "9209471309",
+    dighiBus: "9273635316",
 };
 
+/* -------------------------------------------------------
+   ROUTE DETAILS
+------------------------------------------------------- */
 const ROUTES = [
     {
         name: "Dighi → Dongri",
@@ -41,7 +44,7 @@ const ROUTES = [
 ];
 
 /* -------------------------------------------------------
-   SYSTEM PROMPT
+   SYSTEM PROMPT FOR GEMINI
 ------------------------------------------------------- */
 const SYSTEM_PROMPT = `
 You are the official AI assistant for SA Tours & Travels.
@@ -53,6 +56,7 @@ Your job:
 - Help with fares
 - Help with contact details
 - Help with booking support
+- Help with payment support
 - Answer politely and professionally
 - Keep responses short, clear, and useful
 - Use simple English
@@ -64,9 +68,9 @@ Business details:
 
 Contact details:
 - Helpline number: ${CONTACTS.helpline}
-- Dighi ↔ Dongri bus number: ${CONTACTS.dighiBus}
-- Borli ↔ Dongri bus number: ${CONTACTS.borliBus}
 - Booking number: ${CONTACTS.booking}
+- Borli ↔ Dongri bus number: ${CONTACTS.borliBus}
+- Dighi ↔ Dongri bus number: ${CONTACTS.dighiBus}
 
 Main routes:
 1. Dighi → Dongri (Morning) - Bus: ${CONTACTS.dighiBus}
@@ -81,7 +85,7 @@ Known timings:
 - Dongri → Dighi: 4:00 PM to 10:30 PM
 
 Rules:
-- If the user asks about booking, suggest using the Login option on the website and mention booking number ${CONTACTS.booking}.
+- If the user asks about booking, tell them to use the Book Now option on the website and mention booking number ${CONTACTS.booking}.
 - If the user asks about urgent confirmation/payment issues, tell them to call helpline ${CONTACTS.helpline}.
 - If the user asks about Borli route, mention bus number ${CONTACTS.borliBus}.
 - If the user asks about Dighi route, mention bus number ${CONTACTS.dighiBus}.
@@ -94,6 +98,7 @@ Rules:
 
 /* -------------------------------------------------------
    LOCAL SMART FALLBACK BOT
+   (Used when Gemini quota/model fails)
 ------------------------------------------------------- */
 function getLocalBotReply(message = "") {
     const text = String(message).toLowerCase().trim();
@@ -101,9 +106,9 @@ function getLocalBotReply(message = "") {
     const fullContactBlock = `SA Tours & Travels contact details:
 
 • Helpline: ${CONTACTS.helpline}
-• Dighi ↔ Dongri bus number: ${CONTACTS.dighiBus}
+• Booking contact: ${CONTACTS.booking}
 • Borli ↔ Dongri bus number: ${CONTACTS.borliBus}
-• Booking contact: ${CONTACTS.booking}`;
+• Dighi ↔ Dongri bus number: ${CONTACTS.dighiBus}`;
 
     // Timings / schedule
     if (
@@ -271,7 +276,7 @@ Useful contacts:
 • Booking contact: ${CONTACTS.booking}`;
     }
 
-    // Default welcome
+    // Default
     return `Hello 👋 Welcome to SA Tours & Travels.
 
 I can help you with:
@@ -284,15 +289,59 @@ I can help you with:
 
 Contact details:
 • Helpline: ${CONTACTS.helpline}
-• Dighi ↔ Dongri bus number: ${CONTACTS.dighiBus}
-• Borli ↔ Dongri bus number: ${CONTACTS.borliBus}
 • Booking contact: ${CONTACTS.booking}
+• Borli ↔ Dongri bus number: ${CONTACTS.borliBus}
+• Dighi ↔ Dongri bus number: ${CONTACTS.dighiBus}
 
 You can ask:
 • What are today’s bus timings?
 • How can I book a seat?
 • What is the fare?
 • What are the available routes?`;
+}
+
+/* -------------------------------------------------------
+   GEMINI REQUEST
+------------------------------------------------------- */
+async function getGeminiReply(prompt) {
+    const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                contents: [
+                    {
+                        parts: [{ text: prompt }],
+                    },
+                ],
+                generationConfig: {
+                    temperature: 0.6,
+                    maxOutputTokens: 500,
+                },
+            }),
+        }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        return {
+            ok: false,
+            error: data?.error?.message || "Gemini API request failed.",
+            data,
+        };
+    }
+
+    const reply =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+
+    return {
+        ok: true,
+        reply,
+    };
 }
 
 /* -------------------------------------------------------
@@ -313,7 +362,7 @@ export async function POST(req) {
             );
         }
 
-        // If no Gemini key, directly use local bot
+        // If no API key -> local fallback
         if (!GEMINI_API_KEY) {
             return NextResponse.json({
                 reply: getLocalBotReply(latestUserMessage),
@@ -336,49 +385,21 @@ ${latestUserMessage}
 
 Now answer as SA Tours & Travels AI assistant.`;
 
-        const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    contents: [
-                        {
-                            parts: [{ text: prompt }],
-                        },
-                    ],
-                    generationConfig: {
-                        temperature: 0.6,
-                        maxOutputTokens: 500,
-                    },
-                }),
-            }
-        );
+        const gemini = await getGeminiReply(prompt);
 
-        const data = await geminiResponse.json();
-
-        // Fallback if Gemini fails / quota issue / model issue
-        if (!geminiResponse.ok) {
-            const errorMessage = data?.error?.message || "";
-
-            console.error("Gemini API error", geminiResponse.status, data);
+        // If Gemini fails -> local fallback (NO raw error shown to user)
+        if (!gemini.ok) {
+            console.error("Gemini API error:", gemini.error);
 
             return NextResponse.json({
                 reply: getLocalBotReply(latestUserMessage),
                 source: "local-fallback",
                 modelTried: GEMINI_MODEL,
-                error: errorMessage,
             });
         }
 
-        const reply =
-            data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
-            getLocalBotReply(latestUserMessage);
-
         return NextResponse.json({
-            reply,
+            reply: gemini.reply || getLocalBotReply(latestUserMessage),
             source: "gemini",
             modelUsed: GEMINI_MODEL,
         });
