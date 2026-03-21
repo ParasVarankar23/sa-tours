@@ -15,20 +15,20 @@ export function getSeatRows(total) {
             { left: 9, right: [10, 11] },
             { left: 12, right: [13, 14] },
             { left: 15, right: [16, 17] },
-            { left: 18, right: [] },
-            { left: null, right: [19, 20, 21, 22, 23], isBack: true },
+            { left: 18, right: null },
+            { left: null, right:  [19, 20, 21, 22, 23], isBack: true }
         ],
 
         27: [
             { left: null, right: [1, 2] },
-            { left: 3, right: [4, 5] },
-            { left: 6, right: [7, 8] },
-            { left: 9, right: [10, 11] },
-            { left: 12, right: [13, 14] },
-            { left: 15, right: [16, 17] },
-            { left: 18, right: [19, 20] },
-            { left: 21, right: [22] },
-            { left: null, right: [23, 24, 25, 26, 27], isBack: true },
+            { left: null, right: [4, 5] },
+            { left: 3, right: [7, 8] },
+            { left: 6, right: [10, 11] },
+            { left: 9, right: [13, 14] },
+            { left: 12, right: [16, 17] },
+            { left: 15, right: [19, 20] },
+            { left: 18, right: [21, 22] },
+            { left: null, right: [23, 24, 25, 26, 27], isBack: true }
         ],
 
         31: [
@@ -41,7 +41,7 @@ export function getSeatRows(total) {
             { left: 18, right: [19, 20] },
             { left: 21, right: [22, 23] },
             { left: 24, right: [25, 26] },
-            { left: null, right: [27, 28, 29, 30, 31], isBack: true },
+            { left: null, right: [27, 28, 29, 30, 31], isBack: true }
         ],
     };
 
