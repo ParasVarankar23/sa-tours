@@ -8,7 +8,7 @@ const routes = [
     "Borli Panchatan",
     "Dighi",
     "Velas",
-    "Mahasala",
+    "Mhasla",
     "Mangaon",
     "Panvel",
     "Vashi",
@@ -102,7 +102,7 @@ export default function RoutesPreview() {
                         </div>
                         <p className="mt-4 text-sm font-medium text-slate-500">Main Pickup Areas</p>
                         <h3 className="mt-2 text-lg font-bold text-slate-900">
-                            Borli, Dighi, Mahasala, Mangoan
+                            Borli, Dighi, Mhasla, Mangoan
                         </h3>
                         <p className="mt-2 text-sm leading-7 text-slate-600">
                             Regular boarding support from major nearby travel points and local stops.

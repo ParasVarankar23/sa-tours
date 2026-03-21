@@ -19,7 +19,7 @@ export default function Footer() {
 
                         <p className="mt-4 text-sm leading-7 text-slate-600">
                             Providing reliable daily bus service from Borli, Dighi,
-                            Mahasala and Mangaon to Panvel, Vashi and Mumbai, along with private
+                            Mhasla and Mangaon to Panvel, Vashi and Mumbai, along with private
                             bus booking for weddings, events and group travel.
                         </p>
                     </div>
@@ -60,7 +60,7 @@ export default function Footer() {
                             </p>
                             <p className="flex items-start gap-2">
                                 <MapPin size={16} className="mt-0.5 text-orange-500" />
-                                Mahasala Office, Near ST Stand
+                                Mhasla Office, Near ST Stand
                             </p>
                             <p className="flex items-start gap-2">
                                 <MapPin size={16} className="mt-0.5 text-orange-500" />
@@ -68,7 +68,7 @@ export default function Footer() {
                             </p>
                             <p className="flex items-center gap-2">
                                 <Phone size={16} className="text-orange-500" />
-                                +91 88302 10690
+                                +91  92094 71309
                             </p>
                             <p className="flex items-center gap-2">
                                 <Mail size={16} className="text-orange-500" />
@@ -77,7 +77,7 @@ export default function Footer() {
                         </div>
 
                         <a
-                            href="https://wa.me/+91 88302 106909"
+                            href="https://wa.me/+91 9209471309"
                             target="_blank"
                             className="mt-5 inline-flex items-center gap-2 rounded-full bg-green-500 px-5 py-3 text-sm font-semibold text-white"
                         >

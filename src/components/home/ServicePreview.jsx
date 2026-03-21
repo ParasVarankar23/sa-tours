@@ -1,20 +1,20 @@
 "use client";
 
-import Link from "next/link";
 import { motion } from "framer-motion";
 import {
+    ArrowRight,
+    BriefcaseBusiness,
     Bus,
     CalendarHeart,
     MapPinned,
     Users2,
-    BriefcaseBusiness,
-    ArrowRight,
 } from "lucide-react";
+import Link from "next/link";
 
 const services = [
     {
         title: "Daily Bus Service",
-        desc: "Regular passenger transport from Borli, Dighi, Mahasala and nearby areas to Panvel, Vashi and Mumbai.",
+        desc: "Regular passenger transport from Borli, Dighi, Mhasla and nearby areas to Panvel, Vashi and Mumbai.",
         icon: Bus,
         badge: "Daily",
     },

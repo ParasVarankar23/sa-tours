@@ -127,7 +127,7 @@ export default function AboutPreview() {
                             >
                                 <div className="relative h-[260px] sm:h-[300px] lg:h-[340px] overflow-hidden rounded-[22px]">
                                     <Image
-                                        src="/sa1.jpeg"
+                                        src="/bus1.jpeg"
                                         alt="SA Tours Main Bus"
                                         fill
                                         className="object-cover transition duration-500 hover:scale-105"
@@ -158,7 +158,7 @@ export default function AboutPreview() {
                                 >
                                     <div className="relative h-[120px] sm:h-[135px] lg:h-[150px] overflow-hidden rounded-[18px]">
                                         <Image
-                                            src="/sa2.jpeg"
+                                            src="/sa3.jpeg"
                                             alt="SA Tours Bus Side View"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -173,7 +173,7 @@ export default function AboutPreview() {
                                 >
                                     <div className="relative h-[120px] sm:h-[135px] lg:h-[150px] overflow-hidden rounded-[18px]">
                                         <Image
-                                            src="/sa3.jpeg"
+                                            src="/bus3.jpeg"
                                             alt="SA Tours Travel Vehicle"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -232,7 +232,7 @@ export default function AboutPreview() {
                             className="mt-4 text-[15px] leading-8 text-slate-600 sm:text-base"
                         >
                             SA Tours & Travels provides regular daily passenger service from
-                            Borli Panchatan, Dighi, Mahasala, Mangoan and nearby areas to
+                            Borli Panchatan, Dighi, Mhasla, Mangoan and nearby areas to
                             Panvel, Vashi and Mumbai. We also offer private bus booking for
                             weddings, group events, staff transport and special tours.
                         </motion.p>

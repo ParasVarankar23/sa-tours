@@ -224,7 +224,7 @@ export default function LoginPage() {
                         >
                             Access your account to check booking status, view daily bus schedules,
                             manage travel details and stay updated with route timing information for
-                            Borli, Dighi, Mahasala, Panvel, Vashi and Mumbai.
+                            Borli, Dighi, Mhasla, Panvel, Vashi and Mumbai.
                         </motion.p>
 
                         <motion.div

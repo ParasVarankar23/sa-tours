@@ -73,7 +73,7 @@ export default function TermsPage() {
                         </div>
 
                         <p className="mt-5 text-sm leading-7 text-slate-600">
-                            For clarifications, contact us at +91 88302 10690 or via WhatsApp.
+                            For clarifications, contact us at +91  92094 71309 or via WhatsApp.
                         </p>
                     </div>
                 </div>

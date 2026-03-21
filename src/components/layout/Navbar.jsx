@@ -64,7 +64,7 @@ export default function Navbar() {
                         </Link>
 
                         <a
-                            href="https://wa.me/+91 88302 106909"
+                            href="https://wa.me/+91 9209471309"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:bg-orange-600"
@@ -112,7 +112,7 @@ export default function Navbar() {
                                 </Link>
 
                                 <a
-                                    href="https://wa.me/+91 88302 106909"
+                                    href="https://wa.me/+91 9209471309"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center justify-center gap-2 rounded-full bg-orange-500 px-4 py-3 text-sm font-semibold text-white"

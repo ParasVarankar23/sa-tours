@@ -17,11 +17,11 @@ const offices = [
         name: "Borli Panchatan Office",
         address: "Near ST Stand, Borli Panchatan",
         type: "Main Office",
-        support: "Seat booking, route guidance and daily travel assistance",
+        support: "Booking, route guidance and daily travel assistance",
     },
     {
-        name: "Mahasala Office",
-        address: "Near ST Stand, Mahasala",
+        name: "Mhasla Office",
+        address: "Near ST Stand, Mhasla",
         type: "Support Office",
         support: "Passenger support, timing details and local booking help",
     },
@@ -116,7 +116,7 @@ export default function OfficesPreview() {
                             {/* ACTION BUTTONS */}
                             <div className="mt-5 flex flex-wrap gap-3">
                                 <a
-                                    href="tel:+91 88302 10690"
+                                    href="tel:+91  92094 71309"
                                     className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-500"
                                 >
                                     <Phone size={15} />
@@ -124,7 +124,7 @@ export default function OfficesPreview() {
                                 </a>
 
                                 <a
-                                    href="https://wa.me/918830210690"
+                                    href="https://wa.me/919209471309"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center justify-center gap-2 rounded-full bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"

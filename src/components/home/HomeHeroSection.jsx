@@ -69,7 +69,7 @@ export default function HomeHeroSection() {
                             className="mt-4 max-w-[95%] text-[15px] leading-8 text-slate-600 sm:text-base"
                         >
                             SA Tours & Travels provides reliable daily bus service from Borli,
-                            Dighi, Mahasala, Mangoan and nearby areas to Panvel, Vashi and
+                            Dighi, Mhasla, Mangoan and nearby areas to Panvel, Vashi and
                             Mumbai. We also offer private bus booking for weddings, events,
                             group travel and special tours.
                         </motion.p>
@@ -108,7 +108,7 @@ export default function HomeHeroSection() {
                                     <motion.a
                                         whileHover={{ scale: 1.03 }}
                                         whileTap={{ scale: 0.98 }}
-                                        href="https://wa.me/918830210690"
+                                        href="https://wa.me/919209471309"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-orange-200 transition hover:bg-orange-600"
@@ -127,7 +127,7 @@ export default function HomeHeroSection() {
                             <motion.a
                                 whileHover={{ y: -2, scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
-                                href="tel:+918830210690"
+                                href="tel:+919209471309"
                                 className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-500"
                             >
                                 <Phone size={15} />
@@ -147,7 +147,7 @@ export default function HomeHeroSection() {
                             <motion.a
                                 whileHover={{ y: -2, scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
-                                href="https://wa.me/918830210690"
+                                href="https://wa.me/919209471309"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center justify-center gap-2 rounded-full bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600"
@@ -193,7 +193,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-40 overflow-hidden rounded-[18px] lg:h-44">
                                         <Image
-                                            src="/sa1.jpeg"
+                                            src="/bus1.jpeg"
                                             alt="SA Tours Route 1"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -217,7 +217,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-28 overflow-hidden rounded-[18px] lg:h-32">
                                         <Image
-                                            src="/sa2.jpeg"
+                                            src="/bus3.jpeg"
                                             alt="SA Tours Route 2"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -249,7 +249,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-40 overflow-hidden rounded-[18px] lg:h-44">
                                         <Image
-                                            src="/sa4.jpeg"
+                                            src="/bus2.jpeg"
                                             alt="SA Tours Route 4"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -301,7 +301,7 @@ export default function HomeHeroSection() {
                                 <motion.a
                                     whileHover={{ scale: 1.03 }}
                                     whileTap={{ scale: 0.98 }}
-                                    href="tel:+918830210690"
+                                    href="tel:+919209471309"
                                     className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
                                 >
                                     Contact Us
