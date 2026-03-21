@@ -113,7 +113,7 @@ export default function LoginPage() {
 
             setTimeout(() => {
                 if (role === "admin") {
-                    router.push("/admin");
+                    router.push("/admin/booking");
                 } else if (role === "staff" || position) {
                     router.push("/staff-portal/booking");
                 } else {
@@ -162,7 +162,7 @@ export default function LoginPage() {
 
             setTimeout(() => {
                 if (role === "admin") {
-                    router.push("/admin");
+                    router.push("/admin/booking");
                 } else {
                     router.push("/user/booking");
                 }

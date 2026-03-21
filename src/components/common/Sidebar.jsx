@@ -23,7 +23,6 @@ import { usePathname } from "next/navigation";
 
 const roleLinks = {
     admin: [
-        { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
         { href: "/admin/staff", label: "Staff Access", icon: UserCog },
         { href: "/admin/bus", label: "Buses", icon: BusFront },
         { href: "/admin/schedule", label: "Schedule", icon: CalendarDays },

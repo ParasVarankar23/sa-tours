@@ -160,7 +160,7 @@ export default function SignupPage() {
 
             setTimeout(() => {
                 if (role === "admin") {
-                    router.push("/admin");
+                    router.push("/admin/booking");
                 } else if (role === "staff" || position) {
                     router.push("/staff-portal/booking");
                 } else {
