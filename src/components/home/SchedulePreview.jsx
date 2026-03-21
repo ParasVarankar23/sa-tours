@@ -1,52 +1,23 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
     ArrowRight,
     Clock3,
     MapPin,
     Bus,
-    ArrowDown,
     ArrowRightLeft,
     Route,
+    Phone,
+    X,
 } from "lucide-react";
 import Reveal from "../Reveal";
 import StaggerContainer from "../StaggerContainer";
 import StaggerItem from "../StaggerItem";
 
 /* -------------------------------------------------------
-   PREVIEW CARDS
-------------------------------------------------------- */
-const schedulePreview = [
-    {
-        route: "Dighi → Dongri",
-        time: "3:00 AM",
-        frequency: "Morning Departure",
-        type: "Departure",
-    },
-    {
-        route: "Borli → Dongri",
-        time: "4:00 AM",
-        frequency: "Morning Departure",
-        type: "Departure",
-    },
-    {
-        route: "Dongri → Borli",
-        time: "2:00 PM",
-        frequency: "Evening Return",
-        type: "Return",
-    },
-    {
-        route: "Dongri → Dighi",
-        time: "4:00 PM",
-        frequency: "Evening Return",
-        type: "Return",
-    },
-];
-
-/* -------------------------------------------------------
-   FINAL MANUAL ROUTE DATA
+   ROUTE DATA
 ------------------------------------------------------- */
 const routeOptions = [
     {
@@ -55,6 +26,10 @@ const routeOptions = [
         subtitle: "Morning Departure",
         shortTime: "3:00 AM → 9:00 AM",
         routeLabel: "Dighi → Dongri",
+        previewTime: "3:00 AM",
+        type: "Departure",
+        contactNumber: "9273635316",
+        contactLabel: "Dighi Service Contact",
         rows: [
             { stop: "Dighi", time: "3:00 AM", type: "stop" },
             { stop: "Kudgaon", time: "3:10 AM", type: "stop" },
@@ -72,11 +47,7 @@ const routeOptions = [
             { stop: "Indapur", time: "5:10 AM", type: "stop" },
             { stop: "Kolad", time: "5:30 AM", type: "stop" },
             { stop: "Vadkhal", time: "6:35 AM", type: "stop" },
-            {
-                stop: "Hotel Stop (Breakfast)",
-                time: "6:35 AM to 6:45 AM",
-                type: "break",
-            },
+            { stop: "Hotel Stop (Breakfast)", time: "6:35 AM to 6:45 AM", type: "break" },
             { stop: "Pen", time: "7:00 AM", type: "stop" },
             { stop: "Panvel", time: "7:45 AM", type: "stop" },
             { stop: "Kamothe", time: "7:55 AM", type: "stop" },
@@ -100,6 +71,10 @@ const routeOptions = [
         subtitle: "Morning Departure",
         shortTime: "4:00 AM → 9:30 AM",
         routeLabel: "Borli → Dongri",
+        previewTime: "4:00 AM",
+        type: "Departure",
+        contactNumber: "9209471309",
+        contactLabel: "Borli Service Contact",
         rows: [
             { stop: "Borli", time: "4:00 AM", type: "stop" },
             { stop: "Kapoli", time: "4:05 AM", type: "stop" },
@@ -116,11 +91,7 @@ const routeOptions = [
             { stop: "Indapur", time: "5:50 AM", type: "stop" },
             { stop: "Kolad", time: "6:10 AM", type: "stop" },
             { stop: "Vadkhal", time: "7:15 AM", type: "stop" },
-            {
-                stop: "Hotel Stop (Breakfast)",
-                time: "7:15 AM to 7:25 AM",
-                type: "break",
-            },
+            { stop: "Hotel Stop (Breakfast)", time: "7:15 AM to 7:25 AM", type: "break" },
             { stop: "Pen", time: "7:40 AM", type: "stop" },
             { stop: "Panvel", time: "8:15 AM", type: "stop" },
             { stop: "Kamothe", time: "8:25 AM", type: "stop" },
@@ -144,6 +115,10 @@ const routeOptions = [
         subtitle: "Evening Return",
         shortTime: "2:00 PM → 8:30 PM",
         routeLabel: "Dongri → Borli",
+        previewTime: "2:00 PM",
+        type: "Return",
+        contactNumber: "9209471309",
+        contactLabel: "Borli Return Service Contact",
         rows: [
             { stop: "Dongri", time: "2:00 PM", type: "stop" },
             { stop: "Masjid Bandar", time: "2:05 PM", type: "stop" },
@@ -161,11 +136,7 @@ const routeOptions = [
             { stop: "Panvel", time: "3:30 PM", type: "stop" },
             { stop: "Pen", time: "4:05 PM", type: "stop" },
             { stop: "Vadkhal", time: "4:20 PM", type: "stop" },
-            {
-                stop: "Hotel Stop (Lunch Break)",
-                time: "4:20 PM to 4:50 PM",
-                type: "break",
-            },
+            { stop: "Hotel Stop (Lunch Break)", time: "4:20 PM to 4:50 PM", type: "break" },
             { stop: "Kolad", time: "5:40 PM", type: "stop" },
             { stop: "Indapur", time: "5:55 PM", type: "stop" },
             { stop: "Mangaon", time: "6:10 PM", type: "stop" },
@@ -188,6 +159,10 @@ const routeOptions = [
         subtitle: "Evening Return",
         shortTime: "4:00 PM → 10:30 PM",
         routeLabel: "Dongri → Dighi",
+        previewTime: "4:00 PM",
+        type: "Return",
+        contactNumber: "9273635316",
+        contactLabel: "Dighi Return Service Contact",
         rows: [
             { stop: "Dongri", time: "4:00 PM", type: "stop" },
             { stop: "Masjid Bandar", time: "4:05 PM", type: "stop" },
@@ -205,11 +180,7 @@ const routeOptions = [
             { stop: "Panvel", time: "5:30 PM", type: "stop" },
             { stop: "Pen", time: "6:05 PM", type: "stop" },
             { stop: "Vadkhal", time: "6:20 PM", type: "stop" },
-            {
-                stop: "Hotel Stop (Refreshment Break)",
-                time: "6:20 PM to 6:50 PM",
-                type: "break",
-            },
+            { stop: "Hotel Stop (Refreshment Break)", time: "6:20 PM to 6:50 PM", type: "break" },
             { stop: "Kolad", time: "7:40 PM", type: "stop" },
             { stop: "Indapur", time: "7:55 PM", type: "stop" },
             { stop: "Mangaon", time: "8:10 PM", type: "stop" },
@@ -230,39 +201,18 @@ const routeOptions = [
 ];
 
 /* -------------------------------------------------------
-   TABLE COMPONENT
+   TABLE COMPONENT INSIDE MODAL
 ------------------------------------------------------- */
 function RouteTable({ route }) {
     return (
-        <div className="mt-8 overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
-            {/* HEADER BAR */}
-            <div className="flex flex-col gap-4 border-b border-slate-200 bg-white px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
-                        <Route size={18} />
-                    </div>
-                    <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-500">
-                            {route.subtitle}
-                        </p>
-                        <h3 className="text-xl font-bold text-slate-900">{route.title}</h3>
-                    </div>
-                </div>
-
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <p className="text-[11px] text-slate-500">Schedule Window</p>
-                    <p className="text-sm font-semibold text-slate-900">{route.shortTime}</p>
-                </div>
-            </div>
-
-            {/* MOBILE CARD LIST */}
+        <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white">
+            {/* MOBILE */}
             <div className="block lg:hidden">
                 <div className="divide-y divide-slate-100">
                     {route.rows.map((item, index) => (
                         <div
                             key={`${route.key}-mobile-${index}`}
-                            className={`px-4 py-4 ${item.type === "break" ? "bg-orange-50/60" : "bg-white"
-                                }`}
+                            className={`px-4 py-4 ${item.type === "break" ? "bg-orange-50/60" : "bg-white"}`}
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div>
@@ -291,7 +241,7 @@ function RouteTable({ route }) {
                 </div>
             </div>
 
-            {/* DESKTOP TABLE */}
+            {/* DESKTOP */}
             <div className="hidden overflow-x-auto lg:block">
                 <table className="min-w-full">
                     <thead className="bg-slate-900">
@@ -351,226 +301,211 @@ function RouteTable({ route }) {
 }
 
 /* -------------------------------------------------------
+   MODAL
+------------------------------------------------------- */
+function ScheduleModal({ route, onClose }) {
+    if (!route) return null;
+
+    return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-3 sm:p-5">
+            <div className="relative max-h-[92vh] w-full max-w-6xl overflow-hidden rounded-[30px] bg-white shadow-2xl">
+                {/* Header */}
+                <div className="border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-500">
+                                Full Schedule Details
+                            </p>
+                            <h3 className="mt-2 text-xl font-bold text-slate-900 sm:text-3xl">
+                                {route.title}
+                            </h3>
+                            <p className="mt-2 text-sm text-slate-500 sm:text-base">
+                                {route.shortTime} • {route.subtitle}
+                            </p>
+
+                            <div className="mt-4 flex flex-wrap gap-3">
+                                <div className="inline-flex items-center gap-2 rounded-2xl bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700">
+                                    <Phone className="h-4 w-4" />
+                                    {route.contactNumber}
+                                </div>
+
+                                <div className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">
+                                    <Route className="h-4 w-4" />
+                                    {route.routeLabel}
+                                </div>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Body */}
+                <div className="max-h-[calc(92vh-110px)] overflow-y-auto p-4 sm:p-6">
+                    <RouteTable route={route} />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* -------------------------------------------------------
    MAIN COMPONENT
 ------------------------------------------------------- */
 export default function SchedulePreview() {
-    const fullScheduleRef = useRef(null);
-    const [activeRoute, setActiveRoute] = useState("dighi-dongri");
+    const [activeRouteKey, setActiveRouteKey] = useState(null);
 
     const selectedRoute = useMemo(
-        () => routeOptions.find((route) => route.key === activeRoute) || routeOptions[0],
-        [activeRoute]
+        () => routeOptions.find((route) => route.key === activeRouteKey) || null,
+        [activeRouteKey]
     );
 
-    const scrollToFullSchedule = () => {
-        fullScheduleRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-        });
+    const openRouteModal = (key) => {
+        setActiveRouteKey(key);
+        document.body.style.overflow = "hidden";
     };
 
-    const handleRouteChange = (key) => {
-        setActiveRoute(key);
-
-        setTimeout(() => {
-            fullScheduleRef.current?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-            });
-        }, 120);
+    const closeRouteModal = () => {
+        setActiveRouteKey(null);
+        document.body.style.overflow = "auto";
     };
 
     return (
-        <section className="bg-[#f8fafc] py-8 lg:py-6">
-            <div className="mx-auto max-w-[1380px] px-4 sm:px-6 lg:px-8">
-                {/* HEADER */}
-                <Reveal>
-                    <div className="max-w-4xl">
-                        <p className="text-sm font-bold uppercase tracking-[0.3em] text-orange-500">
-                            Daily Schedule
-                        </p>
-
-                        <h2 className="mt-3 text-3xl font-bold leading-tight text-slate-900 sm:text-4xl lg:text-[42px] lg:leading-[1.08]">
-                            Fixed daily timings for a smooth and dependable journey
-                        </h2>
-
-                        <p className="mt-4 text-justify text-[15px] leading-8 text-slate-600 sm:text-base">
-                            Passengers can rely on our regular morning departures and scheduled
-                            evening return services with comfortable travel, planned hotel stops,
-                            and dependable timing.
-                        </p>
-                    </div>
-                </Reveal>
-
-                {/* TOP PREVIEW CARDS */}
-                <StaggerContainer className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    {schedulePreview.map((item, index) => (
-                        <StaggerItem key={index}>
-                            <div className="group rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200/60">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
-                                        <Clock3 size={18} />
-                                    </div>
-
-                                    <span
-                                        className={`rounded-full px-3 py-1 text-[11px] font-semibold ${item.type === "Departure"
-                                                ? "bg-orange-50 text-orange-600"
-                                                : "bg-slate-100 text-slate-600"
-                                            }`}
-                                    >
-                                        {item.type}
-                                    </span>
-                                </div>
-
-                                <h3 className="mt-4 text-lg font-bold text-slate-900">
-                                    {item.route}
-                                </h3>
-
-                                <p className="mt-3 text-3xl font-bold text-orange-500">
-                                    {item.time}
-                                </p>
-
-                                <div className="mt-3 flex items-center gap-2 text-sm text-slate-500">
-                                    <Bus size={15} />
-                                    <span>{item.frequency}</span>
-                                </div>
-                            </div>
-                        </StaggerItem>
-                    ))}
-                </StaggerContainer>
-
-                {/* BOTTOM INFO BAR */}
-                <Reveal delay={0.1}>
-                    <div className="mt-6 rounded-[26px] border border-slate-200 bg-white p-4 shadow-md shadow-slate-200/50">
-                        <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
-                            <div className="grid gap-4 sm:grid-cols-3">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
-                                        <MapPin size={16} />
-                                    </div>
-                                    <div>
-                                        <p className="text-[11px] text-slate-500">Primary Routes</p>
-                                        <p className="text-sm font-semibold text-slate-900">
-                                            Dighi / Borli ↔ Dongri
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
-                                        <Clock3 size={16} />
-                                    </div>
-                                    <div>
-                                        <p className="text-[11px] text-slate-500">Morning Services</p>
-                                        <p className="text-sm font-semibold text-slate-900">
-                                            3:00 AM & 4:00 AM
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
-                                        <ArrowRightLeft size={16} />
-                                    </div>
-                                    <div>
-                                        <p className="text-[11px] text-slate-500">Return Services</p>
-                                        <p className="text-sm font-semibold text-slate-900">
-                                            2:00 PM & 4:00 PM
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={scrollToFullSchedule}
-                                className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-                            >
-                                View Full Schedule
-                                <ArrowDown size={15} />
-                            </button>
-                        </div>
-                    </div>
-                </Reveal>
-
-                {/* FULL SCHEDULE SECTION */}
-                <div ref={fullScheduleRef} className="pt-10">
+        <>
+            <section className="bg-[#f8fafc] py-8 lg:py-6">
+                <div className="mx-auto max-w-[1380px] px-4 sm:px-6 lg:px-8">
+                    {/* HEADER */}
                     <Reveal>
-                        <div className="mb-6">
-                            <p className="text-sm font-bold uppercase tracking-[0.28em] text-orange-500">
-                                Full Schedule Details
+                        <div className="max-w-4xl">
+                            <p className="text-sm font-bold uppercase tracking-[0.3em] text-orange-500">
+                                Daily Schedule
                             </p>
-                            <h2 className="mt-3 text-3xl font-bold text-slate-900 sm:text-4xl">
-                                Complete route timings with all stops
+
+                            <h2 className="mt-3 text-3xl font-bold leading-tight text-slate-900 sm:text-4xl lg:text-[32px] lg:leading-[1.08]">
+                                Fixed daily timings for a smooth and dependable journey
                             </h2>
-                            <p className="mt-3 max-w-3xl text-[15px] leading-8 text-slate-600">
-                                Select any route below to instantly view the complete stop-wise
-                                schedule, including planned hotel and break stops.
+
+                            <p className="mt-4 text-justify text-[15px] leading-8 text-slate-600 sm:text-base">
+                                Passengers can rely on our regular morning departures and scheduled
+                                evening return services with comfortable travel, planned hotel stops,
+                                and dependable timing.
                             </p>
                         </div>
                     </Reveal>
 
-                    {/* ROUTE TABS / CARDS */}
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        {routeOptions.map((route) => {
-                            const isActive = activeRoute === route.key;
-
-                            return (
+                    {/* SINGLE ROUTE CARDS ONLY */}
+                    <StaggerContainer className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        {routeOptions.map((item) => (
+                            <StaggerItem key={item.key}>
                                 <button
-                                    key={route.key}
                                     type="button"
-                                    onClick={() => handleRouteChange(route.key)}
-                                    className={`rounded-[30px] border p-6 text-left transition-all duration-300 ${isActive
-                                            ? "border-orange-200 bg-orange-50/70 shadow-md shadow-orange-100"
-                                            : "border-slate-200 bg-white shadow-sm hover:-translate-y-1 hover:shadow-md"
-                                        }`}
+                                    onClick={() => openRouteModal(item.key)}
+                                    className="group w-full rounded-[28px] border border-slate-200 bg-white p-5 text-left shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200/60"
                                 >
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div>
-                                            <p
-                                                className={`text-sm font-bold ${isActive ? "text-orange-600" : "text-orange-500"
-                                                    }`}
-                                            >
-                                                {route.title}
-                                            </p>
-
-                                            <p className="mt-3 text-xl font-bold text-slate-900">
-                                                {route.shortTime}
-                                            </p>
-
-                                            <p className="mt-2 text-sm text-slate-500">{route.subtitle}</p>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
+                                            <Clock3 size={18} />
                                         </div>
 
-                                        <div
-                                            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${isActive
-                                                    ? "bg-orange-500 text-white"
-                                                    : "bg-orange-50 text-orange-500"
+                                        <span
+                                            className={`rounded-full px-3 py-1 text-[11px] font-semibold ${item.type === "Departure"
+                                                    ? "bg-orange-50 text-orange-600"
+                                                    : "bg-slate-100 text-slate-600"
                                                 }`}
                                         >
-                                            <Route size={18} />
-                                        </div>
+                                            {item.type}
+                                        </span>
+                                    </div>
+
+                                    <h3 className="mt-4 text-lg font-bold text-slate-900">{item.title}</h3>
+
+                                    <p className="mt-3 text-3xl font-bold text-orange-500">{item.previewTime}</p>
+
+                                    <div className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+                                        <Bus size={15} />
+                                        <span>{item.subtitle}</span>
+                                    </div>
+
+                                    <div className="mt-4 flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                                        <Phone size={15} className="text-orange-500" />
+                                        <span>{item.contactNumber}</span>
+                                    </div>
+
+                                    <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                        View full schedule
+                                        <ArrowRight size={16} className="transition group-hover:translate-x-1" />
                                     </div>
                                 </button>
-                            );
-                        })}
-                    </div>
+                            </StaggerItem>
+                        ))}
+                    </StaggerContainer>
 
-                    {/* ACTIVE ROUTE TABLE */}
-                    <RouteTable route={selectedRoute} />
+                    {/* BOTTOM INFO BAR */}
+                    <Reveal delay={0.1}>
+                        <div className="mt-6 rounded-[26px] border border-slate-200 bg-white p-4 shadow-md shadow-slate-200/50">
+                            <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+                                <div className="grid gap-4 sm:grid-cols-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
+                                            <MapPin size={16} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] text-slate-500">Primary Routes</p>
+                                            <p className="text-sm font-semibold text-slate-900">
+                                                Dighi / Borli ↔ Dongri
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
+                                            <Clock3 size={16} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] text-slate-500">Morning Services</p>
+                                            <p className="text-sm font-semibold text-slate-900">
+                                                3:00 AM & 4:00 AM
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
+                                            <ArrowRightLeft size={16} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] text-slate-500">Return Services</p>
+                                            <p className="text-sm font-semibold text-slate-900">
+                                                2:00 PM & 4:00 PM
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-5 py-3 text-sm font-semibold text-orange-700">
+                                    <Phone size={16} />
+                                    Dighi: 9273635316 • Borli: 9209471309
+                                </div>
+                            </div>
+                        </div>
+                    </Reveal>
 
                     {/* FOOTER NOTE */}
-                    <Reveal delay={0.1}>
+                    <Reveal delay={0.15}>
                         <div className="mt-8 rounded-[26px] border border-orange-100 bg-orange-50/60 p-5">
                             <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
                                 <div>
-                                    <p className="text-sm font-semibold text-orange-700">
-                                        Important Note
-                                    </p>
+                                    <p className="text-sm font-semibold text-orange-700">Important Note</p>
                                     <p className="mt-2 text-sm leading-7 text-slate-700">
-                                        All timings shown are planned service timings. Actual pickup and
-                                        drop time may vary slightly depending on traffic, road conditions,
-                                        weather, and passenger boarding. Hotel stop timings are included
-                                        for better travel comfort.
+                                        Click any route card above to view the complete stop-wise schedule in a
+                                        clean modal popup. Actual pickup and drop time may vary slightly depending
+                                        on traffic, road conditions, weather, and passenger boarding.
                                     </p>
                                 </div>
 
@@ -585,7 +520,10 @@ export default function SchedulePreview() {
                         </div>
                     </Reveal>
                 </div>
-            </div>
-        </section>
+            </section>
+
+            {/* MODAL */}
+            <ScheduleModal route={selectedRoute} onClose={closeRouteModal} />
+        </>
     );
 }
