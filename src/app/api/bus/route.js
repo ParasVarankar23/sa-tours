@@ -167,6 +167,12 @@ function buildExpandedFareEntries(rawFareRules, pickupPoints, dropPoints) {
             rule?.applyToAllNextPickupsBeforeDrop ?? rule?.applyToAllPreviousPickups
         );
 
+
+        // new flag: apply same fare to the selected drop and all previous drops
+        const applyToAllPreviousDrops = Boolean(
+            rule?.applyToAllPreviousDrops ?? rule?.applyToAllNextDropsAfterPickup
+        );
+
         // allow fully empty row
         if (
             !from &&
@@ -234,20 +240,28 @@ function buildExpandedFareEntries(rawFareRules, pickupPoints, dropPoints) {
                 expandedFromIndex,
                 expandedToIndex,
                 applyToAllNextPickupsBeforeDrop,
+                applyToAllPreviousDrops,
             });
         };
 
-        if (applyToAllNextPickupsBeforeDrop) {
-            for (let i = fromIndex; i < pickupPoints.length; i++) {
-                pushExpanded(pickupPoints[i].name, dropPoints[toIndex].name, i, toIndex);
+        // generate ranges for pickups and drops depending on flags
+        const seenForRule = new Set();
+
+        const pickupStart = fromIndex;
+        const pickupEnd = applyToAllNextPickupsBeforeDrop ? pickupPoints.length - 1 : fromIndex;
+        const dropStart = applyToAllPreviousDrops ? 0 : toIndex;
+        const dropEnd = toIndex;
+
+        for (let i = pickupStart; i <= pickupEnd; i++) {
+            for (let j = dropStart; j <= dropEnd; j++) {
+                const ef = pickupPoints[i].name;
+                const et = dropPoints[j].name;
+                const key = `${normalizeKey(ef)}|${normalizeKey(et)}`;
+                if (seenForRule.has(key)) continue;
+                // only include valid direction: pickup index must be <= drop index in booking flow? keep existing behavior
+                seenForRule.add(key);
+                pushExpanded(ef, et, i, j);
             }
-        } else {
-            pushExpanded(
-                pickupPoints[fromIndex].name,
-                dropPoints[toIndex].name,
-                fromIndex,
-                toIndex
-            );
         }
     }
 
@@ -375,6 +389,7 @@ function sanitizeFareRulesRaw(fareRules, pickupPoints, dropPoints) {
             fareStartDate: fareStartDate || "",
             fareEndDate: fareEndDate || "",
             applyToAllNextPickupsBeforeDrop,
+            applyToAllPreviousDrops,
         });
     }
 

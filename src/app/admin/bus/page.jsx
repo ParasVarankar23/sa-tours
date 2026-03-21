@@ -379,6 +379,7 @@ export default function AdminBusPage() {
             const fareStartDate = String(rule?.fareStartDate || "").trim();
             const fareEndDate = String(rule?.fareEndDate || "").trim();
             const applyToAllNextPickupsBeforeDrop = !!rule?.applyToAllNextPickupsBeforeDrop;
+            const applyToAllPreviousDrops = !!rule?.applyToAllPreviousDrops;
 
             const isEmptyRow =
                 !from &&
@@ -425,24 +426,29 @@ export default function AdminBusPage() {
                 }
             }
 
-            if (applyToAllNextPickupsBeforeDrop) {
-                for (let i = fromIndex; i < pickupOptions.length; i++) {
+            // generate full combinations when flags request ranges; dedupe per rule
+            const pickupStart = fromIndex;
+            const pickupEnd = applyToAllNextPickupsBeforeDrop ? pickupOptions.length - 1 : fromIndex;
+            const dropStart = applyToAllPreviousDrops ? 0 : toIndex;
+            const dropEnd = toIndex;
+
+            const seenForRule = new Set();
+
+            for (let i = pickupStart; i <= pickupEnd; i++) {
+                for (let j = dropStart; j <= dropEnd; j++) {
+                    const ef = pickupOptions[i].name;
+                    const et = dropOptions[j].name;
+                    const key = `${ef.toLowerCase()}|${et.toLowerCase()}`;
+                    if (seenForRule.has(key)) continue;
+                    seenForRule.add(key);
                     expandedRules.push({
-                        from: pickupOptions[i].name,
-                        to,
+                        from: ef,
+                        to: et,
                         fareStartDate,
                         fareEndDate,
                         sourceRuleIndex: ruleIndex,
                     });
                 }
-            } else {
-                expandedRules.push({
-                    from,
-                    to,
-                    fareStartDate,
-                    fareEndDate,
-                    sourceRuleIndex: ruleIndex,
-                });
             }
         }
 
@@ -752,6 +758,7 @@ export default function AdminBusPage() {
             fareStartDate: "",
             fareEndDate: "",
             applyToAllNextPickupsBeforeDrop: false,
+            applyToAllPreviousDrops: false,
         };
 
         if (isEdit) {
@@ -926,6 +933,7 @@ export default function AdminBusPage() {
                     fareStartDate: rule.fareStartDate || "",
                     fareEndDate: rule.fareEndDate || "",
                     applyToAllNextPickupsBeforeDrop: !!rule.applyToAllNextPickupsBeforeDrop,
+                    applyToAllPreviousDrops: !!rule.applyToAllPreviousDrops,
                 }))
                 : [],
         });
@@ -1595,21 +1603,22 @@ function BusFormModal({
         if (fromIndex === -1 || toIndex === -1) return [];
 
         const previewList = [];
+        const seen = new Set();
 
-        if (rule.applyToAllNextPickupsBeforeDrop) {
-            for (let i = fromIndex; i < pickupOptions.length; i++) {
-                previewList.push({
-                    from: pickupOptions[i].name,
-                    to: dropOptions[toIndex].name,
-                    fare: rule.fare,
-                });
+        const pickupStart = fromIndex;
+        const pickupEnd = rule.applyToAllNextPickupsBeforeDrop ? pickupOptions.length - 1 : fromIndex;
+        const dropStart = rule.applyToAllPreviousDrops ? 0 : toIndex;
+        const dropEnd = toIndex;
+
+        for (let i = pickupStart; i <= pickupEnd; i++) {
+            for (let j = dropStart; j <= dropEnd; j++) {
+                const ef = pickupOptions[i].name;
+                const et = dropOptions[j].name;
+                const key = `${ef.toLowerCase()}|${et.toLowerCase()}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                previewList.push({ from: ef, to: et, fare: rule.fare });
             }
-        } else {
-            previewList.push({
-                from: pickupOptions[fromIndex].name,
-                to: dropOptions[toIndex].name,
-                fare: rule.fare,
-            });
         }
 
         return previewList;
@@ -2083,6 +2092,31 @@ function BusFormModal({
                                                                 </p>
                                                                 <p className="text-xs text-slate-500">
                                                                     Example: If pickup is Mendadi and drop is Dongri, same fare applies to Mendadi and all next pickup points for Dongri.
+                                                                </p>
+                                                            </div>
+                                                        </label>
+                                                    </div>
+
+                                                    <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+                                                        <label className="flex cursor-pointer items-start gap-3">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!rule.applyToAllPreviousDrops}
+                                                                onChange={(e) =>
+                                                                    handleFareRuleChange(
+                                                                        index,
+                                                                        "applyToAllPreviousDrops",
+                                                                        e.target.checked
+                                                                    )
+                                                                }
+                                                                className="mt-1 h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-400"
+                                                            />
+                                                            <div>
+                                                                <p className="text-sm font-semibold text-slate-800">
+                                                                    Apply same fare to selected drop and all previous drop points
+                                                                </p>
+                                                                <p className="text-xs text-slate-500">
+                                                                    Example: If pickup is Borli and drop is Panvel, same fare applies to Panvel and all earlier drop points (previous stops before Panvel).
                                                                 </p>
                                                             </div>
                                                         </label>
