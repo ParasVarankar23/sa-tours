@@ -1168,20 +1168,23 @@ export default function BookingPage() {
 
     let gridRows = "";
     for (let i = 0; i < maxRows; i++) {
+      const leftHtml = leftColumnSeats[i]
+        ? renderSeatCard(leftColumnSeats[i])
+        : `<div class="seat-placeholder"></div>`;
+
+      const midHtml = middleColumnSeats[i]
+        ? renderSeatCard(middleColumnSeats[i])
+        : `<div class="seat-placeholder"></div>`;
+
+      const rightHtml = rightColumnSeats[i]
+        ? renderSeatCard(rightColumnSeats[i])
+        : `<div class="seat-placeholder"></div>`;
+
       gridRows += `
         <div class="grid-row">
-          <div class="col">${leftColumnSeats[i]
-          ? renderSeatCard(leftColumnSeats[i])
-          : `<div class="seat-placeholder"></div>`
-        }</div>
-          <div class="col">${middleColumnSeats[i]
-          ? renderSeatCard(middleColumnSeats[i])
-          : `<div class="seat-placeholder"></div>`
-        }</div>
-          <div class="col">${rightColumnSeats[i]
-          ? renderSeatCard(rightColumnSeats[i])
-          : `<div class="seat-placeholder"></div>`
-        }</div>
+          <div class="col">${leftHtml}</div>
+          <div class="col">${midHtml}</div>
+          <div class="col">${rightHtml}</div>
         </div>
       `;
     }
