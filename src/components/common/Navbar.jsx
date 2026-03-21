@@ -21,6 +21,62 @@ export default function Navbar({
     onMenuClick = () => { },
 }) {
     const router = useRouter();
+    const [searchQuery, setSearchQuery] = useState("");
+
+    const handleSearch = (q) => {
+        const s = String(q || "").trim().toLowerCase();
+        if (!s) return;
+
+        // booking route is role-based: admin/owner -> /admin/booking, others -> /user/booking
+        if (s.includes("booking")) {
+            if (role && (String(role).toLowerCase() === "admin" || String(role).toLowerCase() === "owner")) {
+                try { router.push("/admin/booking"); } catch { window.location.href = "/admin/booking"; }
+            } else {
+                try { router.push("/user/booking"); } catch { window.location.href = "/user/booking"; }
+            }
+            return;
+        }
+
+        if (s.includes("profile")) {
+            try { router.push("/profile"); } catch { window.location.href = "/profile"; }
+            return;
+        }
+
+        if (s.includes("notification") || s.includes("notifications")) {
+            try { router.push("/notifications"); } catch { window.location.href = "/notifications"; }
+            return;
+        }
+
+        if (s.includes("payment") || s.includes("payments") || s.includes("pay")) {
+            const rl = String(role || "").toLowerCase();
+            if (rl === "admin" || rl === "owner") {
+                try { router.push("/admin/payment"); } catch { window.location.href = "/admin/payment"; }
+            } else if (rl === "staff") {
+                try { router.push("/staff-portal/payment"); } catch { window.location.href = "/staff-portal/payment"; }
+            } else {
+                try { router.push("/user/payment"); } catch { window.location.href = "/user/payment"; }
+            }
+            return;
+        }
+
+        if (s.includes("staff") || s.includes("staffs") || s.includes("team")) {
+            try { router.push("/admin/staff"); } catch { window.location.href = "/admin/staff"; }
+            return;
+        }
+
+        if (s.includes("setting") || s.includes("settings")) {
+            try { router.push("/settings"); } catch { window.location.href = "/settings"; }
+            return;
+        }
+
+        // forgot-password is not role based
+        if (s.includes("forgot") || s.includes("forgot-password") || s.includes("reset password")) {
+            try { router.push("/forgot-password"); } catch { window.location.href = "/forgot-password"; }
+            return;
+        }
+
+        showAppToast("info", "No matching page found for your search");
+    };
 
     const [fullName, setFullName] = useState("");
     const [profileImage, setProfileImage] = useState("");
@@ -367,9 +423,25 @@ export default function Navbar({
                                         />
                                         <input
                                             type="text"
-                                            placeholder="Search pages..."
+                                            placeholder="Search pages (e.g. booking, payments, profile, settings)"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                    e.preventDefault();
+                                                    handleSearch(searchQuery);
+                                                }
+                                            }}
                                             className="w-full min-w-[220px] bg-transparent text-sm text-slate-700 outline-none xl:min-w-[280px]"
                                         />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSearch(searchQuery)}
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded bg-transparent text-slate-500 hover:text-slate-700"
+                                            aria-label="Search"
+                                        >
+                                            <Search size={14} />
+                                        </button>
                                     </div>
                                 </div>
 
