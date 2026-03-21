@@ -621,6 +621,7 @@ export default function BookingPage() {
           name: bookingForm.name,
           phone: bookingForm.phone,
           email: bookingForm.email,
+          userId: user?.uid || "",
           pickup: bookingForm.pickup,
           pickupTime: bookingForm.pickupTime || "",
           drop: bookingForm.drop,

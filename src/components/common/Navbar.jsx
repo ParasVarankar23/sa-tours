@@ -1,16 +1,16 @@
 /* eslint-disable react/prop-types */
 "use client";
 
+import NotificationBell from "@/components/NotificationBell";
 import { showAppToast } from "@/lib/client/toast";
 import {
-    Bell,
     ChevronDown,
     LogOut,
     Menu,
     Search,
     Settings,
     User,
-    X,
+    X
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -373,121 +373,7 @@ export default function Navbar({
                                     </div>
                                 </div>
 
-                                {/* Notifications */}
-                                <div className="relative" ref={notifMenuRef}>
-                                    <button
-                                        type="button"
-                                        onClick={async () => {
-                                            const next = !notifOpen;
-                                            setNotifOpen(next);
-                                            if (next) await loadRecent();
-                                        }}
-                                        className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-orange-300 hover:text-orange-500 sm:h-11 sm:w-11"
-                                        aria-label="Notifications"
-                                    >
-                                        <Bell size={18} />
-                                        {notifCount > 0 ? (
-                                            <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-semibold text-white">
-                                                {notifCount > 99 ? "99+" : notifCount}
-                                            </span>
-                                        ) : null}
-                                    </button>
-
-                                    {notifOpen && (
-                                        <div className="absolute right-0 z-50 mt-3 w-[92vw] max-w-[92vw] rounded-3xl border border-slate-200 bg-white shadow-2xl sm:w-[380px] sm:max-w-[380px]">
-                                            {/* Header */}
-                                            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                                                <div>
-                                                    <h3 className="text-sm font-bold text-slate-900">
-                                                        Notifications
-                                                    </h3>
-                                                    <p className="text-xs text-slate-500">
-                                                        Recent updates & alerts
-                                                    </p>
-                                                </div>
-
-                                                <button
-                                                    onClick={() => {
-                                                        setNotifOpen(false);
-                                                        router.push("/notifications");
-                                                    }}
-                                                    className="rounded-xl px-3 py-1.5 text-xs font-semibold text-orange-600 transition hover:bg-orange-50"
-                                                >
-                                                    View all
-                                                </button>
-                                            </div>
-
-                                            {/* Body */}
-                                            <div className="max-h-[360px] overflow-y-auto p-3">
-                                                {recentNotifs.length === 0 ? (
-                                                    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
-                                                        <Bell className="h-6 w-6 text-slate-400" />
-                                                        <p className="mt-3 text-sm font-semibold text-slate-700">
-                                                            No recent notifications
-                                                        </p>
-                                                        <p className="mt-1 text-xs text-slate-500">
-                                                            New alerts will appear here.
-                                                        </p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-3">
-                                                        {recentNotifs.map((n) => (
-                                                            <div
-                                                                key={n.id}
-                                                                className={`rounded-2xl border p-3 transition ${n.read
-                                                                        ? "border-slate-200 bg-white"
-                                                                        : "border-orange-100 bg-orange-50/70"
-                                                                    }`}
-                                                            >
-                                                                <div className="flex items-start gap-3">
-                                                                    <div
-                                                                        className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${n.read
-                                                                                ? "bg-slate-300"
-                                                                                : "bg-orange-500"
-                                                                            }`}
-                                                                    />
-
-                                                                    <div className="min-w-0 flex-1">
-                                                                        <p className="truncate text-sm font-semibold text-slate-900">
-                                                                            {n.title || "Notification"}
-                                                                        </p>
-                                                                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">
-                                                                            {n.message || "No message"}
-                                                                        </p>
-                                                                        <p className="mt-2 text-[11px] text-slate-400">
-                                                                            {formatNotifDate(n.createdAt)}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="mt-3 flex flex-wrap items-center gap-2">
-                                                                    {!n.read && (
-                                                                        <button
-                                                                            onClick={() => markAsRead(n)}
-                                                                            className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-white"
-                                                                        >
-                                                                            Mark as read
-                                                                        </button>
-                                                                    )}
-
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setNotifOpen(false);
-                                                                            router.push("/notifications");
-                                                                        }}
-                                                                        className="rounded-xl bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-orange-600"
-                                                                    >
-                                                                        Open
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+                                <NotificationBell />
 
                                 {/* Profile Dropdown */}
                                 <div className="relative" ref={profileMenuRef}>

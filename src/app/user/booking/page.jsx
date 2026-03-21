@@ -1005,6 +1005,7 @@ export default function BookingPage() {
                                                         name: form.name || "",
                                                         phone: form.phone || "",
                                                         email: form.email || "",
+                                                        userId: user?.uid || "",
                                                         pickup: form.pickup || "",
                                                         pickupTime: form.pickupTime || "",
                                                         drop: form.drop || "",

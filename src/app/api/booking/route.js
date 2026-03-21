@@ -430,6 +430,40 @@ function validatePickupDrop(busData, pickup, drop) {
 }
 
 /* =========================
+   Notification helpers
+========================= */
+
+async function createRoleNotification(db, role, { title, message, data }) {
+    if (!db || !role || !title) return null;
+    const now = new Date().toISOString();
+    const ts = Date.now();
+    const payload = { title, message: message || "", data: data || null, createdAt: now, ts, read: false };
+    try {
+        const ref = db.ref(`notifications/roles/${role}`).push();
+        await ref.set(payload);
+        return ref.key;
+    } catch (e) {
+        console.error("createRoleNotification error:", e);
+        return null;
+    }
+}
+
+async function createUserNotification(db, uid, { title, message, data }) {
+    if (!db || !uid || !title) return null;
+    const now = new Date().toISOString();
+    const ts = Date.now();
+    const payload = { title, message: message || "", data: data || null, createdAt: now, ts, read: false };
+    try {
+        const ref = db.ref(`notifications/users/${uid}`).push();
+        await ref.set(payload);
+        return ref.key;
+    } catch (e) {
+        console.error("createUserNotification error:", e);
+        return null;
+    }
+}
+
+/* =========================
    GET - Fetch bookings for bus/date
 ========================= */
 export async function GET(req) {
@@ -620,6 +654,29 @@ export async function POST(req) {
         };
 
         await seatRef.set(payload);
+
+        // create notifications: admin + user (if userId present)
+        try {
+            const db2 = getAdminDb();
+            // role notification for admin
+            await createRoleNotification(db2, "admin", {
+                title: "New booking created",
+                message: `Seat ${seatNo} booked on ${date} for ${payload.busNumber || "bus"} (${payload.pickup} → ${payload.drop}) Fare: ₹${payload.fare}`,
+                data: { busId, date, seatNo, booking: payload },
+            });
+
+            // user notification when userId provided in request body
+            const userIdFromBody = normalizeText(body.userId || "");
+            if (userIdFromBody) {
+                await createUserNotification(db2, userIdFromBody, {
+                    title: "Booking confirmed",
+                    message: `Your booking for seat ${seatNo} on ${date} is confirmed.`,
+                    data: { busId, date, seatNo, booking: payload },
+                });
+            }
+        } catch (e) {
+            console.error("Failed to create booking notifications:", e);
+        }
 
         if (email) {
             try {
@@ -912,6 +969,27 @@ export async function DELETE(req) {
             } catch (e) {
                 emailResult.error = e?.message || String(e);
             }
+        }
+
+        // send notifications about cancellation
+        try {
+            const db3 = getAdminDb();
+            await createRoleNotification(db3, "admin", {
+                title: "Booking cancelled",
+                message: `Seat ${seatNo} on ${date} (${existingVal.busNumber || "bus"}) has been cancelled.`,
+                data: { busId, date, seatNo, booking: existingVal },
+            });
+
+            const uid = normalizeText(existingVal.userId || existingVal.user || existingVal.userId || "");
+            if (uid) {
+                await createUserNotification(db3, uid, {
+                    title: "Booking cancelled",
+                    message: `Your booking for seat ${seatNo} on ${date} has been cancelled.`,
+                    data: { busId, date, seatNo, booking: existingVal },
+                });
+            }
+        } catch (e) {
+            console.error("Failed to create cancellation notifications:", e);
         }
 
         return NextResponse.json(

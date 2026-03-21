@@ -2,6 +2,36 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { getAdminDb } from "../../../../lib/firebaseAdmin";
 
+async function createRoleNotification(db, role, { title, message, data }) {
+    if (!db || !role || !title) return null;
+    const now = new Date().toISOString();
+    const ts = Date.now();
+    const payload = { title, message: message || "", data: data || null, createdAt: now, ts, read: false };
+    try {
+        const ref = db.ref(`notifications/roles/${role}`).push();
+        await ref.set(payload);
+        return ref.key;
+    } catch (e) {
+        console.error("createRoleNotification error:", e);
+        return null;
+    }
+}
+
+async function createUserNotification(db, uid, { title, message, data }) {
+    if (!db || !uid || !title) return null;
+    const now = new Date().toISOString();
+    const ts = Date.now();
+    const payload = { title, message: message || "", data: data || null, createdAt: now, ts, read: false };
+    try {
+        const ref = db.ref(`notifications/users/${uid}`).push();
+        await ref.set(payload);
+        return ref.key;
+    } catch (e) {
+        console.error("createUserNotification error:", e);
+        return null;
+    }
+}
+
 export async function POST(req) {
     try {
         const body = await req.json();
@@ -57,6 +87,26 @@ export async function POST(req) {
         try {
             console.debug(`/api/public/verify-payment saved payment id=${paymentId} userId=${record.metadata && record.metadata.userId ? record.metadata.userId : 'null'} amount=${record.details && record.details.amount ? record.details.amount : 'na'}`);
         } catch (e) { }
+
+        // create notifications for admin and user (if metadata.userId present)
+        try {
+            const userId = record.metadata && record.metadata.userId ? String(record.metadata.userId) : "";
+            await createRoleNotification(db, "admin", {
+                title: "Payment received",
+                message: `Payment ${paymentId} received for order ${orderId}. Amount: ₹${(amountRupees || 0).toFixed ? (amountRupees).toFixed(2) : amountRupees}`,
+                data: { payment: record },
+            });
+
+            if (userId) {
+                await createUserNotification(db, userId, {
+                    title: "Payment successful",
+                    message: `We received your payment of ₹${(amountRupees || 0).toFixed ? (amountRupees).toFixed(2) : amountRupees}`,
+                    data: { payment: record },
+                });
+            }
+        } catch (e) {
+            console.error("Failed to create payment notifications:", e);
+        }
 
         // Return the saved payment record for client to attach to bookings
         return NextResponse.json({ success: true, payment: record }, { status: 200 });

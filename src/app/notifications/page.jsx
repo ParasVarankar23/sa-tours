@@ -18,7 +18,7 @@ export default function NotificationsPage() {
     const [notifications, setNotifications] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
 
-    const itemsPerPage = 10;
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     async function load() {
         setLoading(true);
@@ -33,6 +33,18 @@ export default function NotificationsPage() {
 
             const list = data.notifications || [];
             setNotifications(list);
+
+            // If the URL includes ?show=all then show all notifications on one page
+            try {
+                const params = new URLSearchParams(window.location.search);
+                if (params.get("show") === "all") {
+                    setItemsPerPage(list.length || 1);
+                } else {
+                    setItemsPerPage(10);
+                }
+            } catch (e) {
+                setItemsPerPage(10);
+            }
             setCurrentPage(1); // reset to page 1 on refresh
         } catch (err) {
             console.error(err);
@@ -147,7 +159,7 @@ export default function NotificationsPage() {
     /* =========================
        Pagination Logic
     ========================= */
-    const totalPages = Math.ceil(notifications.length / itemsPerPage);
+    const totalPages = Math.ceil(notifications.length / (itemsPerPage || 1));
 
     const paginatedNotifications = useMemo(() => {
         const startIndex = (currentPage - 1) * itemsPerPage;
@@ -296,8 +308,8 @@ export default function NotificationsPage() {
                                 <div
                                     key={n.id}
                                     className={`rounded-3xl border p-4 transition md:p-5 ${n.read
-                                            ? "border-slate-200 bg-white hover:border-slate-300"
-                                            : "border-orange-100 bg-orange-50/60 hover:border-orange-200"
+                                        ? "border-slate-200 bg-white hover:border-slate-300"
+                                        : "border-orange-100 bg-orange-50/60 hover:border-orange-200"
                                         }`}
                                 >
                                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -316,8 +328,8 @@ export default function NotificationsPage() {
 
                                                     <span
                                                         className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${n.read
-                                                                ? "bg-slate-100 text-slate-600"
-                                                                : "bg-orange-100 text-[#ea580c]"
+                                                            ? "bg-slate-100 text-slate-600"
+                                                            : "bg-orange-100 text-[#ea580c]"
                                                             }`}
                                                     >
                                                         {n.read ? "Read" : "Unread"}
@@ -353,8 +365,8 @@ export default function NotificationsPage() {
                                             <button
                                                 onClick={() => markRead(n, !n.read)}
                                                 className={`inline-flex h-10 items-center justify-center gap-2 rounded-2xl px-4 text-xs font-semibold transition md:text-sm ${n.read
-                                                        ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                                                        : "border border-orange-200 bg-white text-[#ea580c] hover:bg-orange-50"
+                                                    ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                                    : "border border-orange-200 bg-white text-[#ea580c] hover:bg-orange-50"
                                                     }`}
                                             >
                                                 <CheckCheck className="h-4 w-4" />
@@ -416,8 +428,8 @@ export default function NotificationsPage() {
                                                         key={page}
                                                         onClick={() => setCurrentPage(page)}
                                                         className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-2xl px-3 text-sm font-semibold transition ${currentPage === page
-                                                                ? "bg-[#f97316] text-white shadow-sm"
-                                                                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                                            ? "bg-[#f97316] text-white shadow-sm"
+                                                            : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                                                             }`}
                                                     >
                                                         {page}
