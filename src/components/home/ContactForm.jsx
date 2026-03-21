@@ -48,9 +48,20 @@ export default function ContactSection() {
 
     const handleChange = (e) => {
         const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+        let newValue = value;
+        if (e.target.name === "phone" && typeof newValue === "string") {
+            // keep digits only and cap to 10 characters
+            newValue = newValue.replace(/\D/g, "").slice(0, 10);
+        }
+
+        if (e.target.name === "fullName" && typeof newValue === "string") {
+            // remove any digits from the full name as user types
+            newValue = newValue.replace(/\d/g, "").slice(0, 100);
+        }
+
         setFormData((prev) => ({
             ...prev,
-            [e.target.name]: value,
+            [e.target.name]: newValue,
         }));
     };
 
@@ -59,6 +70,8 @@ export default function ContactSection() {
 
         if (!formData.fullName.trim()) {
             newErrors.fullName = "Please enter your full name";
+        } else if (!/^[A-Za-z\s'\-]{2,}$/.test(formData.fullName.trim())) {
+            newErrors.fullName = "Enter a valid full name (letters and spaces only)";
         }
 
         if (!formData.phone.trim()) {
@@ -249,6 +262,9 @@ ${formData.message}`;
                                         value={formData.phone}
                                         onChange={handleChange}
                                         placeholder="Enter your phone number"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        maxLength={10}
                                         className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                                     />
                                 </div>

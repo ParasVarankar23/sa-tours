@@ -249,6 +249,25 @@ function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
 
 export default function BookingPage() {
     const { user } = useAuth();
+    // sanitizers and validators for passenger inputs
+    const sanitizeNameInput = (v) => {
+        if (typeof v !== "string") return "";
+        return v.replace(/\d+/g, "").replace(/[^A-Za-z\s'\-]/g, "").slice(0, 100);
+    };
+
+    const sanitizePhoneInput = (v) => {
+        if (typeof v !== "string") return "";
+        return v.replace(/\D+/g, "").slice(0, 10);
+    };
+
+    const sanitizeEmailInput = (v) => {
+        if (typeof v !== "string") return "";
+        return v.trim().slice(0, 254).toLowerCase();
+    };
+
+    const isValidName = (v) => /^[A-Za-z\s'\-]{2,}$/.test(String(v || "").trim());
+    const isValidPhone = (v) => /^\d{10}$/.test(String(v || "").trim());
+    const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
     const [date, setDate] = useState("");
     const [buses, setBuses] = useState([]);
     const [schedules, setSchedules] = useState({});
@@ -841,7 +860,7 @@ export default function BookingPage() {
                                                             onChange={(e) =>
                                                                 setBookingForms((bf) => ({
                                                                     ...bf,
-                                                                    [seat]: { ...form, name: e.target.value },
+                                                                    [seat]: { ...form, name: sanitizeNameInput(e.target.value) },
                                                                 }))
                                                             }
                                                             className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
@@ -853,9 +872,12 @@ export default function BookingPage() {
                                                             onChange={(e) =>
                                                                 setBookingForms((bf) => ({
                                                                     ...bf,
-                                                                    [seat]: { ...form, phone: e.target.value },
+                                                                    [seat]: { ...form, phone: sanitizePhoneInput(e.target.value) },
                                                                 }))
                                                             }
+                                                            inputMode="numeric"
+                                                            pattern="[0-9]*"
+                                                            maxLength={10}
                                                             className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
                                                         />
 
@@ -865,9 +887,10 @@ export default function BookingPage() {
                                                             onChange={(e) =>
                                                                 setBookingForms((bf) => ({
                                                                     ...bf,
-                                                                    [seat]: { ...form, email: e.target.value },
+                                                                    [seat]: { ...form, email: sanitizeEmailInput(e.target.value) },
                                                                 }))
                                                             }
+                                                            type="email"
                                                             className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
                                                         />
                                                     </div>
@@ -987,6 +1010,20 @@ export default function BookingPage() {
                                                 const form = bookingForms[String(s)];
                                                 if (!form || !form.name || !form.phone) {
                                                     return showAppToast("error", `Provide name and phone for seat ${s}`);
+                                                }
+                                            }
+
+                                            // Validate each passenger's details
+                                            for (const s of selectedSeats) {
+                                                const form = bookingForms[String(s)] || {};
+                                                if (!isValidName(form.name)) {
+                                                    return showAppToast("error", `Enter a valid name for seat ${s}`);
+                                                }
+                                                if (!isValidPhone(form.phone)) {
+                                                    return showAppToast("error", `Enter a valid 10-digit phone for seat ${s}`);
+                                                }
+                                                if (form.email && !isValidEmail(form.email)) {
+                                                    return showAppToast("error", `Enter a valid email for seat ${s}`);
                                                 }
                                             }
 

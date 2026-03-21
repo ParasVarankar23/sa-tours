@@ -349,6 +349,27 @@ function calculateFare(bus, pickup, drop, dateStr) {
 }
 
 export default function BookingPage() {
+  // --- Input sanitizers / validators ---
+  const sanitizeNameInput = (v) => {
+    if (typeof v !== "string") return "";
+    // remove digits, allow letters, spaces, apostrophes, hyphens; cap length
+    return v.replace(/\d+/g, "").replace(/[^A-Za-z\s'\-]/g, "").slice(0, 100);
+  };
+
+  const sanitizePhoneInput = (v) => {
+    if (typeof v !== "string") return "";
+    return v.replace(/\D+/g, "").slice(0, 10);
+  };
+
+  const sanitizeEmailInput = (v) => {
+    if (typeof v !== "string") return "";
+    return v.trim().slice(0, 254).toLowerCase();
+  };
+
+  const isValidName = (v) => /^[A-Za-z\s'\-]{2,}$/.test(String(v || "").trim());
+  const isValidPhone = (v) => /^\d{10}$/.test(String(v || "").trim());
+  const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
+
   const [date, setDate] = useState("");
   const [buses, setBuses] = useState([]);
   const [schedules, setSchedules] = useState({});
@@ -587,6 +608,18 @@ export default function BookingPage() {
       return showAppToast("error", "Provide name and phone");
     }
 
+    if (!isValidName(bookingForm.name)) {
+      return showAppToast("error", "Enter a valid name (letters and spaces only)");
+    }
+
+    if (!isValidPhone(bookingForm.phone)) {
+      return showAppToast("error", "Enter a valid 10-digit phone number");
+    }
+
+    if (bookingForm.email && !isValidEmail(bookingForm.email)) {
+      return showAppToast("error", "Enter a valid email address");
+    }
+
     if (!bookingForm.pickup || !bookingForm.drop) {
       return showAppToast("error", "Select pickup and drop");
     }
@@ -665,6 +698,18 @@ export default function BookingPage() {
 
     if (!bookingForm.name || !bookingForm.phone) {
       return showAppToast("error", "Provide name and phone");
+    }
+
+    if (!isValidName(bookingForm.name)) {
+      return showAppToast("error", "Enter a valid name (letters and spaces only)");
+    }
+
+    if (!isValidPhone(bookingForm.phone)) {
+      return showAppToast("error", "Enter a valid 10-digit phone number");
+    }
+
+    if (bookingForm.email && !isValidEmail(bookingForm.email)) {
+      return showAppToast("error", "Enter a valid email address");
     }
 
     if (!bookingForm.pickup || !bookingForm.drop) {
@@ -830,6 +875,18 @@ export default function BookingPage() {
       return showAppToast("error", "Provide name and phone");
     }
 
+    if (!isValidName(bookingForm.name)) {
+      return showAppToast("error", "Enter a valid name (letters and spaces only)");
+    }
+
+    if (!isValidPhone(bookingForm.phone)) {
+      return showAppToast("error", "Enter a valid 10-digit phone number");
+    }
+
+    if (bookingForm.email && !isValidEmail(bookingForm.email)) {
+      return showAppToast("error", "Enter a valid email address");
+    }
+
     if (!bookingForm.pickup || !bookingForm.drop) {
       return showAppToast("error", "Select pickup and drop");
     }
@@ -982,6 +1039,19 @@ export default function BookingPage() {
       const token = localStorage.getItem("authToken");
       if (!token) {
         return showAppToast("error", "Unauthorized — please login as admin");
+      }
+
+      // Validate block details
+      if (blockDetails.name && !isValidName(blockDetails.name)) {
+        return showAppToast("error", "Enter a valid name (letters and spaces only)");
+      }
+
+      if (blockDetails.phone && !isValidPhone(blockDetails.phone)) {
+        return showAppToast("error", "Enter a valid 10-digit phone number");
+      }
+
+      if (blockDetails.email && !isValidEmail(blockDetails.email)) {
+        return showAppToast("error", "Enter a valid email address");
       }
 
       const payload = {
@@ -2157,7 +2227,9 @@ export default function BookingPage() {
                       <input
                         placeholder="Name"
                         value={bookingForm.name ?? ""}
-                        onChange={(e) => setBookingForm((p) => ({ ...p, name: e.target.value }))}
+                        onChange={(e) =>
+                          setBookingForm((p) => ({ ...p, name: sanitizeNameInput(e.target.value) }))
+                        }
                         className="w-full rounded-lg border px-3 py-2"
                         disabled={!editingSeat && selectedSeats.length === 0}
                       />
@@ -2165,7 +2237,12 @@ export default function BookingPage() {
                       <input
                         placeholder="Phone number"
                         value={bookingForm.phone ?? ""}
-                        onChange={(e) => setBookingForm((p) => ({ ...p, phone: e.target.value }))}
+                        onChange={(e) =>
+                          setBookingForm((p) => ({ ...p, phone: sanitizePhoneInput(e.target.value) }))
+                        }
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={10}
                         className="w-full rounded-lg border px-3 py-2"
                         disabled={!editingSeat && selectedSeats.length === 0}
                       />
@@ -2173,7 +2250,10 @@ export default function BookingPage() {
                       <input
                         placeholder="Email"
                         value={bookingForm.email ?? ""}
-                        onChange={(e) => setBookingForm((p) => ({ ...p, email: e.target.value }))}
+                        onChange={(e) =>
+                          setBookingForm((p) => ({ ...p, email: sanitizeEmailInput(e.target.value) }))
+                        }
+                        type="email"
                         className="w-full rounded-lg border px-3 py-2"
                         disabled={!editingSeat && selectedSeats.length === 0}
                       />
@@ -2518,21 +2598,31 @@ export default function BookingPage() {
                 <input
                   placeholder="Name"
                   value={blockDetails.name}
-                  onChange={(e) => setBlockDetails((p) => ({ ...p, name: e.target.value }))}
+                  onChange={(e) =>
+                    setBlockDetails((p) => ({ ...p, name: sanitizeNameInput(e.target.value) }))
+                  }
                   className="w-full rounded-lg border px-3 py-2"
                 />
 
                 <input
                   placeholder="Phone"
                   value={blockDetails.phone}
-                  onChange={(e) => setBlockDetails((p) => ({ ...p, phone: e.target.value }))}
+                  onChange={(e) =>
+                    setBlockDetails((p) => ({ ...p, phone: sanitizePhoneInput(e.target.value) }))
+                  }
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={10}
                   className="w-full rounded-lg border px-3 py-2"
                 />
 
                 <input
                   placeholder="Email"
                   value={blockDetails.email}
-                  onChange={(e) => setBlockDetails((p) => ({ ...p, email: e.target.value }))}
+                  onChange={(e) =>
+                    setBlockDetails((p) => ({ ...p, email: sanitizeEmailInput(e.target.value) }))
+                  }
+                  type="email"
                   className="w-full rounded-lg border px-3 py-2"
                 />
 
