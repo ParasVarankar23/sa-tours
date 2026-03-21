@@ -8,7 +8,6 @@ import {
     ChevronLeft,
     ChevronRight,
     Clock3,
-    Copy,
     RefreshCw,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -17,7 +16,6 @@ export default function NotificationsPage() {
     const [loading, setLoading] = useState(true);
     const [notifications, setNotifications] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
-
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
     async function load() {
@@ -31,10 +29,9 @@ export default function NotificationsPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Failed to load notifications");
 
-            const list = data.notifications || [];
+            const list = Array.isArray(data.notifications) ? data.notifications : [];
             setNotifications(list);
 
-            // If the URL includes ?show=all then show all notifications on one page
             try {
                 const params = new URLSearchParams(window.location.search);
                 if (params.get("show") === "all") {
@@ -42,10 +39,11 @@ export default function NotificationsPage() {
                 } else {
                     setItemsPerPage(10);
                 }
-            } catch (e) {
+            } catch {
                 setItemsPerPage(10);
             }
-            setCurrentPage(1); // reset to page 1 on refresh
+
+            setCurrentPage(1);
         } catch (err) {
             console.error(err);
             showAppToast("error", err.message || "Failed to load notifications");
@@ -147,14 +145,6 @@ export default function NotificationsPage() {
         });
     }
 
-    const handleCopyData = async (n) => {
-        try {
-            await navigator.clipboard?.writeText(JSON.stringify(n.data || {}, null, 2));
-            showAppToast("success", "Notification data copied");
-        } catch {
-            showAppToast("error", "Failed to copy data");
-        }
-    };
 
     /* =========================
        Pagination Logic
@@ -165,7 +155,7 @@ export default function NotificationsPage() {
         const startIndex = (currentPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
         return notifications.slice(startIndex, endIndex);
-    }, [notifications, currentPage]);
+    }, [notifications, currentPage, itemsPerPage]);
 
     useEffect(() => {
         if (currentPage > totalPages && totalPages > 0) {
@@ -180,21 +170,20 @@ export default function NotificationsPage() {
     return (
         <div className="min-h-screen w-full bg-[#f8fafc] p-3 md:p-4 lg:p-5">
             {/* Header */}
-            <div className="mb-5 rounded-[28px] bg-gradient-to-r from-[#f97316] to-[#facc15] p-5 text-white shadow-lg md:p-6">
+            <div className="mb-5 rounded-[28px] border border-orange-100 bg-white p-5 shadow-sm md:p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                        <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold backdrop-blur-sm">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-semibold text-[#ea580c]">
                             <Bell className="h-4 w-4" />
                             NOTIFICATION CENTER
                         </div>
 
-                        <h1 className="mt-3 text-2xl font-bold md:text-4xl lg:text-[44px]">
+                        <h1 className="mt-3 text-2xl font-bold text-slate-900 md:text-4xl lg:text-[40px]">
                             Notifications
                         </h1>
 
-                        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/90 md:text-base">
-                            View recent updates, booking alerts, account activity, and
-                            important system notifications in one place.
+                        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500 md:text-base">
+                            View recent booking updates, payment alerts, and important account activity in one place.
                         </p>
                     </div>
 
@@ -202,17 +191,15 @@ export default function NotificationsPage() {
                         <button
                             onClick={load}
                             disabled={loading}
-                            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-semibold text-[#ea580c] shadow-md transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-70"
+                            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
                         >
-                            <RefreshCw
-                                className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-                            />
+                            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                             Refresh
                         </button>
 
                         <button
                             onClick={markAllRead}
-                            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
+                            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#ea580c]"
                         >
                             <CheckCheck className="h-4 w-4" />
                             Mark All Read
@@ -309,7 +296,7 @@ export default function NotificationsPage() {
                                     key={n.id}
                                     className={`rounded-3xl border p-4 transition md:p-5 ${n.read
                                         ? "border-slate-200 bg-white hover:border-slate-300"
-                                        : "border-orange-100 bg-orange-50/60 hover:border-orange-200"
+                                        : "border-orange-100 bg-orange-50/50 hover:border-orange-200"
                                         }`}
                                 >
                                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -337,7 +324,7 @@ export default function NotificationsPage() {
                                                 </div>
 
                                                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                                                    {n.message || "No message available"}
+                                                    {typeof n.message === 'object' ? JSON.stringify(n.message) : (n.message || "No message available")}
                                                 </p>
 
                                                 <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
@@ -361,7 +348,7 @@ export default function NotificationsPage() {
                                         </div>
 
                                         {/* Right Actions */}
-                                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                        <div className="flex flex-wrap items-center gap-2 lg:min-w-[260px] lg:justify-end">
                                             <button
                                                 onClick={() => markRead(n, !n.read)}
                                                 className={`inline-flex h-10 items-center justify-center gap-2 rounded-2xl px-4 text-xs font-semibold transition md:text-sm ${n.read
@@ -373,25 +360,17 @@ export default function NotificationsPage() {
                                                 {n.read ? "Mark Unread" : "Mark Read"}
                                             </button>
 
-                                            <button
-                                                onClick={() => handleCopyData(n)}
-                                                className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 md:text-sm"
-                                            >
-                                                <Copy className="h-4 w-4" />
-                                                Copy Data
-                                            </button>
                                         </div>
                                     </div>
 
-                                    {/* Optional Data Preview */}
+                                    {/* Clean Data Preview */}
                                     {n.data && Object.keys(n.data).length > 0 ? (
-                                        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                                Data Preview
+                                        <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                                            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                                Booking / Payment Details
                                             </p>
-                                            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-700">
-                                                {JSON.stringify(n.data, null, 2)}
-                                            </pre>
+
+                                            <NotificationDetails data={n.data} />
                                         </div>
                                     ) : null}
                                 </div>
@@ -410,9 +389,7 @@ export default function NotificationsPage() {
                                     <div className="flex flex-wrap items-center gap-2">
                                         {/* Prev */}
                                         <button
-                                            onClick={() =>
-                                                setCurrentPage((prev) => Math.max(prev - 1, 1))
-                                            }
+                                            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                                             disabled={currentPage === 1}
                                             className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
@@ -422,29 +399,23 @@ export default function NotificationsPage() {
 
                                         {/* Page Numbers */}
                                         <div className="flex flex-wrap items-center gap-2">
-                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                                                (page) => (
-                                                    <button
-                                                        key={page}
-                                                        onClick={() => setCurrentPage(page)}
-                                                        className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-2xl px-3 text-sm font-semibold transition ${currentPage === page
-                                                            ? "bg-[#f97316] text-white shadow-sm"
-                                                            : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                                                            }`}
-                                                    >
-                                                        {page}
-                                                    </button>
-                                                )
-                                            )}
+                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => setCurrentPage(page)}
+                                                    className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-2xl px-3 text-sm font-semibold transition ${currentPage === page
+                                                        ? "bg-[#f97316] text-white shadow-sm"
+                                                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                                        }`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            ))}
                                         </div>
 
                                         {/* Next */}
                                         <button
-                                            onClick={() =>
-                                                setCurrentPage((prev) =>
-                                                    Math.min(prev + 1, totalPages)
-                                                )
-                                            }
+                                            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                                             disabled={currentPage === totalPages}
                                             className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
@@ -471,7 +442,7 @@ function StatCard({ title, value, subtitle, icon, iconBg }) {
             <div className="flex items-start justify-between gap-3">
                 <div>
                     <p className="text-sm text-slate-500">{title}</p>
-                    <h3 className="mt-2 text-xl font-bold text-slate-900 break-words md:text-2xl">
+                    <h3 className="mt-2 break-words text-xl font-bold text-slate-900 md:text-2xl">
                         {value}
                     </h3>
                     <p className="mt-2 text-xs text-slate-500">{subtitle}</p>
@@ -483,6 +454,103 @@ function StatCard({ title, value, subtitle, icon, iconBg }) {
                     {icon}
                 </div>
             </div>
+        </div>
+    );
+}
+
+function NotificationDetails({ data }) {
+    const booking = data?.booking || data || {};
+    const payment = data?.payment || data || {};
+
+    function formatValue(v) {
+        if (v === undefined || v === null || v === "") return "";
+        if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v);
+        // If it's an object, prefer common id-like fields, otherwise stringify
+        if (typeof v === "object") {
+            if (v.id) return String(v.id);
+            if (v.paymentId) return String(v.paymentId);
+            if (v.orderId) return String(v.orderId);
+            if (v.amount) return String(v.amount);
+            try {
+                return JSON.stringify(v);
+            } catch {
+                return String(v);
+            }
+        }
+        return String(v);
+    }
+
+    const bookingFields = [
+        { label: "Bus Number", value: formatValue(booking?.busNumber || booking?.busId || "") },
+        { label: "Passenger Name", value: formatValue(booking?.name || booking?.passengerName || "") },
+        { label: "Seat Number", value: formatValue(booking?.seatNo || booking?.seatNumber || "") },
+        { label: "Travel Date", value: formatValue(booking?.date || booking?.travelDate || "") },
+        {
+            label: "Route",
+            value: formatValue(booking?.pickup && booking?.drop ? `${booking.pickup} → ${booking.drop}` : ""),
+        },
+        { label: "Pickup Time", value: formatValue(booking?.pickupTime || "") },
+        { label: "Drop Time", value: formatValue(booking?.dropTime || "") },
+        {
+            label: "Fare",
+            value:
+                booking?.fare !== undefined && booking?.fare !== null && booking?.fare !== ""
+                    ? `₹${Number(booking.fare).toFixed(2)}`
+                    : "",
+        },
+        { label: "Payment ID", value: formatValue(booking?.payment || booking?.paymentId || "") },
+        { label: "Payment Method", value: formatValue(booking?.paymentMethod || "") },
+        { label: "Phone", value: formatValue(booking?.phone || booking?.phoneNumber || "") },
+        { label: "Email", value: formatValue(booking?.email || "") },
+        {
+            label: "Created At",
+            value: booking?.createdAt ? new Date(booking.createdAt).toLocaleString("en-IN") : "",
+        },
+    ].filter((item) => item.value);
+
+    const paymentFields = [
+        { label: "Payment ID", value: formatValue(payment?.paymentId || payment?.id || "") },
+        { label: "Order ID", value: formatValue(payment?.orderId || "") },
+        {
+            label: "Amount",
+            value:
+                payment?.amount !== undefined && payment?.amount !== null && payment?.amount !== ""
+                    ? `₹${Number(payment.amount).toFixed(2)}`
+                    : "",
+        },
+        { label: "Currency", value: formatValue(payment?.currency || "") },
+        { label: "Method", value: formatValue(payment?.paymentMethod || payment?.method || "") },
+        {
+            label: "Paid At",
+            value: payment?.createdAt ? new Date(payment.createdAt).toLocaleString("en-IN") : "",
+        },
+    ].filter((item) => item.value);
+
+    const fieldsToShow = bookingFields.length > 0 ? bookingFields : paymentFields;
+
+    if (!fieldsToShow.length) {
+        return (
+            <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-500">
+                No additional details available.
+            </div>
+        );
+    }
+
+    return (
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {fieldsToShow.map((item, index) => (
+                <div
+                    key={`${item.label}-${index}`}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+                >
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        {item.label}
+                    </p>
+                    <p className="mt-1 break-words text-sm font-semibold text-slate-900">
+                        {item.value}
+                    </p>
+                </div>
+            ))}
         </div>
     );
 }

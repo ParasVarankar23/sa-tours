@@ -148,7 +148,7 @@ function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
 
         const rawRules = collectRawRules();
         if (typeof window !== "undefined" && window && window.location) {
-            console.debug && console.debug("[fare-debug] collectRawRules", { fromStop, toStop, dateStr, rawRules });
+            // fare debug removed
         }
         if (rawRules.length > 0) {
             const pickupOptions = (() => {
@@ -218,24 +218,24 @@ function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
             };
 
             if (typeof window !== "undefined" && window && window.location) {
-                console.debug && console.debug("[fare-debug] expandedRules", { expanded });
+                // fare debug removed
             }
 
             const matches = expanded.filter((r) => normalizeKey(r.from) === normalizeKey(fromStop) && normalizeKey(r.to) === normalizeKey(toStop) && ruleAppliesOnDate(r, dateStr));
             if (typeof window !== "undefined" && window && window.location) {
-                console.debug && console.debug("[fare-debug] matches", { matches, dateStr });
+                // fare debug removed
             }
             if (matches && matches.length > 0) {
                 const chosen = matches[matches.length - 1];
                 if (typeof window !== "undefined" && window && window.location) {
-                    console.debug && console.debug("[fare-debug] chosen", { chosen });
+                    // fare debug removed
                 }
                 const overrideFare = Number(chosen.fare);
                 if (Number.isFinite(overrideFare) && overrideFare > 0) {
                     amount = overrideFare;
                     ruleApplied = true;
                     if (typeof window !== "undefined" && window && window.location) {
-                        console.debug && console.debug("[fare-debug] overrideApplied", { amount, ruleApplied });
+                        // fare debug removed
                     }
                 }
             }

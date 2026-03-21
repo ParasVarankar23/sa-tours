@@ -56,7 +56,7 @@ export async function POST(req) {
 
         // Debug: log incoming metadata userId to help trace missing payments
         try {
-            console.debug("/api/public/verify-payment incoming metadata.userId=", metadata && metadata.userId ? String(metadata.userId) : null);
+            // debug removed
         } catch (e) { }
 
         // normalize and store a `details` object similar to Razorpay response shape
@@ -85,7 +85,7 @@ export async function POST(req) {
         await db.ref(`payments/${paymentId}`).set(record);
 
         try {
-            console.debug(`/api/public/verify-payment saved payment id=${paymentId} userId=${record.metadata && record.metadata.userId ? record.metadata.userId : 'null'} amount=${record.details && record.details.amount ? record.details.amount : 'na'}`);
+            // debug removed
         } catch (e) { }
 
         // create notifications for admin and user (if metadata.userId present)

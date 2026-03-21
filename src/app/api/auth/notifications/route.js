@@ -19,15 +19,38 @@ export async function GET(req) {
         const uid = user.uid || null;
         const role = (user.role || "user").toString().toLowerCase();
 
+        // GET called for uid, role (debug removed)
+
         const db = getAdminDb();
 
         // fetch role notifications
-        const roleSnap = await db.ref(`notifications/roles/${role}`).once("value");
-        const roleData = roleSnap.exists() ? roleSnap.val() : {};
+        // owners should also see admin notifications; merge role sets when needed
+        const rolesToFetch = [role];
+        if (role === "owner") {
+            rolesToFetch.push("admin");
+        }
+
+        let roleData = {};
+        for (const r of rolesToFetch) {
+            try {
+                const snap = await db.ref(`notifications/roles/${r}`).once("value");
+                if (snap.exists()) {
+                    const val = snap.val() || {};
+                    roleData = { ...roleData, ...val };
+                }
+            } catch (e) {
+                // ignore individual role fetch errors
+                console.error(`Failed to fetch role notifications for ${r}:`, e);
+            }
+        }
+
+        // roleData keys debug removed
 
         // fetch user notifications
         const userSnap = uid ? await db.ref(`notifications/users/${uid}`).once("value") : null;
         const userData = userSnap && userSnap.exists() ? userSnap.val() : {};
+
+        // userData keys debug removed
 
         // fetch per-user read map for role notifications
         const readSnap = uid ? await db.ref(`notifications/reads/${uid}`).once("value") : null;
@@ -62,6 +85,8 @@ export async function GET(req) {
         // optionally include public notifications
         const publicSnap = await db.ref(`notifications/public`).once("value");
         const publicData = publicSnap.exists() ? publicSnap.val() : {};
+
+        // publicData keys debug removed
         for (const [id, n] of Object.entries(publicData || {})) {
             out.push({
                 id,
@@ -80,10 +105,25 @@ export async function GET(req) {
             return tb - ta;
         });
 
+        // total merged notifications debug removed
+
         // pagination support via query params: offset (default 0) and limit (default 10)
         const url = new URL(req.url);
-        const offset = Math.max(0, parseInt(url.searchParams.get("offset") || "0", 100));
-        const limit = Math.max(1, parseInt(url.searchParams.get("limit") || "10", 100));
+        const hasOffset = url.searchParams.has("offset");
+        const hasLimit = url.searchParams.has("limit");
+        let offset = Math.max(0, parseInt(url.searchParams.get("offset") || "0", 100));
+        let limit = Math.max(1, parseInt(url.searchParams.get("limit") || "10", 100));
+
+        // If client did not provide pagination params, return all notifications
+        if (!hasOffset && !hasLimit) {
+            offset = 0;
+            limit = out.length || 1;
+        }
+
+        // If offset is beyond total, reset to 0 to avoid empty slice
+        if (offset >= out.length) {
+            offset = 0;
+        }
 
         const total = out.length;
         const unreadCount = out.filter((n) => !n.read).length;

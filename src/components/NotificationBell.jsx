@@ -9,8 +9,10 @@ export default function NotificationBell({ pollInterval = 10000 }) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const [notifications, setNotifications] = useState([]);
+    const [meta, setMeta] = useState({ total: 0, unreadCount: 0 });
     const [loading, setLoading] = useState(false);
     const mounted = useRef(true);
+    const containerRef = useRef(null);
 
     useEffect(() => {
         mounted.current = true;
@@ -26,6 +28,7 @@ export default function NotificationBell({ pollInterval = 10000 }) {
             if (!res.ok) return;
             if (!mounted.current) return;
             setNotifications(data.notifications || []);
+            setMeta({ total: data.total || (data.notifications || []).length, unreadCount: data.unreadCount || 0 });
         } catch (e) {
             // ignore
         }
@@ -36,6 +39,19 @@ export default function NotificationBell({ pollInterval = 10000 }) {
         const id = setInterval(fetchList, pollInterval);
         return () => clearInterval(id);
     }, [pollInterval]);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        function handleDocClick(e) {
+            if (!containerRef.current) return;
+            if (!containerRef.current.contains(e.target)) {
+                setOpen(false);
+            }
+        }
+
+        document.addEventListener("mousedown", handleDocClick);
+        return () => document.removeEventListener("mousedown", handleDocClick);
+    }, []);
 
     const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -77,7 +93,7 @@ export default function NotificationBell({ pollInterval = 10000 }) {
     };
 
     return (
-        <div className="relative">
+        <div className="relative" ref={containerRef}>
             <button
                 type="button"
                 onClick={async () => { setOpen((s) => !s); if (!open) await fetchList(); }}
@@ -96,7 +112,7 @@ export default function NotificationBell({ pollInterval = 10000 }) {
                     <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                         <div>
                             <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
-                            <p className="text-xs text-slate-500">Recent updates & alerts</p>
+                            <p className="text-xs text-slate-500">Recent updates & alerts • {meta.total || 0} total</p>
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={markAllRead} className="rounded-xl px-3 py-1.5 text-xs font-semibold text-orange-600 transition hover:bg-orange-50">Mark all read</button>
@@ -114,20 +130,24 @@ export default function NotificationBell({ pollInterval = 10000 }) {
                         ) : (
                             <div className="space-y-3">
                                 {notifications.slice(0, 20).map((n) => (
-                                    <div key={n.id} className={`rounded-2xl border p-3 transition ${n.read ? 'border-slate-200 bg-white' : 'border-orange-100 bg-orange-50/70'}`}>
+                                    <div
+                                        key={n.id}
+                                        onClick={() => setOpen(false)}
+                                        className={`rounded-2xl border p-3 transition ${n.read ? 'border-slate-200 bg-white' : 'border-orange-100 bg-orange-50/70'}`}
+                                    >
                                         <div className="flex items-start gap-3">
                                             <div className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${n.read ? 'bg-slate-300' : 'bg-orange-500'}`} />
                                             <div className="min-w-0 flex-1">
                                                 <p className="truncate text-sm font-semibold text-slate-900">{n.title || 'Notification'}</p>
-                                                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{n.message || 'No message'}</p>
+                                                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{typeof n.message === 'object' ? JSON.stringify(n.message) : (n.message || 'No message')}</p>
                                                 <p className="mt-2 text-[11px] text-slate-400">{n.createdAt ? new Date(n.createdAt).toLocaleString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, day: '2-digit', month: 'short' }) : ''}</p>
                                             </div>
                                         </div>
                                         <div className="mt-3 flex flex-wrap items-center gap-2">
                                             {!n.read && (
-                                                <button onClick={() => markRead(n)} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-white">Mark as read</button>
+                                                <button onClick={(e) => { e.stopPropagation(); markRead(n); }} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-white">Mark as read</button>
                                             )}
-                                            <button onClick={() => { setOpen(false); window.open('/notifications?show=all', '_blank'); }} className="rounded-xl bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-orange-600">Open</button>
+                                            <button onClick={(e) => { e.stopPropagation(); setOpen(false); window.open('/notifications?show=all', '_blank'); }} className="rounded-xl bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-orange-600">Open</button>
                                         </div>
                                     </div>
                                 ))}

@@ -659,20 +659,30 @@ export async function POST(req) {
         try {
             const db2 = getAdminDb();
             // role notification for admin
-            await createRoleNotification(db2, "admin", {
-                title: "New booking created",
-                message: `Seat ${seatNo} booked on ${date} for ${payload.busNumber || "bus"} (${payload.pickup} → ${payload.drop}) Fare: ₹${payload.fare}`,
-                data: { busId, date, seatNo, booking: payload },
-            });
+            try {
+                const roleKey = await createRoleNotification(db2, "admin", {
+                    title: "New booking created",
+                    message: `Seat ${seatNo} booked on ${date} for ${payload.busNumber || "bus"} (${payload.pickup} → ${payload.drop}) Fare: ₹${payload.fare}`,
+                    data: { busId, date, seatNo, booking: payload },
+                });
+            } catch (e) {
+                console.error("[Notifications] createRoleNotification error:", e);
+            }
 
             // user notification when userId provided in request body
             const userIdFromBody = normalizeText(body.userId || "");
             if (userIdFromBody) {
-                await createUserNotification(db2, userIdFromBody, {
-                    title: "Booking confirmed",
-                    message: `Your booking for seat ${seatNo} on ${date} is confirmed.`,
-                    data: { busId, date, seatNo, booking: payload },
-                });
+                try {
+                    const userKey = await createUserNotification(db2, userIdFromBody, {
+                        title: "Booking confirmed",
+                        message: `Your booking for seat ${seatNo} on ${date} is confirmed.`,
+                        data: { busId, date, seatNo, booking: payload },
+                    });
+                } catch (e) {
+                    console.error("[Notifications] createUserNotification error for userId", userIdFromBody, e);
+                }
+            } else {
+                // no userId provided in booking body; skipping user notification
             }
         } catch (e) {
             console.error("Failed to create booking notifications:", e);
