@@ -1501,7 +1501,7 @@ export default function BookingPage() {
       return;
     }
 
-    const printHtml = html.replace(
+    let printHtml = html.replace(
       "</style>",
       `
     @page {
@@ -1522,13 +1522,141 @@ export default function BookingPage() {
     </style>`
     );
 
+
+    // Append a small script in the preview window that captures the .sheet element
+    // using html2canvas + jsPDF inside the preview's browser context.
+    const previewScript = `
+      (function () {
+        function loadScript(src) {
+          return new Promise(function (resolve, reject) {
+            var s = document.createElement('script');
+            s.src = src;
+            s.async = true;
+            s.onload = function () { resolve(); };
+            s.onerror = function () { reject(new Error('Failed to load ' + src)); };
+            document.head.appendChild(s);
+          });
+        }
+
+        async function generatePdf() {
+          try {
+            var sheet = document.querySelector('.sheet');
+            if (!sheet) return alert('Template not found');
+
+            if (document.fonts && document.fonts.ready) await document.fonts.ready;
+            await new Promise(function (r) { setTimeout(r, 120); });
+
+            // Load UMD builds into the preview window if not already present
+            if (!window.html2canvas) {
+              await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+            }
+            if (!window.jspdf && !window.jsPDF) {
+              await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+            }
+
+            var html2c = window.html2canvas;
+            var jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (window.jsPDF || null);
+            if (!html2c || !jsPDFCtor) throw new Error('Required libraries not available');
+
+            var scale = 2;
+            var canvas = await html2c(sheet, { scale: scale, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 });
+
+            var imgData = canvas.toDataURL('image/jpeg', 0.98);
+            var A4_WIDTH_MM = 210;
+            var A4_HEIGHT_MM = 297;
+            var margin = 8;
+
+            var pdf = new jsPDFCtor({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+            var pdfWidth = A4_WIDTH_MM - margin * 2;
+            var pdfHeight = A4_HEIGHT_MM - margin * 2;
+
+            var canvasWidth = canvas.width;
+            var canvasHeight = canvas.height;
+            var imgWidthMm = pdfWidth;
+            var imgHeightMm = (canvasHeight * imgWidthMm) / canvasWidth;
+
+            if (imgHeightMm <= pdfHeight) {
+              pdf.addImage(imgData, 'JPEG', margin, margin, imgWidthMm, imgHeightMm);
+            } else {
+              var pxPerMm = canvasWidth / imgWidthMm;
+              var pageHeightPx = Math.floor(pdfHeight * pxPerMm);
+              var remaining = canvasHeight;
+              var position = 0;
+              var tmpCanvas = document.createElement('canvas');
+              var tmpCtx = tmpCanvas.getContext('2d');
+
+              while (remaining > 0) {
+                var slice = Math.min(pageHeightPx, remaining);
+                tmpCanvas.width = canvasWidth;
+                tmpCanvas.height = slice;
+                tmpCtx.clearRect(0, 0, tmpCanvas.width, tmpCanvas.height);
+                tmpCtx.drawImage(canvas, 0, position, canvasWidth, slice, 0, 0, canvasWidth, slice);
+
+                var sliceData = tmpCanvas.toDataURL('image/jpeg', 0.98);
+                var sliceHeightMm = (slice * imgWidthMm) / canvasWidth;
+
+                if (position > 0) pdf.addPage();
+                pdf.addImage(sliceData, 'JPEG', margin, margin, imgWidthMm, sliceHeightMm);
+
+                position += slice;
+                remaining -= slice;
+              }
+            }
+
+            var filename = 'seat-template-' + encodeURIComponent(document.title || 'bus') + '.pdf';
+            pdf.save(filename);
+          } catch (err) {
+            console.error(err);
+            alert('Failed to generate PDF: ' + (err && err.message ? err.message : String(err)));
+          }
+        }
+
+            // expose the generator so parent window can call it
+            window.generateSeatPdf = generatePdf;
+
+            document.addEventListener('DOMContentLoaded', function () {
+              var btn = document.getElementById('download-pdf');
+              if (btn) btn.addEventListener('click', generatePdf);
+            });
+      })();
+    `;
+
+    printHtml = printHtml.replace('</body>', `<script>${previewScript}</script></body>`);
+
     printWindow.document.open();
     printWindow.document.write(printHtml);
     printWindow.document.close();
+    return printWindow;
   };
 
   const handleDownloadSeatTemplate = async () => {
     try {
+      // Prefer generating PDF from the preview window (ensures exact parity).
+      try {
+        const previewWin = handlePrintSeatTemplate();
+        if (previewWin) {
+          let attempts = 0;
+          const callGenerator = () => {
+            try {
+              if (previewWin.generateSeatPdf) {
+                previewWin.generateSeatPdf();
+                return;
+              }
+            } catch (e) {
+              // ignore
+            }
+            attempts++;
+            if (attempts < 30) setTimeout(callGenerator, 200);
+            else showAppToast('error', 'Preview PDF generator not available');
+          };
+          setTimeout(callGenerator, 300);
+          return;
+        }
+      } catch (e) {
+        // continue to fallback method below
+      }
+
       const html = buildSeatTemplateHtml();
       if (!html) return;
 
@@ -1565,7 +1693,31 @@ export default function BookingPage() {
         pdfContainer.appendChild(headStyle.cloneNode(true));
       } else {
         const style = document.createElement("style");
-        style.innerHTML = `* { box-sizing: border-box; } body { margin: 0; font-family: "Times New Roman", serif; } .sheet { width: 794px; min-height: 1123px; padding: 18px; background: #fff; color: #111; font-family: "Times New Roman", serif; } .line-row, .value { line-height: 1.15; }`;
+        style.innerHTML = `
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Times New Roman", serif;
+      background: #fff;
+      color: #111;
+    }
+    .sheet {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 5mm;
+      background: #fff;
+      color: #111;
+      font-family: "Times New Roman", serif;
+    }
+    .line-row {
+      display: flex;
+      align-items: center;
+    }
+    .value {
+      line-height: 1.35;
+      padding-bottom: 1px;
+    }
+  `;
         pdfContainer.appendChild(style);
       }
       pdfContainer.appendChild(sheet.cloneNode(true));
