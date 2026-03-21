@@ -1,7 +1,15 @@
 "use client";
 
 import { showAppToast } from "@/lib/client/toast";
-import { BUS_TYPES, getFare, isBorliVillageStop, isCityStop, isDighiVillageStop, normalizeStopName, ROUTES } from "@/lib/fare";
+import {
+    BUS_TYPES,
+    getFare,
+    isBorliVillageStop,
+    isCityStop,
+    isDighiVillageStop,
+    normalizeStopName,
+    ROUTES,
+} from "@/lib/fare";
 import {
     Bus,
     CalendarDays,
@@ -14,6 +22,10 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+/* =========================
+   Helpers
+========================= */
+
 function normalizeText(v) {
     return String(v || "").trim();
 }
@@ -22,287 +34,458 @@ function normalizeKey(v) {
     return normalizeText(v).toLowerCase();
 }
 
-function resolvePointValue(val, fallback = "") {
-    if (!val) return String(fallback || "");
-    if (typeof val === "object") return String(val.name || "");
-    return String(val);
+function resolvePointName(point) {
+    if (!point) return "";
+    if (typeof point === "string") return normalizeText(point);
+    if (typeof point === "object") return normalizeText(point.name);
+    return "";
+}
+
+function resolvePointObject(point, fallbackTime = "") {
+    if (!point) return { name: "", time: fallbackTime || "" };
+    if (typeof point === "string") return { name: normalizeText(point), time: fallbackTime || "" };
+    return {
+        name: normalizeText(point.name),
+        time: normalizeText(point.time || fallbackTime || ""),
+    };
+}
+
+function formatDateLabel(dateStr) {
+    if (!dateStr) return "(any)";
+    try {
+        const d = new Date(dateStr);
+        if (Number.isNaN(d.getTime())) return dateStr;
+        return d.toLocaleDateString("en-GB");
+    } catch {
+        return dateStr;
+    }
+}
+
+function isDateWithinRange(targetDate, startDate, endDate) {
+    if (!targetDate) return true;
+
+    try {
+        const t = new Date(targetDate);
+        if (Number.isNaN(t.getTime())) return false;
+
+        const targetOnly = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+
+        if (startDate) {
+            const s = new Date(startDate);
+            if (Number.isNaN(s.getTime())) return false;
+            const sOnly = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+            if (targetOnly < sOnly) return false;
+        }
+
+        if (endDate) {
+            const e = new Date(endDate);
+            if (Number.isNaN(e.getTime())) return false;
+            const eOnly = new Date(e.getFullYear(), e.getMonth(), e.getDate());
+            if (targetOnly > eOnly) return false;
+        }
+
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function ruleIntersectsRange(rule, rangeFrom, rangeTo) {
+    if (!rangeFrom && !rangeTo) return true;
+
+    try {
+        const ruleStart = rule?.fareStartDate ? new Date(rule.fareStartDate) : null;
+        const ruleEnd = rule?.fareEndDate ? new Date(rule.fareEndDate) : null;
+        const from = rangeFrom ? new Date(rangeFrom) : null;
+        const to = rangeTo ? new Date(rangeTo) : null;
+
+        const normalize = (d) =>
+            d ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null;
+
+        const rs = normalize(ruleStart);
+        const re = normalize(ruleEnd);
+        const rf = normalize(from);
+        const rt = normalize(to);
+
+        const effectiveRuleStart = rs || new Date(1900, 0, 1);
+        const effectiveRuleEnd = re || new Date(2999, 11, 31);
+        const effectiveRangeStart = rf || new Date(1900, 0, 1);
+        const effectiveRangeEnd = rt || new Date(2999, 11, 31);
+
+        return (
+            effectiveRuleStart <= effectiveRangeEnd &&
+            effectiveRuleEnd >= effectiveRangeStart
+        );
+    } catch {
+        return false;
+    }
 }
 
 function buildRouteStops(bus) {
     if (!bus) return [];
-    const resolve = (p) => {
-        if (!p) return "";
-        if (typeof p === "object") return normalizeText(p.name);
-        return normalizeText(p);
-    };
 
-    if (Array.isArray(bus.pickupPoints) || Array.isArray(bus.dropPoints)) {
-        const start = resolve(bus.startPoint);
-        const pickups = Array.isArray(bus.pickupPoints)
-            ? bus.pickupPoints
-                .map((p) => normalizeText(typeof p === "string" ? p : p?.name))
-                .filter(Boolean)
-            : [];
-        const drops = Array.isArray(bus.dropPoints)
-            ? bus.dropPoints
-                .map((p) => normalizeText(typeof p === "string" ? p : p?.name))
-                .filter(Boolean)
-            : [];
-        const end = resolve(bus.endPoint);
+    const start = resolvePointName(bus.startPoint);
+    const pickups = Array.isArray(bus.pickupPoints)
+        ? bus.pickupPoints.map((p) => resolvePointName(p)).filter(Boolean)
+        : [];
+    const drops = Array.isArray(bus.dropPoints)
+        ? bus.dropPoints.map((p) => resolvePointName(p)).filter(Boolean)
+        : [];
+    const end = resolvePointName(bus.endPoint);
 
-        const all = [];
-        if (start) all.push(start);
-        for (const p of pickups) {
-            if (!all.some((x) => normalizeKey(x) === normalizeKey(p))) all.push(p);
+    const all = [];
+    if (start) all.push(start);
+
+    for (const p of pickups) {
+        if (!all.some((x) => normalizeKey(x) === normalizeKey(p))) {
+            all.push(p);
         }
-        for (const d of drops) {
-            if (!all.some((x) => normalizeKey(x) === normalizeKey(d))) all.push(d);
-        }
-        if (end && !all.some((x) => normalizeKey(x) === normalizeKey(end)))
-            all.push(end);
-
-        return all;
     }
 
-    const middleStops = Array.isArray(bus.stops)
-        ? bus.stops
-            .map((s) => (typeof s === "string" ? s : s?.stopName))
-            .filter(Boolean)
-            .map((s) => normalizeText(s))
-        : [];
+    for (const d of drops) {
+        if (!all.some((x) => normalizeKey(x) === normalizeKey(d))) {
+            all.push(d);
+        }
+    }
 
-    return [resolve(bus.startPoint), ...middleStops, resolve(bus.endPoint)].filter(
-        Boolean
-    );
+    if (end && !all.some((x) => normalizeKey(x) === normalizeKey(end))) {
+        all.push(end);
+    }
+
+    return all;
 }
 
 function getPickupOptions(bus) {
     if (!bus) return [];
-    if (Array.isArray(bus.pickupPoints)) {
-        const resolve = (p) => {
-            if (!p) return "";
-            if (typeof p === "object") return normalizeText(p.name);
-            return normalizeText(p);
-        };
 
-        const start = resolve(bus.startPoint);
-        const pickups = bus.pickupPoints.map((p) => resolve(p)).filter(Boolean);
+    const start = resolvePointName(bus.startPoint);
+    const pickups = Array.isArray(bus.pickupPoints)
+        ? bus.pickupPoints.map((p) => resolvePointName(p)).filter(Boolean)
+        : [];
 
-        const out = [];
-        if (start) out.push(start);
-        for (const p of pickups) {
-            if (!out.some((x) => normalizeKey(x) === normalizeKey(p))) out.push(p);
+    const out = [];
+    if (start) out.push(start);
+
+    for (const p of pickups) {
+        if (!out.some((x) => normalizeKey(x) === normalizeKey(p))) {
+            out.push(p);
         }
-
-        return out;
     }
 
-    const stops = buildRouteStops(bus);
-    if (stops.length <= 1) return [];
-    return stops.slice(0, stops.length - 1);
+    return out;
 }
 
 function getDropOptions(bus, pickup) {
     if (!bus || !pickup) return [];
 
-    if (Array.isArray(bus.pickupPoints) || Array.isArray(bus.dropPoints)) {
-        const resolve = (p) => {
-            if (!p) return "";
-            if (typeof p === "object") return normalizeText(p.name);
-            return normalizeText(p);
-        };
+    const start = resolvePointName(bus.startPoint);
+    const pickups = Array.isArray(bus.pickupPoints)
+        ? bus.pickupPoints.map((p) => resolvePointName(p)).filter(Boolean)
+        : [];
+    const drops = Array.isArray(bus.dropPoints)
+        ? bus.dropPoints.map((p) => resolvePointName(p)).filter(Boolean)
+        : [];
+    const end = resolvePointName(bus.endPoint);
 
-        const start = resolve(bus.startPoint);
-        const pickups = Array.isArray(bus.pickupPoints)
-            ? bus.pickupPoints.map((p) => resolve(p)).filter(Boolean)
-            : [];
-        const drops = Array.isArray(bus.dropPoints)
-            ? bus.dropPoints.map((p) => resolve(p)).filter(Boolean)
-            : [];
-        const end = resolve(bus.endPoint);
+    const routeStops = [];
+    if (start) routeStops.push(start);
 
-        const all = [];
-        if (start) all.push(start);
-        for (const p of pickups)
-            if (!all.some((x) => normalizeKey(x) === normalizeKey(p))) all.push(p);
-        for (const d of drops)
-            if (!all.some((x) => normalizeKey(x) === normalizeKey(d))) all.push(d);
-        if (end && !all.some((x) => normalizeKey(x) === normalizeKey(end)))
-            all.push(end);
-
-        const pickupIndex = all.findIndex((s) => normalizeKey(s) === normalizeKey(pickup));
-        if (pickupIndex === -1) return [];
-
-        const sliced = all.slice(pickupIndex + 1);
-        const dropSet = new Set(drops.map((d) => normalizeKey(d)));
-        const pickupSet = new Set(pickups.map((p) => normalizeKey(p)));
-
-        return sliced.filter((s) => {
-            const key = normalizeKey(s);
-            if (pickupSet.has(key)) return false;
-            return dropSet.has(key) || (end && key === normalizeKey(end));
-        });
+    for (const p of pickups) {
+        if (!routeStops.some((x) => normalizeKey(x) === normalizeKey(p))) {
+            routeStops.push(p);
+        }
     }
 
-    const stops = buildRouteStops(bus);
-    const pickupIndex = stops.findIndex((s) => normalizeKey(s) === normalizeKey(pickup));
+    for (const d of drops) {
+        if (!routeStops.some((x) => normalizeKey(x) === normalizeKey(d))) {
+            routeStops.push(d);
+        }
+    }
+
+    if (end && !routeStops.some((x) => normalizeKey(x) === normalizeKey(end))) {
+        routeStops.push(end);
+    }
+
+    const pickupIndex = routeStops.findIndex((s) => normalizeKey(s) === normalizeKey(pickup));
     if (pickupIndex === -1) return [];
-    return stops.slice(pickupIndex + 1);
+
+    const validDropNames = [...drops];
+    if (end) validDropNames.push(end);
+
+    const validDropSet = new Set(validDropNames.map((x) => normalizeKey(x)));
+
+    return routeStops
+        .slice(pickupIndex + 1)
+        .filter((stop) => validDropSet.has(normalizeKey(stop)));
 }
 
+/* =========================
+   Fare Rule Expansion
+========================= */
+
 function expandFareRules(bus) {
-    const rules = Array.isArray(bus.fareRulesRaw)
+    const rules = Array.isArray(bus?.fareRulesRaw)
         ? bus.fareRulesRaw
-        : Array.isArray(bus.fareRules)
+        : Array.isArray(bus?.fareRules)
             ? bus.fareRules
             : [];
-    const pickupOptions = getPickupOptions(bus);
+
+    if (!bus) return [];
+
+    const start = resolvePointName(bus.startPoint);
+    const pickups = Array.isArray(bus.pickupPoints)
+        ? bus.pickupPoints.map((p) => resolvePointName(p)).filter(Boolean)
+        : [];
+    const drops = Array.isArray(bus.dropPoints)
+        ? bus.dropPoints.map((p) => resolvePointName(p)).filter(Boolean)
+        : [];
+    const end = resolvePointName(bus.endPoint);
+
+    const pickupOptions = [];
+    if (start) pickupOptions.push(start);
+
+    for (const p of pickups) {
+        if (!pickupOptions.some((x) => normalizeKey(x) === normalizeKey(p))) {
+            pickupOptions.push(p);
+        }
+    }
+
+    const dropOptions = [];
+    for (const d of drops) {
+        if (!dropOptions.some((x) => normalizeKey(x) === normalizeKey(d))) {
+            dropOptions.push(d);
+        }
+    }
+
+    if (end && !dropOptions.some((x) => normalizeKey(x) === normalizeKey(end))) {
+        dropOptions.push(end);
+    }
 
     const expanded = [];
+
     for (let i = 0; i < rules.length; i++) {
         const r = rules[i] || {};
-        const from = String(r.from || "").trim();
-        const to = String(r.to || "").trim();
-        const fare = r.fare;
-        const fareStartDate = r.fareStartDate || "";
-        const fareEndDate = r.fareEndDate || "";
-        const apply = !!r.applyToAllNextPickupsBeforeDrop;
+        const from = normalizeText(r.from);
+        const to = normalizeText(r.to);
+        const fare = Number(r.fare);
+        const fareStartDate = normalizeText(r.fareStartDate);
+        const fareEndDate = normalizeText(r.fareEndDate);
 
-        if (!from && !to && (fare === undefined || fare === "")) continue;
+        const applyNextPickups = Boolean(
+            r.applyToAllNextPickupsBeforeDrop ?? r.applyToAllPreviousPickups
+        );
 
-        if (apply) {
-            const fromIndex = pickupOptions.findIndex(
-                (p) => normalizeKey(p) === normalizeKey(from)
-            );
-            const endIndex = pickupOptions.length;
-            const startIdx = fromIndex === -1 ? 0 : fromIndex;
-            for (let j = startIdx; j < endIndex; j++) {
+        const applyPreviousDrops = Boolean(
+            r.applyToAllPreviousDrops ?? r.applyToAllNextDropsAfterPickup
+        );
+
+        if (!from || !to || !Number.isFinite(fare) || fare <= 0) continue;
+
+        const fromIndex = pickupOptions.findIndex((p) => normalizeKey(p) === normalizeKey(from));
+        const toIndex = dropOptions.findIndex((p) => normalizeKey(p) === normalizeKey(to));
+
+        if (fromIndex === -1 || toIndex === -1) continue;
+
+        const pickupStart = fromIndex;
+        const pickupEnd = applyNextPickups ? pickupOptions.length - 1 : fromIndex;
+
+        const dropStart = applyPreviousDrops ? 0 : toIndex;
+        const dropEnd = toIndex;
+
+        const seen = new Set();
+
+        for (let pi = pickupStart; pi <= pickupEnd; pi++) {
+            for (let di = dropStart; di <= dropEnd; di++) {
+                const ef = pickupOptions[pi];
+                const et = dropOptions[di];
+
+                const key = `${normalizeKey(ef)}|${normalizeKey(et)}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+
                 expanded.push({
-                    from: pickupOptions[j],
-                    to,
+                    from: ef,
+                    to: et,
                     fare,
                     fareStartDate,
                     fareEndDate,
                     sourceIndex: i,
+                    originalRule: r,
                 });
             }
-        } else {
-            expanded.push({ from, to, fare, fareStartDate, fareEndDate, sourceIndex: i });
         }
     }
 
     return expanded;
 }
 
-function ruleAppliesOnDate(rule, dateStr) {
-    if (!dateStr) return true;
-    try {
-        const d = new Date(dateStr);
-        if (Number.isNaN(d.getTime())) return false;
+/* =========================
+   Date Matching
+========================= */
 
-        if (rule.fareStartDate) {
-            const s = new Date(rule.fareStartDate);
-            if (Number.isNaN(s.getTime())) return false;
-            if (d < new Date(s.getFullYear(), s.getMonth(), s.getDate())) return false;
-        }
-
-        if (rule.fareEndDate) {
-            const e = new Date(rule.fareEndDate);
-            if (Number.isNaN(e.getTime())) return false;
-            if (d > new Date(e.getFullYear(), e.getMonth(), e.getDate())) return false;
-        }
-
-        return true;
-    } catch (e) {
-        return false;
-    }
+function ruleAppliesOnSingleDate(rule, singleDate) {
+    if (!singleDate) return true;
+    return isDateWithinRange(singleDate, rule.fareStartDate, rule.fareEndDate);
 }
+
+function ruleAppliesForRange(rule, rangeFrom, rangeTo) {
+    if (!rangeFrom && !rangeTo) return true;
+    return ruleIntersectsRange(rule, rangeFrom, rangeTo);
+}
+
+function ruleMatchesDateFilter(rule, dateMode, singleDate, rangeFrom, rangeTo) {
+    if (dateMode === "single") {
+        return ruleAppliesOnSingleDate(rule, singleDate);
+    }
+    return ruleAppliesForRange(rule, rangeFrom, rangeTo);
+}
+
+/* =========================
+   Fare / Validation
+========================= */
 
 function normalizeBusTypeLocal(raw) {
     if (!raw) return BUS_TYPES.NON_AC;
+
     const s = String(raw || "").trim().toLowerCase();
-    if (s === "non-ac" || s === "non ac" || s === "nonac" || s.includes("non")) return BUS_TYPES.NON_AC;
-    if (s === "ac" || s === "a/c" || s.includes("ac")) return BUS_TYPES.AC;
+
+    if (s === "non-ac" || s === "non ac" || s === "nonac" || s.includes("non")) {
+        return BUS_TYPES.NON_AC;
+    }
+
+    if (s === "ac" || s === "a/c" || s.includes("ac")) {
+        return BUS_TYPES.AC;
+    }
+
     return BUS_TYPES.NON_AC;
 }
 
-function getEffectiveFare(bus, from, to, dateStr) {
-    const rules = Array.isArray(bus.fareRulesRaw)
+function detectRouteKey(bus, from, to) {
+    try {
+        const pickupNorm = normalizeStopName(from);
+        const dropNorm = normalizeStopName(to);
+
+        if (isBorliVillageStop(pickupNorm) && isCityStop(dropNorm)) {
+            return ROUTES.BORLI_TO_DONGRI;
+        }
+        if (isDighiVillageStop(pickupNorm) && isCityStop(dropNorm)) {
+            return ROUTES.DIGHI_TO_DONGRI;
+        }
+        if (isCityStop(pickupNorm) && isBorliVillageStop(dropNorm)) {
+            return ROUTES.DONGRI_TO_BORLI;
+        }
+        if (isCityStop(pickupNorm) && isDighiVillageStop(dropNorm)) {
+            return ROUTES.DONGRI_TO_DIGHI;
+        }
+
+        const s = normalizeStopName(resolvePointName(bus?.startPoint));
+        const e = normalizeStopName(resolvePointName(bus?.endPoint));
+
+        if (isBorliVillageStop(s) && isCityStop(e)) return ROUTES.BORLI_TO_DONGRI;
+        if (isDighiVillageStop(s) && isCityStop(e)) return ROUTES.DIGHI_TO_DONGRI;
+        if (isCityStop(s) && isBorliVillageStop(e)) return ROUTES.DONGRI_TO_BORLI;
+        if (isCityStop(s) && isDighiVillageStop(e)) return ROUTES.DONGRI_TO_DIGHI;
+
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+function getEffectiveFare(bus, from, to, dateMode, singleDate, rangeFrom, rangeTo) {
+    const rules = Array.isArray(bus?.fareRulesRaw)
         ? bus.fareRulesRaw
-        : Array.isArray(bus.fareRules)
+        : Array.isArray(bus?.fareRules)
             ? bus.fareRules
             : [];
+
     const expanded = expandFareRules(bus);
 
     const matches = expanded.filter(
         (r) =>
             normalizeKey(r.from) === normalizeKey(from) &&
             normalizeKey(r.to) === normalizeKey(to) &&
-            ruleAppliesOnDate(r, dateStr)
+            ruleMatchesDateFilter(r, dateMode, singleDate, rangeFrom, rangeTo)
     );
 
-    // Debug info
-    // eslint-disable-next-line no-console
-    console.debug("[FareDebug] expandedMatches", { busId: bus?.busId, from, to, dateStr, expandedCount: expanded.length, matchesCount: matches.length });
-
-    if (matches && matches.length > 0) {
+    if (matches.length > 0) {
         const chosen = matches[matches.length - 1];
         const fare = Number(chosen.fare);
+
         if (Number.isFinite(fare) && fare > 0) {
-            const sourceRule = rules[chosen.sourceIndex] || null;
+            const sourceRule = rules[chosen.sourceIndex] || chosen.originalRule || null;
+
             return {
                 fare,
                 source: {
                     sourceIndex: chosen.sourceIndex,
                     appliedFrom: chosen.from,
+                    appliedTo: chosen.to,
                     original: sourceRule,
                 },
             };
         }
     }
 
-    // No matching raw rule found — try to derive base fare from fare.js using route detection
     try {
-        // prefer using normalized from/to first
-        const pickupNorm = normalizeStopName(from);
-        const dropNorm = normalizeStopName(to);
-
-        let routeKey = null;
-        if (isBorliVillageStop(pickupNorm) && isCityStop(dropNorm)) routeKey = ROUTES.BORLI_TO_DONGRI;
-        else if (isDighiVillageStop(pickupNorm) && isCityStop(dropNorm)) routeKey = ROUTES.DIGHI_TO_DONGRI;
-        else if (isCityStop(pickupNorm) && isBorliVillageStop(dropNorm)) routeKey = ROUTES.DONGRI_TO_BORLI;
-        else if (isCityStop(pickupNorm) && isDighiVillageStop(dropNorm)) routeKey = ROUTES.DONGRI_TO_DIGHI;
+        const routeKey = detectRouteKey(bus, from, to);
 
         if (routeKey) {
             const mappedType = normalizeBusTypeLocal(bus?.busType);
-            const base = getFare({ route: routeKey, pickup: from, drop: to, busType: mappedType });
-            // eslint-disable-next-line no-console
-            console.debug("[FareDebug] baseFareResult", { busId: bus?.busId, from, to, routeKey, base });
+            const base = getFare({
+                route: routeKey,
+                pickup: from,
+                drop: to,
+                busType: mappedType,
+            });
 
             if (base && Number.isFinite(Number(base.amount)) && Number(base.amount) > 0) {
-                return { fare: Number(base.amount), source: { sourceIndex: null, appliedFrom: null, original: null, base: true } };
+                return {
+                    fare: Number(base.amount),
+                    source: {
+                        sourceIndex: null,
+                        appliedFrom: null,
+                        appliedTo: null,
+                        original: null,
+                        base: true,
+                    },
+                };
             }
-        } else {
-            // eslint-disable-next-line no-console
-            console.debug("[FareDebug] route detection failed for pair", { busId: bus?.busId, from, to });
         }
     } catch (e) {
-        // eslint-disable-next-line no-console
         console.error("[FareDebug] base fare lookup failed", e);
     }
 
     return { fare: null, source: null };
 }
 
+/* =========================
+   Main Page
+========================= */
+
 export default function AdminFareViewPage() {
     const [buses, setBuses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedBusId, setSelectedBusId] = useState("");
-    const [date, setDate] = useState("");
+
+    const [dateMode, setDateMode] = useState("single"); // single | range
+    const [singleDate, setSingleDate] = useState("");
+    const [rangeFrom, setRangeFrom] = useState("");
+    const [rangeTo, setRangeTo] = useState("");
+
     const [validatedResults, setValidatedResults] = useState({});
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingRuleIndex, setEditingRuleIndex] = useState(null);
-    const [editForm, setEditForm] = useState({ from: "", to: "", fare: "", fareStartDate: "", fareEndDate: "", applyToAllNextPickupsBeforeDrop: false });
+
+    const [editForm, setEditForm] = useState({
+        from: "",
+        to: "",
+        fare: "",
+        fareStartDate: "",
+        fareEndDate: "",
+        applyToAllNextPickupsBeforeDrop: false,
+        applyToAllPreviousDrops: false,
+    });
 
     useEffect(() => {
         const load = async () => {
@@ -310,7 +493,11 @@ export default function AdminFareViewPage() {
                 setLoading(true);
                 const res = await fetch("/api/bus");
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.error || "Failed to load buses");
+
+                if (!res.ok) {
+                    throw new Error(data.error || "Failed to load buses");
+                }
+
                 setBuses(data.buses || []);
             } catch (e) {
                 console.error(e);
@@ -328,7 +515,7 @@ export default function AdminFareViewPage() {
                 const q = params.get("busId");
                 if (q) setSelectedBusId(q);
             }
-        } catch (e) { }
+        } catch { }
     }, []);
 
     const selectedBus = useMemo(
@@ -340,69 +527,151 @@ export default function AdminFareViewPage() {
 
     const pairs = useMemo(() => {
         if (!selectedBus) return [];
+
         const out = [];
+
         for (const p of pickupOptions) {
             const drops = getDropOptions(selectedBus, p);
+
             for (const d of drops) {
-                const res = getEffectiveFare(selectedBus, p, d, date);
-                out.push({ from: p, to: d, fare: res.fare, source: res.source });
+                const res = getEffectiveFare(
+                    selectedBus,
+                    p,
+                    d,
+                    dateMode,
+                    singleDate,
+                    rangeFrom,
+                    rangeTo
+                );
+
+                const routeStops = buildRouteStops(selectedBus);
+
+                let nextPickup = null;
+                const pickupNames = Array.isArray(selectedBus.pickupPoints)
+                    ? selectedBus.pickupPoints.map((x) => resolvePointName(x)).filter(Boolean)
+                    : [];
+
+                const dropNames = Array.isArray(selectedBus.dropPoints)
+                    ? selectedBus.dropPoints.map((x) => resolvePointName(x)).filter(Boolean)
+                    : [];
+
+                const pIdx = routeStops.findIndex((s) => normalizeKey(s) === normalizeKey(p));
+                if (pIdx !== -1) {
+                    for (let i = pIdx + 1; i < routeStops.length; i++) {
+                        const stop = routeStops[i];
+                        if (pickupNames.some((x) => normalizeKey(x) === normalizeKey(stop))) {
+                            nextPickup = stop;
+                            break;
+                        }
+                    }
+                }
+
+                let prevDrop = null;
+                const dIdx = routeStops.findIndex((s) => normalizeKey(s) === normalizeKey(d));
+                if (dIdx !== -1) {
+                    for (let i = dIdx - 1; i >= 0; i--) {
+                        const stop = routeStops[i];
+                        if (dropNames.some((x) => normalizeKey(x) === normalizeKey(stop))) {
+                            prevDrop = stop;
+                            break;
+                        }
+                    }
+                }
+
+                out.push({
+                    from: p,
+                    to: d,
+                    fare: res.fare,
+                    source: res.source,
+                    nextPickup,
+                    prevDrop,
+                });
             }
         }
-        return out;
-    }, [selectedBus, pickupOptions, date]);
 
-    const rawRules = useMemo(
-        () =>
-            Array.isArray(selectedBus?.fareRulesRaw)
-                ? selectedBus.fareRulesRaw
-                : selectedBus?.fareRules || [],
-        [selectedBus]
-    );
+        return out;
+    }, [selectedBus, pickupOptions, dateMode, singleDate, rangeFrom, rangeTo]);
+
+    const rawRules = useMemo(() => {
+        if (Array.isArray(selectedBus?.fareRulesRaw)) return selectedBus.fareRulesRaw;
+        if (Array.isArray(selectedBus?.fareRules)) return selectedBus.fareRules;
+        return [];
+    }, [selectedBus]);
 
     function validateRawRule(rule) {
-        if (!selectedBus) return { ok: false, expected: null, error: "No bus selected" };
+        if (!selectedBus) {
+            return { ok: false, expected: null, error: "No bus selected" };
+        }
+
         try {
-            // derive route constant from rule from/to or from selectedBus start/end
-            const pickupNorm = normalizeStopName(rule.from || "");
-            const dropNorm = normalizeStopName(rule.to || "");
+            const expanded = expandFareRules(selectedBus).filter(
+                (r) =>
+                    r.sourceIndex !== undefined &&
+                    rawRules[r.sourceIndex] === rule &&
+                    ruleMatchesDateFilter(r, dateMode, singleDate, rangeFrom, rangeTo)
+            );
 
-            let routeKey = null;
-            if (isBorliVillageStop(pickupNorm) && isCityStop(dropNorm)) routeKey = ROUTES.BORLI_TO_DONGRI;
-            else if (isDighiVillageStop(pickupNorm) && isCityStop(dropNorm)) routeKey = ROUTES.DIGHI_TO_DONGRI;
-            else if (isCityStop(pickupNorm) && isBorliVillageStop(dropNorm)) routeKey = ROUTES.DONGRI_TO_BORLI;
-            else if (isCityStop(pickupNorm) && isDighiVillageStop(dropNorm)) routeKey = ROUTES.DONGRI_TO_DIGHI;
-
-            if (!routeKey && selectedBus) {
-                const s = normalizeStopName(selectedBus.startPoint || selectedBus.start || "");
-                const e = normalizeStopName(selectedBus.endPoint || selectedBus.end || "");
-                if (isBorliVillageStop(s) && isCityStop(e)) routeKey = ROUTES.BORLI_TO_DONGRI;
-                else if (isDighiVillageStop(s) && isCityStop(e)) routeKey = ROUTES.DIGHI_TO_DONGRI;
-                else if (isCityStop(s) && isBorliVillageStop(e)) routeKey = ROUTES.DONGRI_TO_BORLI;
-                else if (isCityStop(s) && isDighiVillageStop(e)) routeKey = ROUTES.DONGRI_TO_DIGHI;
+            if (expanded.length === 0) {
+                return {
+                    ok: false,
+                    expected: null,
+                    error:
+                        dateMode === "single"
+                            ? "Rule not active on selected date"
+                            : "Rule not active in selected range",
+                };
             }
 
-            // eslint-disable-next-line no-console
-            console.debug("[FareDebug] validateRawRule", { busId: selectedBus?.busId, ruleFrom: rule.from, ruleTo: rule.to, routeKey });
+            const expectedPairs = expanded.map((r) => ({
+                from: r.from,
+                to: r.to,
+                expected: Number(r.fare || 0),
+                configured: Number(rule?.fare || 0),
+            }));
 
-            if (!routeKey) return { ok: false, expected: null, error: "Unable to determine route for validation" };
+            const allOk = expectedPairs.every(
+                (p) => Number.isFinite(p.expected) && p.expected > 0 && p.expected === p.configured
+            );
 
-            const res = getFare({ route: routeKey, pickup: rule.from, drop: rule.to, busType: normalizeBusTypeLocal(selectedBus?.busType) });
-            const expected = Number(res?.amount || 0);
-            const configured = Number(rule?.fare || 0);
-            const ok = Number.isFinite(expected) && expected > 0 && expected === configured;
-            return { ok, expected: expected || null, error: null };
+            return {
+                ok: allOk,
+                expected: Number(rule?.fare || 0),
+                error: null,
+                expectedPairs,
+            };
         } catch (e) {
             return { ok: false, expected: null, error: e.message || "Validation failed" };
         }
     }
 
-    async function handleValidateClick(rule, idx) {
+    function handleValidateClick(rule, idx) {
         const result = validateRawRule(rule);
-        setValidatedResults((s) => ({ ...(s || {}), [idx]: result }));
+        setValidatedResults((s) => ({
+            ...(s || {}),
+            [idx]: result,
+        }));
+    }
+
+    async function refreshBuses(keepBusId = selectedBus?.busId) {
+        const listRes = await fetch("/api/bus");
+        const listData = await listRes.json();
+
+        if (!listRes.ok) {
+            throw new Error(listData.error || "Failed to refresh buses");
+        }
+
+        setBuses(listData.buses || []);
+
+        if (keepBusId) {
+            setSelectedBusId(String(keepBusId));
+        }
     }
 
     async function handleDeleteRule(idx) {
-        if (!selectedBus) return showAppToast("error", "No bus selected");
+        if (!selectedBus) {
+            return showAppToast("error", "No bus selected");
+        }
+
         const ok = window.confirm("Delete this fare rule? This action cannot be undone.");
         if (!ok) return;
 
@@ -412,7 +681,9 @@ export default function AdminFareViewPage() {
                 ? selectedBus.fareRules.slice()
                 : [];
 
-        if (idx < 0 || idx >= updatedRules.length) return showAppToast("error", "Invalid rule index");
+        if (idx < 0 || idx >= updatedRules.length) {
+            return showAppToast("error", "Invalid rule index");
+        }
 
         updatedRules.splice(idx, 1);
 
@@ -422,9 +693,9 @@ export default function AdminFareViewPage() {
             busName: selectedBus.busName || "",
             busType: selectedBus.busType || "",
             routeName: selectedBus.routeName || "",
-            startPoint: selectedBus.startPoint || selectedBus.start || { name: selectedBus.startPoint?.name || selectedBus.start || "", time: selectedBus.startTime || "" },
+            startPoint: resolvePointObject(selectedBus.startPoint, selectedBus.startTime || ""),
             startTime: selectedBus.startTime || "",
-            endPoint: selectedBus.endPoint || selectedBus.end || { name: selectedBus.endPoint?.name || selectedBus.end || "", time: selectedBus.endTime || "" },
+            endPoint: resolvePointObject(selectedBus.endPoint, selectedBus.endTime || ""),
             endTime: selectedBus.endTime || "",
             seatLayout: String(selectedBus.seatLayout || ""),
             pickupPoints: Array.isArray(selectedBus.pickupPoints) ? selectedBus.pickupPoints : [],
@@ -436,30 +707,29 @@ export default function AdminFareViewPage() {
 
         try {
             setLoading(true);
+
             const res = await fetch("/api/bus", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to delete rule");
-            showAppToast("success", "Rule deleted");
 
-            // refresh list
-            const listRes = await fetch("/api/bus");
-            const listData = await listRes.json();
-            if (listRes.ok) setBuses(listData.buses || []);
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to delete rule");
+            }
+
+            showAppToast("success", "Rule deleted");
+            await refreshBuses(selectedBus.busId);
+
             try {
-                if (typeof window !== "undefined" && 'BroadcastChannel' in window) {
-                    try {
-                        const ch = new BroadcastChannel('sa-tours-buses');
-                        ch.postMessage({ type: 'bus-updated', busId: selectedBus?.busId || null });
-                        ch.close();
-                    } catch (e) {
-                        // ignore
-                    }
+                if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+                    const ch = new BroadcastChannel("sa-tours-buses");
+                    ch.postMessage({ type: "bus-updated", busId: selectedBus.busId || null });
+                    ch.close();
                 }
-            } catch (e) { }
+            } catch { }
         } catch (e) {
             console.error(e);
             showAppToast("error", e.message || "Failed to delete rule");
@@ -470,6 +740,7 @@ export default function AdminFareViewPage() {
 
     function openEditRule(idx) {
         const r = rawRules[idx] || {};
+
         setEditingRuleIndex(idx);
         setEditForm({
             from: r.from || "",
@@ -477,14 +748,24 @@ export default function AdminFareViewPage() {
             fare: r.fare || "",
             fareStartDate: r.fareStartDate || "",
             fareEndDate: r.fareEndDate || "",
-            applyToAllNextPickupsBeforeDrop: !!r.applyToAllNextPickupsBeforeDrop,
+            applyToAllNextPickupsBeforeDrop: !!(
+                r.applyToAllNextPickupsBeforeDrop ?? r.applyToAllPreviousPickups
+            ),
+            applyToAllPreviousDrops: !!(
+                r.applyToAllPreviousDrops ?? r.applyToAllNextDropsAfterPickup
+            ),
         });
+
         setShowEditModal(true);
     }
 
     async function handleSaveEditedRule() {
-        if (!selectedBus) return showAppToast("error", "No bus selected");
+        if (!selectedBus) {
+            return showAppToast("error", "No bus selected");
+        }
+
         const idx = editingRuleIndex;
+
         const updatedRules = Array.isArray(selectedBus.fareRulesRaw)
             ? selectedBus.fareRulesRaw.slice()
             : Array.isArray(selectedBus.fareRules)
@@ -492,24 +773,24 @@ export default function AdminFareViewPage() {
                 : [];
 
         updatedRules[idx] = {
-            from: String(editForm.from || "").trim(),
-            to: String(editForm.to || "").trim(),
+            from: normalizeText(editForm.from),
+            to: normalizeText(editForm.to),
             fare: editForm.fare,
             fareStartDate: editForm.fareStartDate || "",
             fareEndDate: editForm.fareEndDate || "",
             applyToAllNextPickupsBeforeDrop: !!editForm.applyToAllNextPickupsBeforeDrop,
+            applyToAllPreviousDrops: !!editForm.applyToAllPreviousDrops,
         };
 
-        // build payload using selectedBus core fields to satisfy server validation
         const payload = {
             busId: selectedBus.busId,
             busNumber: selectedBus.busNumber || "",
             busName: selectedBus.busName || "",
             busType: selectedBus.busType || "",
             routeName: selectedBus.routeName || "",
-            startPoint: selectedBus.startPoint || selectedBus.start || { name: selectedBus.startPoint?.name || selectedBus.start || "", time: selectedBus.startTime || "" },
+            startPoint: resolvePointObject(selectedBus.startPoint, selectedBus.startTime || ""),
             startTime: selectedBus.startTime || "",
-            endPoint: selectedBus.endPoint || selectedBus.end || { name: selectedBus.endPoint?.name || selectedBus.end || "", time: selectedBus.endTime || "" },
+            endPoint: resolvePointObject(selectedBus.endPoint, selectedBus.endTime || ""),
             endTime: selectedBus.endTime || "",
             seatLayout: String(selectedBus.seatLayout || ""),
             pickupPoints: Array.isArray(selectedBus.pickupPoints) ? selectedBus.pickupPoints : [],
@@ -521,18 +802,21 @@ export default function AdminFareViewPage() {
 
         try {
             setLoading(true);
+
             const res = await fetch("/api/bus", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
+
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to save rule");
+
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to save rule");
+            }
+
             showAppToast("success", "Rule updated");
-            // refresh list
-            const listRes = await fetch("/api/bus");
-            const listData = await listRes.json();
-            if (listRes.ok) setBuses(listData.buses || []);
+            await refreshBuses(selectedBus.busId);
         } catch (e) {
             console.error(e);
             showAppToast("error", e.message || "Failed to save rule");
@@ -547,41 +831,40 @@ export default function AdminFareViewPage() {
         <div className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-7xl space-y-6">
                 {/* Header */}
-                {/* Header */}
-                <div className="rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:p-7">
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-end">
-                        {/* Left Side */}
+                <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:p-6">
+                    <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-start">
+                        {/* Left Content */}
                         <div className="lg:col-span-5 xl:col-span-5">
-                            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-2 text-xs font-semibold text-orange-700">
+                            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-[11px] font-semibold text-orange-700 sm:text-xs">
                                 <Ticket className="h-3.5 w-3.5" />
                                 Fare Management
                             </div>
 
-                            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+                            <h1 className="text-lg font-extrabold tracking-tight text-slate-900 sm:text-xl lg:text-2xl">
                                 Bus Fare Viewer
                             </h1>
 
-                            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500 sm:text-base">
-                                View all pickup-to-drop fare combinations with applied rule source and date validity in one clean place.
+                            <p className="mt-2 max-w-md text-xs leading-5 text-slate-500 sm:text-sm sm:leading-6">
+                                View all pickup-to-drop fare combinations with selected date or range.
                             </p>
                         </div>
 
-                        {/* Right Side Filters */}
+                        {/* Right Controls */}
                         <div className="lg:col-span-7 xl:col-span-7">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                {/* Bus Select Card */}
-                                <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-4">
-                                    <label className="mb-3 block text-sm font-semibold text-slate-700">
+                            <div className="space-y-3">
+                                {/* FIRST ROW - Select Bus */}
+                                <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
+                                    <label className="mb-2 block text-xs font-semibold text-slate-700 sm:text-sm">
                                         Select Bus
                                     </label>
 
                                     <div className="relative">
-                                        <Bus className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                                        <Bus className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 sm:left-4 sm:h-5 sm:w-5" />
 
                                         <select
                                             value={selectedBusId}
                                             onChange={(e) => setSelectedBusId(e.target.value)}
-                                            className="h-14 w-full appearance-none rounded-2xl border border-slate-200 bg-white pl-12 pr-12 text-sm font-semibold text-slate-800 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                                            className="h-11 w-full appearance-none rounded-2xl border border-slate-200 bg-white pl-10 pr-10 text-sm font-medium text-slate-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100 sm:h-12 sm:pl-12 sm:pr-12"
                                         >
                                             <option value="">-- Choose Bus --</option>
                                             {buses.map((b) => (
@@ -592,7 +875,7 @@ export default function AdminFareViewPage() {
                                         </select>
 
                                         <svg
-                                            className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                                            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 sm:right-4"
                                             viewBox="0 0 20 20"
                                             fill="currentColor"
                                         >
@@ -605,29 +888,92 @@ export default function AdminFareViewPage() {
                                     </div>
                                 </div>
 
-                                {/* Date Card */}
-                                <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-4">
-                                    <label className="mb-3 block text-sm font-semibold text-slate-700">
-                                        Fare Date
-                                    </label>
+                                {/* SECOND ROW - Filter Mode + Date */}
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    {/* Filter Mode */}
+                                    <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
+                                        <label className="mb-2 block text-xs font-semibold text-slate-700 sm:text-sm">
+                                            Date Options
+                                        </label>
 
-                                    <div className="relative">
-                                        <CalendarDays className="pointer-events-none absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setDateMode("single")}
+                                                className={`h-11 rounded-2xl border px-2 text-xs font-semibold transition sm:h-12 sm:text-sm ${dateMode === "single"
+                                                        ? "border-orange-300 bg-orange-50 text-orange-700"
+                                                        : "border-slate-200 bg-white text-slate-600"
+                                                    }`}
+                                            >
+                                                Single Date
+                                            </button>
 
-                                        <input
-                                            type="date"
-                                            value={date}
-                                            onChange={(e) => setDate(e.target.value)}
-                                            className="h-14 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                                        />
+                                            <button
+                                                type="button"
+                                                onClick={() => setDateMode("range")}
+                                                className={`h-11 rounded-2xl border px-2 text-xs font-semibold transition sm:h-12 sm:text-sm ${dateMode === "range"
+                                                        ? "border-orange-300 bg-orange-50 text-orange-700"
+                                                        : "border-slate-200 bg-white text-slate-600"
+                                                    }`}
+                                            >
+                                                Date Range
+                                            </button>
+                                        </div>
                                     </div>
+
+                                    {/* Date Input */}
+                                    {dateMode === "single" ? (
+                                        <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
+                                            <label className="mb-2 block text-xs font-semibold text-slate-700 sm:text-sm">
+                                                Selected Date
+                                            </label>
+
+                                            <div className="relative">
+                                                <CalendarDays className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400 sm:left-4 sm:h-5 sm:w-5" />
+
+                                                <input
+                                                    type="date"
+                                                    value={singleDate}
+                                                    onChange={(e) => setSingleDate(e.target.value)}
+                                                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-3 text-sm font-medium text-slate-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100 sm:h-12 sm:pl-12 sm:pr-4"
+                                                />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
+                                            <label className="mb-2 block text-xs font-semibold text-slate-700 sm:text-sm">
+                                                Date Range
+                                            </label>
+
+                                            <div className="grid grid-cols-1 gap-2">
+                                                <div className="relative">
+                                                    <CalendarDays className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400 sm:left-4 sm:h-5 sm:w-5" />
+                                                    <input
+                                                        type="date"
+                                                        value={rangeFrom}
+                                                        onChange={(e) => setRangeFrom(e.target.value)}
+                                                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-3 text-sm font-medium text-slate-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100 sm:h-12 sm:pl-12 sm:pr-4"
+                                                    />
+                                                </div>
+
+                                                <div className="relative">
+                                                    <CalendarDays className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400 sm:left-4 sm:h-5 sm:w-5" />
+                                                    <input
+                                                        type="date"
+                                                        value={rangeTo}
+                                                        onChange={(e) => setRangeTo(e.target.value)}
+                                                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-3 text-sm font-medium text-slate-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100 sm:h-12 sm:pl-12 sm:pr-4"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Loading */}
                 {loading && (
                     <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
                         <div className="flex items-center gap-3 text-slate-600">
@@ -637,7 +983,6 @@ export default function AdminFareViewPage() {
                     </div>
                 )}
 
-                {/* Empty State */}
                 {!loading && !selectedBus && (
                     <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
                         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
@@ -645,15 +990,15 @@ export default function AdminFareViewPage() {
                         </div>
                         <h3 className="text-lg font-bold text-slate-900">Select a bus to view fares</h3>
                         <p className="mt-2 text-sm text-slate-500">
-                            Choose a bus from the dropdown above to see all available pickup and drop fare combinations.
+                            Choose a bus and date filter to see all effective fares.
                         </p>
                     </div>
                 )}
 
                 {!loading && selectedBus && (
                     <>
-                        {/* Bus Summary */}
-                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                        {/* Summary */}
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
                             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                                 <div className="mb-3 flex items-center gap-3">
                                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
@@ -702,19 +1047,41 @@ export default function AdminFareViewPage() {
                                         <h3 className="text-base font-bold text-slate-900">{rawRules.length}</h3>
                                     </div>
                                 </div>
-                                <p className="text-sm text-slate-600">Configured fare rules for this bus</p>
+                                <p className="text-sm text-slate-600">Configured fare rules</p>
+                            </div>
+
+                            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                <div className="mb-3 flex items-center gap-3">
+                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
+                                        <CalendarDays className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                            Active Filter
+                                        </p>
+                                        <h3 className="text-base font-bold text-slate-900">
+                                            {dateMode === "single" ? "Single Date" : "Date Range"}
+                                        </h3>
+                                    </div>
+                                </div>
+                                <p className="text-sm text-slate-600">
+                                    {dateMode === "single"
+                                        ? singleDate
+                                            ? formatDateLabel(singleDate)
+                                            : "All dates"
+                                        : `${rangeFrom ? formatDateLabel(rangeFrom) : "Any"} → ${rangeTo ? formatDateLabel(rangeTo) : "Any"
+                                        }`}
+                                </p>
                             </div>
                         </div>
 
-                        {/* Fare Cards */}
+                        {/* Effective Fare Pairs */}
                         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-                            <div className="mb-5 flex items-center justify-between">
-                                <div>
-                                    <h2 className="text-xl font-bold text-slate-900">Effective Fare Pairs</h2>
-                                    <p className="mt-1 text-sm text-slate-500">
-                                        Final fares after applying matching rules and date filters.
-                                    </p>
-                                </div>
+                            <div className="mb-5">
+                                <h2 className="text-xl font-bold text-slate-900">Effective Fare Pairs</h2>
+                                <p className="mt-1 text-sm text-slate-500">
+                                    Date-wise fares based on selected date or range.
+                                </p>
                             </div>
 
                             {pairs.length === 0 ? (
@@ -728,97 +1095,155 @@ export default function AdminFareViewPage() {
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                                    {pairs.map((p, idx) => (
-                                        <div
-                                            key={`${p.from}-${p.to}-${idx}`}
-                                            className="rounded-3xl border border-slate-200 bg-slate-50/60 p-5 transition hover:border-orange-200 hover:bg-white hover:shadow-sm"
-                                        >
-                                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">
-                                                        <span className="rounded-xl bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200">
-                                                            {p.from}
-                                                        </span>
-                                                        <ChevronRight className="h-4 w-4 text-slate-400" />
-                                                        <span className="rounded-xl bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200">
-                                                            {p.to}
-                                                        </span>
-                                                    </div>
+                                    {pairs.map((p, idx) => {
+                                        const statusClass = !p.source
+                                            ? "bg-slate-100 text-slate-500"
+                                            : p.source.original
+                                                ? "bg-orange-50 text-orange-700 ring-1 ring-orange-100"
+                                                : p.source.base
+                                                    ? "bg-slate-50 text-slate-700"
+                                                    : "bg-orange-50 text-orange-700 ring-1 ring-orange-100";
 
-                                                    <div className="mt-4 flex items-center gap-2">
-                                                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
-                                                            <IndianRupee className="h-4 w-4" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                                                Fare
-                                                            </p>
-                                                            {p.fare === null ? (
-                                                                <p className="text-sm font-semibold text-slate-400">No fare available</p>
-                                                            ) : (
-                                                                <p className="text-lg font-bold text-slate-900">₹{p.fare}</p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                        const statusLabel = !p.source
+                                            ? "Not Matched"
+                                            : p.source.original
+                                                ? "Rule Applied"
+                                                : p.source.base
+                                                    ? "Base Fare"
+                                                    : "Derived";
 
-                                                <div
-                                                    className={`inline-flex rounded-2xl px-3 py-2 text-xs font-semibold ${p.fare === null
-                                                        ? "bg-slate-100 text-slate-500"
-                                                        : "bg-orange-50 text-orange-700 ring-1 ring-orange-100"
-                                                        }`}
-                                                >
-                                                    {p.fare === null ? "Not Matched" : "Rule Applied"}
-                                                </div>
-                                            </div>
-
-                                            {p.source ? (
-                                                <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-                                                    <div className="mb-2 text-sm font-semibold text-slate-800">
-                                                        Applied Rule
-                                                    </div>
-
-                                                    <div className="text-sm text-slate-700">
-                                                        {p.source.original ? (
-                                                            <>
-                                                                <span className="font-semibold">{p.source.original.from}</span>
-                                                                <span className="mx-2 text-slate-400">→</span>
-                                                                <span className="font-semibold">{p.source.original.to}</span>
-                                                                <span className="ml-2 font-bold text-orange-600">
-                                                                    = ₹{p.source.original.fare}
-                                                                </span>
-                                                            </>
-                                                        ) : (
-                                                            <span>Derived from rule #{p.source.sourceIndex}</span>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                                                        <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
-                                                            Valid: {p.source.original?.fareStartDate || "(any)"}
-                                                        </span>
-                                                        <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
-                                                            To: {p.source.original?.fareEndDate || "(any)"}
-                                                        </span>
-
-                                                        {p.source.original?.applyToAllNextPickupsBeforeDrop && (
-                                                            <span className="rounded-full bg-orange-50 px-3 py-1 font-medium text-orange-700">
-                                                                Applies to next pickups
+                                        return (
+                                            <div
+                                                key={`${p.from}-${p.to}-${idx}`}
+                                                className="rounded-3xl border border-slate-200 bg-slate-50/60 p-5 transition hover:border-orange-200 hover:bg-white hover:shadow-sm"
+                                            >
+                                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">
+                                                            <span className="rounded-xl bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200">
+                                                                {p.from}
                                                             </span>
-                                                        )}
+                                                            <ChevronRight className="h-4 w-4 text-slate-400" />
+                                                            <span className="rounded-xl bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200">
+                                                                {p.to}
+                                                            </span>
+                                                        </div>
 
-                                                        {p.source.appliedFrom &&
-                                                            p.source.original &&
-                                                            p.source.appliedFrom !== p.source.original.from && (
-                                                                <span className="rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-700">
-                                                                    Applied from: {p.source.appliedFrom}
-                                                                </span>
-                                                            )}
+                                                        <div className="mt-4 flex items-center gap-2">
+                                                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+                                                                <IndianRupee className="h-4 w-4" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                                    Fare
+                                                                </p>
+                                                                {p.fare === null ? (
+                                                                    <p className="text-sm font-semibold text-slate-400">
+                                                                        No fare available
+                                                                    </p>
+                                                                ) : (
+                                                                    <p className="text-lg font-bold text-slate-900">
+                                                                        ₹{p.fare}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className={`inline-flex rounded-2xl px-3 py-2 text-xs font-semibold ${statusClass}`}>
+                                                        {statusLabel}
                                                     </div>
                                                 </div>
-                                            ) : null}
-                                        </div>
-                                    ))}
+
+                                                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                                                    {dateMode === "single" ? (
+                                                        <span className="rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700">
+                                                            {singleDate ? `Date: ${formatDateLabel(singleDate)}` : "All dates"}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="rounded-full bg-sky-50 px-3 py-1 font-medium text-sky-700">
+                                                            Range: {rangeFrom ? formatDateLabel(rangeFrom) : "Any"} →{" "}
+                                                            {rangeTo ? formatDateLabel(rangeTo) : "Any"}
+                                                        </span>
+                                                    )}
+
+                                                    {p.nextPickup && (
+                                                        <span className="rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700">
+                                                            Next pickup: {p.nextPickup}
+                                                        </span>
+                                                    )}
+
+                                                    {p.prevDrop && (
+                                                        <span className="rounded-full bg-sky-50 px-3 py-1 font-medium text-sky-700">
+                                                            Previous drop: {p.prevDrop}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {p.source ? (
+                                                    <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
+                                                        <div className="mb-2 text-sm font-semibold text-slate-800">
+                                                            Applied Rule
+                                                        </div>
+
+                                                        <div className="text-sm text-slate-700">
+                                                            {p.source.original ? (
+                                                                <>
+                                                                    <span className="font-semibold">{p.source.original.from}</span>
+                                                                    <span className="mx-2 text-slate-400">→</span>
+                                                                    <span className="font-semibold">{p.source.original.to}</span>
+                                                                    <span className="ml-2 font-bold text-orange-600">
+                                                                        = ₹{p.source.original.fare}
+                                                                    </span>
+                                                                </>
+                                                            ) : p.source.base ? (
+                                                                <span>Derived from base fare (route lookup)</span>
+                                                            ) : (
+                                                                <span>Derived from rule #{p.source.sourceIndex ?? "—"}</span>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                                                            <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
+                                                                Start: {formatDateLabel(p.source.original?.fareStartDate)}
+                                                            </span>
+                                                            <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
+                                                                End: {formatDateLabel(p.source.original?.fareEndDate)}
+                                                            </span>
+
+                                                            {p.source.original?.applyToAllNextPickupsBeforeDrop && (
+                                                                <span className="rounded-full bg-orange-50 px-3 py-1 font-medium text-orange-700">
+                                                                    Applies to next pickups
+                                                                </span>
+                                                            )}
+
+                                                            {p.source.original?.applyToAllPreviousDrops && (
+                                                                <span className="rounded-full bg-sky-50 px-3 py-1 font-medium text-sky-700">
+                                                                    Applies to previous drops
+                                                                </span>
+                                                            )}
+
+                                                            {p.source.appliedFrom &&
+                                                                p.source.original &&
+                                                                p.source.appliedFrom !== p.source.original.from && (
+                                                                    <span className="rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-700">
+                                                                        Applied from: {p.source.appliedFrom}
+                                                                    </span>
+                                                                )}
+
+                                                            {p.source.appliedTo &&
+                                                                p.source.original &&
+                                                                p.source.appliedTo !== p.source.original.to && (
+                                                                    <span className="rounded-full bg-violet-50 px-3 py-1 font-medium text-violet-700">
+                                                                        Applied to: {p.source.appliedTo}
+                                                                    </span>
+                                                                )}
+                                                        </div>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -828,7 +1253,7 @@ export default function AdminFareViewPage() {
                             <div className="mb-5">
                                 <h2 className="text-xl font-bold text-slate-900">Raw Fare Rules</h2>
                                 <p className="mt-1 text-sm text-slate-500">
-                                    Original configured rules before expansion and override resolution.
+                                    Validate rule by selected date or date range.
                                 </p>
                             </div>
 
@@ -863,10 +1288,10 @@ export default function AdminFareViewPage() {
 
                                             <div className="mt-4 flex flex-wrap gap-2 text-xs">
                                                 <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
-                                                    Start: {r.fareStartDate || "(any)"}
+                                                    Start: {formatDateLabel(r.fareStartDate)}
                                                 </span>
                                                 <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
-                                                    End: {r.fareEndDate || "(any)"}
+                                                    End: {formatDateLabel(r.fareEndDate)}
                                                 </span>
 
                                                 {r.applyToAllNextPickupsBeforeDrop && (
@@ -874,7 +1299,14 @@ export default function AdminFareViewPage() {
                                                         Applies to next pickups
                                                     </span>
                                                 )}
+
+                                                {r.applyToAllPreviousDrops && (
+                                                    <span className="rounded-full bg-sky-50 px-3 py-1 font-medium text-sky-700">
+                                                        Applies to previous drops
+                                                    </span>
+                                                )}
                                             </div>
+
                                             <div className="mt-4 flex items-center gap-2">
                                                 <button
                                                     onClick={() => handleValidateClick(r, i)}
@@ -897,18 +1329,48 @@ export default function AdminFareViewPage() {
                                                     Delete
                                                 </button>
 
-                                                {validatedResults && validatedResults[i] ? (
+                                                {validatedResults?.[i] ? (
                                                     <div className="ml-auto text-xs font-medium">
                                                         {validatedResults[i].error ? (
-                                                            <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">Error</span>
+                                                            <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">
+                                                                {validatedResults[i].error}
+                                                            </span>
                                                         ) : validatedResults[i].ok ? (
-                                                            <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">Matches ₹{validatedResults[i].expected}</span>
+                                                            <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
+                                                                Active ₹{validatedResults[i].expected}
+                                                            </span>
                                                         ) : (
-                                                            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">Mismatch (expected ₹{validatedResults[i].expected || '—'})</span>
+                                                            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">
+                                                                Mismatch
+                                                            </span>
                                                         )}
                                                     </div>
                                                 ) : null}
                                             </div>
+
+                                            {validatedResults?.[i]?.expectedPairs?.length ? (
+                                                <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50/50 p-4">
+                                                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-orange-700">
+                                                        Active Generated Pairs
+                                                    </p>
+
+                                                    <div className="space-y-2">
+                                                        {validatedResults[i].expectedPairs.map((pair, idx) => (
+                                                            <div
+                                                                key={`${pair.from}-${pair.to}-${idx}`}
+                                                                className="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-sm shadow-sm"
+                                                            >
+                                                                <span className="font-medium text-slate-700">
+                                                                    {pair.from} → {pair.to}
+                                                                </span>
+                                                                <span className="font-bold text-orange-600">
+                                                                    ₹{pair.expected}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     ))}
                                 </div>
@@ -917,12 +1379,15 @@ export default function AdminFareViewPage() {
                     </>
                 )}
             </div>
-            {/* Edit modal */}
+
             <EditRuleModal
                 open={showEditModal}
                 form={editForm}
                 setForm={setEditForm}
-                onCancel={() => { setShowEditModal(false); setEditingRuleIndex(null); }}
+                onCancel={() => {
+                    setShowEditModal(false);
+                    setEditingRuleIndex(null);
+                }}
                 onSave={handleSaveEditedRule}
                 saving={loading}
             />
@@ -930,49 +1395,117 @@ export default function AdminFareViewPage() {
     );
 }
 
-// Edit modal (simple)
+/* =========================
+   Edit Rule Modal
+========================= */
+
 function EditRuleModal({ open, form, setForm, onCancel, onSave, saving }) {
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
-                <h3 className="mb-4 text-lg font-bold">Edit Fare Rule</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+                <h3 className="mb-5 text-lg font-bold text-slate-900">Edit Fare Rule</h3>
 
                 <div className="mb-3">
                     <label className="text-xs font-semibold text-slate-600">From</label>
-                    <input value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2" />
+                    <input
+                        value={form.from}
+                        onChange={(e) => setForm({ ...form, from: e.target.value })}
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
                 </div>
 
                 <div className="mb-3">
                     <label className="text-xs font-semibold text-slate-600">To</label>
-                    <input value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2" />
+                    <input
+                        value={form.to}
+                        onChange={(e) => setForm({ ...form, to: e.target.value })}
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
                 </div>
 
                 <div className="mb-3">
                     <label className="text-xs font-semibold text-slate-600">Fare (₹)</label>
-                    <input type="number" value={form.fare} onChange={(e) => setForm({ ...form, fare: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2" />
+                    <input
+                        type="number"
+                        value={form.fare}
+                        onChange={(e) => setForm({ ...form, fare: e.target.value })}
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
                 </div>
 
                 <div className="mb-3 grid grid-cols-2 gap-3">
                     <div>
                         <label className="text-xs font-semibold text-slate-600">Start Date</label>
-                        <input type="date" value={form.fareStartDate} onChange={(e) => setForm({ ...form, fareStartDate: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2" />
+                        <input
+                            type="date"
+                            value={form.fareStartDate}
+                            onChange={(e) => setForm({ ...form, fareStartDate: e.target.value })}
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                        />
                     </div>
+
                     <div>
                         <label className="text-xs font-semibold text-slate-600">End Date</label>
-                        <input type="date" value={form.fareEndDate} onChange={(e) => setForm({ ...form, fareEndDate: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2" />
+                        <input
+                            type="date"
+                            value={form.fareEndDate}
+                            onChange={(e) => setForm({ ...form, fareEndDate: e.target.value })}
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                        />
                     </div>
+                </div>
+
+                <div className="mb-3 flex items-center gap-2">
+                    <input
+                        id="applyNext"
+                        type="checkbox"
+                        checked={!!form.applyToAllNextPickupsBeforeDrop}
+                        onChange={(e) =>
+                            setForm({
+                                ...form,
+                                applyToAllNextPickupsBeforeDrop: e.target.checked,
+                            })
+                        }
+                    />
+                    <label htmlFor="applyNext" className="text-sm text-slate-700">
+                        Apply to all next pickups before drop
+                    </label>
                 </div>
 
                 <div className="mb-4 flex items-center gap-2">
-                    <input id="applyNext" type="checkbox" checked={!!form.applyToAllNextPickupsBeforeDrop} onChange={(e) => setForm({ ...form, applyToAllNextPickupsBeforeDrop: e.target.checked })} />
-                    <label htmlFor="applyNext" className="text-sm text-slate-700">Apply to all next pickups before drop</label>
+                    <input
+                        id="applyPrevDrops"
+                        type="checkbox"
+                        checked={!!form.applyToAllPreviousDrops}
+                        onChange={(e) =>
+                            setForm({
+                                ...form,
+                                applyToAllPreviousDrops: e.target.checked,
+                            })
+                        }
+                    />
+                    <label htmlFor="applyPrevDrops" className="text-sm text-slate-700">
+                        Apply to all previous drops
+                    </label>
                 </div>
 
-                <div className="mt-4 flex items-center justify-end gap-3">
-                    <button onClick={onCancel} className="rounded-2xl border px-4 py-2 text-sm">Cancel</button>
-                    <button onClick={onSave} disabled={saving} className="rounded-2xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white">{saving ? 'Saving...' : 'Save'}</button>
+                <div className="mt-5 flex items-center justify-end gap-3">
+                    <button
+                        onClick={onCancel}
+                        className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        onClick={onSave}
+                        disabled={saving}
+                        className="rounded-2xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-70"
+                    >
+                        {saving ? "Saving..." : "Save"}
+                    </button>
                 </div>
             </div>
         </div>

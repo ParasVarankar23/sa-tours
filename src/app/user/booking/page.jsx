@@ -56,6 +56,23 @@ function getStopTime(bus, stopName) {
     if (normalizeKey(startName) === normalizeKey(stopName)) return normalizeText(bus.startTime);
     if (normalizeKey(endName) === normalizeKey(stopName)) return normalizeText(bus.endTime);
 
+    // prefer explicit pickupPoints/dropPoints when available
+    if (Array.isArray(bus.pickupPoints)) {
+        const p = bus.pickupPoints.find((x) => {
+            const name = typeof x === "string" ? x : x?.name;
+            return normalizeKey(name) === normalizeKey(stopName);
+        });
+        if (p) return normalizeText(typeof p === "string" ? "" : p.time || p?.stopTime || "");
+    }
+
+    if (Array.isArray(bus.dropPoints)) {
+        const d = bus.dropPoints.find((x) => {
+            const name = typeof x === "string" ? x : x?.name;
+            return normalizeKey(name) === normalizeKey(stopName);
+        });
+        if (d) return normalizeText(typeof d === "string" ? "" : d.time || d?.stopTime || "");
+    }
+
     const found = (bus.stops || []).find((s) => {
         const name = typeof s === "string" ? s : s?.stopName;
         return normalizeKey(name) === normalizeKey(stopName);

@@ -2,7 +2,14 @@
 
 import SeatLayout from "@/components/SeatLayout";
 import { showAppToast } from "@/lib/client/toast";
-import { BUS_TYPES, getFare, isBorliVillageStop, isCityStop, isDighiVillageStop, ROUTES } from "@/lib/fare";
+import {
+  BUS_TYPES,
+  getFare,
+  isBorliVillageStop,
+  isCityStop,
+  isDighiVillageStop,
+  ROUTES,
+} from "@/lib/fare";
 import {
   BusFront,
   CalendarDays,
@@ -36,37 +43,45 @@ function resolvePointValue(val, fallback = "") {
 
 function buildRouteStops(bus) {
   if (!bus) return [];
+
   const resolve = (p) => {
     if (!p) return "";
     if (typeof p === "object") return normalizeText(p.name);
     return normalizeText(p);
   };
 
-  // Prefer explicit pickupPoints/dropPoints shape when available
   if (Array.isArray(bus.pickupPoints) || Array.isArray(bus.dropPoints)) {
     const start = resolve(bus.startPoint);
     const pickups = Array.isArray(bus.pickupPoints)
-      ? bus.pickupPoints.map((p) => normalizeText(typeof p === "string" ? p : p?.name)).filter(Boolean)
+      ? bus.pickupPoints
+        .map((p) => normalizeText(typeof p === "string" ? p : p?.name))
+        .filter(Boolean)
       : [];
     const drops = Array.isArray(bus.dropPoints)
-      ? bus.dropPoints.map((p) => normalizeText(typeof p === "string" ? p : p?.name)).filter(Boolean)
+      ? bus.dropPoints
+        .map((p) => normalizeText(typeof p === "string" ? p : p?.name))
+        .filter(Boolean)
       : [];
     const end = resolve(bus.endPoint);
 
     const all = [];
     if (start) all.push(start);
+
     for (const p of pickups) {
       if (!all.some((x) => normalizeKey(x) === normalizeKey(p))) all.push(p);
     }
+
     for (const d of drops) {
       if (!all.some((x) => normalizeKey(x) === normalizeKey(d))) all.push(d);
     }
-    if (end && !all.some((x) => normalizeKey(x) === normalizeKey(end))) all.push(end);
+
+    if (end && !all.some((x) => normalizeKey(x) === normalizeKey(end))) {
+      all.push(end);
+    }
 
     return all;
   }
 
-  // Fallback to legacy `stops` array if present
   const middleStops = Array.isArray(bus.stops)
     ? bus.stops
       .map((s) => (typeof s === "string" ? s : s?.stopName))
@@ -74,14 +89,25 @@ function buildRouteStops(bus) {
       .map((s) => normalizeText(s))
     : [];
 
-  return [resolve(bus.startPoint), ...middleStops, resolve(bus.endPoint)].filter(Boolean);
+  return [
+    resolve(bus.startPoint),
+    ...middleStops,
+    resolve(bus.endPoint),
+  ].filter(Boolean);
 }
 
 function getStopTime(bus, stopName) {
   if (!bus || !stopName) return "";
 
-  const startName = typeof bus.startPoint === "object" ? normalizeText(bus.startPoint.name) : normalizeText(bus.startPoint);
-  const endName = typeof bus.endPoint === "object" ? normalizeText(bus.endPoint.name) : normalizeText(bus.endPoint);
+  const startName =
+    typeof bus.startPoint === "object"
+      ? normalizeText(bus.startPoint.name)
+      : normalizeText(bus.startPoint);
+
+  const endName =
+    typeof bus.endPoint === "object"
+      ? normalizeText(bus.endPoint.name)
+      : normalizeText(bus.endPoint);
 
   if (normalizeKey(startName) === normalizeKey(stopName)) {
     return normalizeText(bus.startTime);
@@ -89,6 +115,28 @@ function getStopTime(bus, stopName) {
 
   if (normalizeKey(endName) === normalizeKey(stopName)) {
     return normalizeText(bus.endTime);
+  }
+
+  if (Array.isArray(bus.pickupPoints)) {
+    const foundPickup = bus.pickupPoints.find((p) => {
+      const name = typeof p === "string" ? p : p?.name;
+      return normalizeKey(name) === normalizeKey(stopName);
+    });
+
+    if (foundPickup && typeof foundPickup === "object") {
+      return normalizeText(foundPickup.time);
+    }
+  }
+
+  if (Array.isArray(bus.dropPoints)) {
+    const foundDrop = bus.dropPoints.find((p) => {
+      const name = typeof p === "string" ? p : p?.name;
+      return normalizeKey(name) === normalizeKey(stopName);
+    });
+
+    if (foundDrop && typeof foundDrop === "object") {
+      return normalizeText(foundDrop.time);
+    }
   }
 
   const found = (bus.stops || []).find((s) => {
@@ -103,7 +151,6 @@ function getStopTime(bus, stopName) {
 function getPickupOptions(bus) {
   if (!bus) return [];
 
-  // Prefer explicit pickupPoints shape when available
   if (Array.isArray(bus.pickupPoints)) {
     const resolve = (p) => {
       if (!p) return "";
@@ -116,6 +163,7 @@ function getPickupOptions(bus) {
 
     const out = [];
     if (start) out.push(start);
+
     for (const p of pickups) {
       if (!out.some((x) => normalizeKey(x) === normalizeKey(p))) out.push(p);
     }
@@ -131,42 +179,15 @@ function getPickupOptions(bus) {
 function getDropOptions(bus, pickup) {
   if (!bus || !pickup) return [];
 
-  // If explicit pickup/drop shapes present, build ordered stops and slice
   if (Array.isArray(bus.pickupPoints) || Array.isArray(bus.dropPoints)) {
-    const resolve = (p) => {
-      if (!p) return "";
-      if (typeof p === "object") return normalizeText(p.name);
-      return normalizeText(p);
-    };
-
-    const start = resolve(bus.startPoint);
-    const pickups = Array.isArray(bus.pickupPoints)
-      ? bus.pickupPoints.map((p) => resolve(p)).filter(Boolean)
-      : [];
-    const drops = Array.isArray(bus.dropPoints)
-      ? bus.dropPoints.map((p) => resolve(p)).filter(Boolean)
-      : [];
-    const end = resolve(bus.endPoint);
-
-    const all = [];
-    if (start) all.push(start);
-    for (const p of pickups) if (!all.some((x) => normalizeKey(x) === normalizeKey(p))) all.push(p);
-    for (const d of drops) if (!all.some((x) => normalizeKey(x) === normalizeKey(d))) all.push(d);
-    if (end && !all.some((x) => normalizeKey(x) === normalizeKey(end))) all.push(end);
-
+    const all = buildRouteStops(bus);
     const pickupIndex = all.findIndex((s) => normalizeKey(s) === normalizeKey(pickup));
     if (pickupIndex === -1) return [];
 
-    const sliced = all.slice(pickupIndex + 1);
-    const dropSet = new Set(drops.map((d) => normalizeKey(d)));
-    const pickupSet = new Set(pickups.map((p) => normalizeKey(p)));
+    const pickupOptions = getPickupOptions(bus);
+    const pickupSet = new Set(pickupOptions.map((p) => normalizeKey(p)));
 
-    // exclude any stop that is also listed as a pickup
-    return sliced.filter((s) => {
-      const key = normalizeKey(s);
-      if (pickupSet.has(key)) return false;
-      return dropSet.has(key) || (end && key === normalizeKey(end));
-    });
+    return all.slice(pickupIndex + 1).filter((s) => !pickupSet.has(normalizeKey(s)));
   }
 
   const stops = buildRouteStops(bus);
@@ -177,98 +198,156 @@ function getDropOptions(bus, pickup) {
 
 function ruleAppliesOnDate(rule, dateStr) {
   if (!dateStr) return true;
-  try {
-    const d = new Date(dateStr);
-    if (Number.isNaN(d.getTime())) return false;
 
-    if (rule.fareStartDate) {
-      const s = new Date(rule.fareStartDate);
-      if (Number.isNaN(s.getTime())) return false;
-      if (d < new Date(s.getFullYear(), s.getMonth(), s.getDate())) return false;
-    }
+  const toDateOnly = (s) => String(s || "").slice(0, 10);
 
-    if (rule.fareEndDate) {
-      const e = new Date(rule.fareEndDate);
-      if (Number.isNaN(e.getTime())) return false;
-      if (d > new Date(e.getFullYear(), e.getMonth(), e.getDate())) return false;
-    }
+  const d = toDateOnly(dateStr);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
 
-    return true;
-  } catch (e) {
-    return false;
+  if (rule.fareStartDate) {
+    const s = toDateOnly(rule.fareStartDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+    if (d < s) return false;
   }
+
+  if (rule.fareEndDate) {
+    const e = toDateOnly(rule.fareEndDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(e)) return false;
+    if (d > e) return false;
+  }
+
+  return true;
 }
 
 function calculateFare(bus, pickup, drop, dateStr) {
   if (!bus || !pickup || !drop) return null;
 
-  // Determine route constant from pickup/drop if possible
   let routeKey = null;
   try {
     if (isBorliVillageStop(pickup) && isCityStop(drop)) routeKey = ROUTES.BORLI_TO_DONGRI;
     else if (isDighiVillageStop(pickup) && isCityStop(drop)) routeKey = ROUTES.DIGHI_TO_DONGRI;
     else if (isCityStop(pickup) && isBorliVillageStop(drop)) routeKey = ROUTES.DONGRI_TO_BORLI;
     else if (isCityStop(pickup) && isDighiVillageStop(drop)) routeKey = ROUTES.DONGRI_TO_DIGHI;
-  } catch (e) {
+  } catch {
     routeKey = null;
   }
 
-  // Get base fare via fare.js only when we have a route constant
   let baseAmount = 0;
   if (routeKey) {
     try {
-      const mappedType = (function normalizeBusTypeLocal(raw) {
-        if (!raw) return BUS_TYPES.NON_AC;
-        const s = String(raw || "").trim().toLowerCase();
-        if (s === "non-ac" || s === "non ac" || s === "nonac" || s.includes("non")) return BUS_TYPES.NON_AC;
-        if (s === "ac" || s === "a/c" || s.includes("ac")) return BUS_TYPES.AC;
+      const mappedType = (() => {
+        if (!bus?.busType) return BUS_TYPES.NON_AC;
+        const s = String(bus.busType).trim().toLowerCase();
+
+        if (s === "non-ac" || s === "non ac" || s === "nonac" || s.includes("non")) {
+          return BUS_TYPES.NON_AC;
+        }
+
+        if (s === "ac" || s === "a/c" || s.includes("ac")) {
+          return BUS_TYPES.AC;
+        }
+
         return BUS_TYPES.NON_AC;
-      })(bus?.busType);
-      const base = getFare({ route: routeKey, pickup, drop, busType: mappedType });
+      })();
+
+      const base = getFare({
+        route: routeKey,
+        pickup,
+        drop,
+        busType: mappedType,
+      });
+
       baseAmount = Number(base?.amount || 0);
-    } catch (e) {
+    } catch {
       baseAmount = 0;
     }
   }
 
-  // Apply any bus-specific date-aware overrides (last-match wins)
-  const rules = Array.isArray(bus.fareRulesRaw) ? bus.fareRulesRaw : Array.isArray(bus.fareRules) ? bus.fareRules : [];
-  if (!rules || rules.length === 0) {
+  const rules = Array.isArray(bus.fareRulesRaw)
+    ? bus.fareRulesRaw
+    : Array.isArray(bus.fareRules)
+      ? bus.fareRules
+      : [];
+
+  if (!rules.length) {
     return baseAmount > 0 ? baseAmount : null;
   }
 
   const pickupOptions = getPickupOptions(bus);
+  const allStops = buildRouteStops(bus);
+  const pickupSet = new Set(pickupOptions.map((p) => normalizeKey(p)));
+  const dropCandidates = allStops.filter((s) => !pickupSet.has(normalizeKey(s)));
+
   const expanded = [];
+
   for (let i = 0; i < rules.length; i++) {
     const r = rules[i] || {};
+
     const from = String(r.from || "").trim();
     const to = String(r.to || "").trim();
-    const fareVal = r.fare;
+    const fareVal = Number(r.fare);
     const fareStartDate = r.fareStartDate || "";
     const fareEndDate = r.fareEndDate || "";
-    const apply = !!r.applyToAllNextPickupsBeforeDrop;
 
-    if (!from && !to && (fareVal === undefined || fareVal === "")) continue;
+    const applyNextPickups = !!r.applyToAllNextPickupsBeforeDrop;
+    const applyPreviousDrops = !!r.applyToAllPreviousDrops;
 
-    if (apply) {
+    if (!from || !to || !Number.isFinite(fareVal) || fareVal <= 0) continue;
+
+    let fromList = [from];
+    if (applyNextPickups) {
       const fromIndex = pickupOptions.findIndex((p) => normalizeKey(p) === normalizeKey(from));
-      const startIdx = fromIndex === -1 ? 0 : fromIndex;
-      for (let j = startIdx; j < pickupOptions.length; j++) {
-        expanded.push({ from: pickupOptions[j], to, fare: fareVal, fareStartDate, fareEndDate, sourceIndex: i });
+      if (fromIndex !== -1) {
+        fromList = pickupOptions.slice(fromIndex);
       }
-    } else {
-      expanded.push({ from, to, fare: fareVal, fareStartDate, fareEndDate, sourceIndex: i });
+    }
+
+    let toList = [to];
+    if (applyPreviousDrops) {
+      const toIndex = dropCandidates.findIndex((d) => normalizeKey(d) === normalizeKey(to));
+      if (toIndex !== -1) {
+        toList = dropCandidates.slice(0, toIndex + 1);
+      } else if (dropCandidates.length) {
+        toList = dropCandidates;
+      }
+    }
+
+    for (const fromStop of fromList) {
+      for (const toStop of toList) {
+        const fromIdx = allStops.findIndex((s) => normalizeKey(s) === normalizeKey(fromStop));
+        const toIdx = allStops.findIndex((s) => normalizeKey(s) === normalizeKey(toStop));
+
+        if (fromIdx !== -1 && toIdx !== -1 && toIdx > fromIdx) {
+          expanded.push({
+            from: fromStop,
+            to: toStop,
+            fare: fareVal,
+            fareStartDate,
+            fareEndDate,
+            sourceIndex: i,
+          });
+        }
+      }
     }
   }
 
-  const matches = expanded.filter((r) => normalizeKey(r.from) === normalizeKey(pickup) && normalizeKey(r.to) === normalizeKey(drop) && ruleAppliesOnDate(r, dateStr));
-  if (!matches || matches.length === 0) {
+  const matches = expanded.filter(
+    (r) =>
+      normalizeKey(r.from) === normalizeKey(pickup) &&
+      normalizeKey(r.to) === normalizeKey(drop) &&
+      ruleAppliesOnDate(r, dateStr)
+  );
+
+  if (!matches.length) {
     return baseAmount > 0 ? baseAmount : null;
   }
 
   const chosen = matches[matches.length - 1];
   const override = Number(chosen.fare);
-  if (Number.isFinite(override) && override > 0) return override;
+
+  if (Number.isFinite(override) && override > 0) {
+    return override;
+  }
 
   return baseAmount > 0 ? baseAmount : null;
 }
@@ -280,7 +359,7 @@ export default function BookingPage() {
   const [loading, setLoading] = useState(false);
   const [selectedBus, setSelectedBus] = useState(null);
   const [selectedSeats, setSelectedSeats] = useState([]);
-  const [bookedCounts, setBookedCounts] = useState({}); // { busId: { booked: number, blocked: number } }
+  const [bookedCounts, setBookedCounts] = useState({});
   const [bookings, setBookings] = useState({});
   const [viewBooking, setViewBooking] = useState(null);
   const [bookingForm, setBookingForm] = useState({
@@ -313,7 +392,6 @@ export default function BookingPage() {
   const visibleBookings = useMemo(() => {
     return Object.entries(bookings || {}).filter(([, b]) => {
       if (!b) return false;
-      // hide blocked seats from the Existing Bookings list
       if (b.status === "blocked") return false;
       return true;
     });
@@ -322,9 +400,6 @@ export default function BookingPage() {
   const { user } = useAuth();
   const router = useRouter();
 
-  /* =========================
-     Fetch buses + schedules
-  ========================= */
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
@@ -350,9 +425,6 @@ export default function BookingPage() {
     fetchAll();
   }, []);
 
-  /* =========================
-     Fetch bookings for selected bus/date
-  ========================= */
   const fetchBookings = async () => {
     try {
       if (!selectedBus || !date) {
@@ -393,12 +465,8 @@ export default function BookingPage() {
 
   useEffect(() => {
     fetchBookings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBus, date]);
 
-  /* =========================
-     Fare Calculation
-  ========================= */
   useEffect(() => {
     if (!selectedBus || !bookingForm.pickup || !bookingForm.drop) {
       setComputedFare(null);
@@ -409,9 +477,6 @@ export default function BookingPage() {
     setComputedFare(fare);
   }, [selectedBus, bookingForm.pickup, bookingForm.drop, date]);
 
-  /* =========================
-     Available buses for date
-  ========================= */
   const availableBuses = useMemo(() => {
     if (!date) return [];
 
@@ -421,7 +486,6 @@ export default function BookingPage() {
     });
   }, [date, buses, schedules]);
 
-  // fetch booked counts for available buses on the selected date
   useEffect(() => {
     const loadCounts = async () => {
       try {
@@ -438,7 +502,6 @@ export default function BookingPage() {
               let booked = 0;
               let blocked = 0;
 
-              // Only count numeric seat keys (1,2,3...) and ignore any metadata keys
               for (const key of Object.keys(raw)) {
                 if (!/^[0-9]+$/.test(key)) continue;
                 if (Number(key) < 1) continue;
@@ -447,7 +510,6 @@ export default function BookingPage() {
                 if (rec && rec.status === "blocked") {
                   blocked++;
                 } else {
-                  // count only meaningful booking records (same filter used in fetchBookings)
                   const hasMeaningful = Boolean(
                     (rec.name && String(rec.name).trim()) ||
                     (rec.phone && String(rec.phone).trim()) ||
@@ -467,9 +529,15 @@ export default function BookingPage() {
 
         const results = await Promise.all(calls);
         const map = {};
-        for (const r of results) map[r.busId] = { booked: Number(r.booked) || 0, blocked: Number(r.blocked) || 0 };
+        for (const r of results) {
+          map[r.busId] = {
+            booked: Number(r.booked) || 0,
+            blocked: Number(r.blocked) || 0,
+          };
+        }
+
         setBookedCounts(map);
-      } catch (e) {
+      } catch {
         setBookedCounts({});
       }
     };
@@ -484,9 +552,6 @@ export default function BookingPage() {
     [selectedBus, bookingForm.pickup]
   );
 
-  /* =========================
-     Handlers
-  ========================= */
   const resetBookingForm = () => {
     setSelectedSeats([]);
     setEditingSeat(null);
@@ -529,11 +594,10 @@ export default function BookingPage() {
       return showAppToast("error", "Select pickup and drop");
     }
 
-    // re-calculate fare at submit time to avoid stale state (race conditions)
     const currentFare = calculateFare(selectedBus, bookingForm.pickup, bookingForm.drop, date);
-    // allow admin to override fare even if computedFare is not available
     const overrideVal = String(bookingForm.fareOverride || "").trim();
     const overrideNum = overrideVal === "" ? null : Number(overrideVal);
+
     if (currentFare === null && (overrideNum === null || !Number.isFinite(overrideNum) || overrideNum <= 0)) {
       return showAppToast("error", "Fare not available for selected pickup and drop");
     }
@@ -542,7 +606,10 @@ export default function BookingPage() {
       const results = [];
 
       for (const seatNo of seatsToProcess) {
-        const finalFare = overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0 ? overrideNum : Number(currentFare ?? computedFare);
+        const finalFare =
+          overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0
+            ? overrideNum
+            : Number(currentFare ?? computedFare);
 
         const payload = {
           busId: selectedBus.busId,
@@ -606,17 +673,19 @@ export default function BookingPage() {
       return showAppToast("error", "Select pickup and drop");
     }
 
-    // re-calculate fare at submit time to avoid stale state (race conditions)
     const currentFare = calculateFare(selectedBus, bookingForm.pickup, bookingForm.drop, date);
-    // allow admin to override fare even if computedFare is not available
     const overrideVal = String(bookingForm.fareOverride || "").trim();
     const overrideNum = overrideVal === "" ? null : Number(overrideVal);
+
     if (currentFare === null && (overrideNum === null || !Number.isFinite(overrideNum) || overrideNum <= 0)) {
       return showAppToast("error", "Fare not available for selected pickup and drop");
     }
 
     try {
-      const finalFareForBooking = overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0 ? overrideNum : Number(currentFare ?? computedFare);
+      const finalFareForBooking =
+        overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0
+          ? overrideNum
+          : Number(currentFare ?? computedFare);
 
       const bookingsPayload = seats.map((seatNo) => ({
         busId: selectedBus.busId,
@@ -769,10 +838,11 @@ export default function BookingPage() {
       return showAppToast("error", "Select pickup and drop");
     }
 
-    // allow admin to override fare even if computedFare is not available
+    const currentFare = calculateFare(selectedBus, bookingForm.pickup, bookingForm.drop, date);
     const overrideVal = String(bookingForm.fareOverride || "").trim();
     const overrideNum = overrideVal === "" ? null : Number(overrideVal);
-    if (computedFare === null && (overrideNum === null || !Number.isFinite(overrideNum) || overrideNum <= 0)) {
+
+    if (currentFare === null && (overrideNum === null || !Number.isFinite(overrideNum) || overrideNum <= 0)) {
       return showAppToast("error", "Fare not available for selected pickup and drop");
     }
 
@@ -780,7 +850,10 @@ export default function BookingPage() {
       const created = [];
 
       for (const seatNo of seats) {
-        const finalFare = overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0 ? overrideNum : Number(computedFare);
+        const finalFare =
+          overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0
+            ? overrideNum
+            : Number(currentFare ?? computedFare);
 
         const payload = {
           busId: selectedBus.busId,
@@ -819,7 +892,11 @@ export default function BookingPage() {
 
       if (token) {
         for (const c of created) {
-          const amountForRecord = overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0 ? Number(overrideNum) : Number(computedFare);
+          const amountForRecord =
+            overrideNum !== null && Number.isFinite(overrideNum) && overrideNum > 0
+              ? Number(overrideNum)
+              : Number(currentFare ?? computedFare);
+
           const payload = {
             amount: Number(amountForRecord) || 0,
             currency: "INR",
@@ -853,8 +930,8 @@ export default function BookingPage() {
               },
               body: JSON.stringify(payload),
             });
-          } catch (e) {
-            console.warn("offline payment record failed", e);
+          } catch {
+            // silent
           }
         }
       }
@@ -1061,9 +1138,10 @@ export default function BookingPage() {
 
       {/* Bus List */}
       <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
-        {/* Header */}
         <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-xl md:text-2xl font-bold text-slate-900">Available Buses</h2>
+          <h2 className="text-xl font-bold text-slate-900 md:text-2xl">
+            Available Buses
+          </h2>
           <p className="mt-1 text-sm text-slate-500">
             {date
               ? `Showing ${availableBuses.length} available bus(es) for ${date}`
@@ -1071,19 +1149,24 @@ export default function BookingPage() {
           </p>
         </div>
 
-        {/* Content */}
         <div className="p-4 md:p-5">
           {loading ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-              <p className="text-sm font-medium text-slate-700">Loading buses and schedules...</p>
+              <p className="text-sm font-medium text-slate-700">
+                Loading buses and schedules...
+              </p>
             </div>
           ) : !date ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-              <p className="text-sm font-medium text-slate-700">Please select a date first</p>
+              <p className="text-sm font-medium text-slate-700">
+                Please select a date first
+              </p>
             </div>
           ) : availableBuses.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-              <p className="text-sm font-medium text-slate-700">No buses available for this date</p>
+              <p className="text-sm font-medium text-slate-700">
+                No buses available for this date
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4">
@@ -1095,36 +1178,30 @@ export default function BookingPage() {
                 const booked = bookedCounts[bus.busId]?.booked ?? 0;
                 const blocked = bookedCounts[bus.busId]?.blocked ?? 0;
                 const cabins = Array.isArray(bus.cabins) ? bus.cabins.length : 0;
-                // Show available seats as total minus booked (blocked seats remain counted here)
                 const available = Math.max(totalSeats - booked, 0);
 
                 return (
                   <div
                     key={bus.busId}
-                    className="rounded-[24px] border border-slate-200 bg-white p-4 md:p-5 shadow-sm transition-all duration-200 hover:border-orange-200 hover:shadow-md"
+                    className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:border-orange-200 hover:shadow-md md:p-5"
                   >
-                    {/* Top Row */}
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      {/* Left */}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start gap-3">
-                          {/* Icon */}
                           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-orange-100 bg-orange-50">
                             <BusFront className="h-7 w-7 text-[#f97316]" />
                           </div>
 
-                          {/* Main Info */}
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                               <div className="min-w-0">
                                 <h3 className="truncate text-2xl font-bold tracking-tight text-slate-900">
                                   {bus.busNumber}
                                 </h3>
-                                <p className="mt-1 text-sm md:text-base text-slate-500">
+                                <p className="mt-1 text-sm text-slate-500 md:text-base">
                                   {bus.busName} • {bus.busType}
                                 </p>
 
-                                {/* Small Tags */}
                                 <div className="mt-3 flex flex-wrap gap-2">
                                   <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
                                     {String(bus.seatLayout || "")} Seats
@@ -1135,10 +1212,9 @@ export default function BookingPage() {
                                 </div>
                               </div>
 
-                              {/* Button */}
                               <div className="w-full lg:w-auto">
                                 <button
-                                  className="inline-flex w-full lg:w-auto items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c]"
+                                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] lg:w-auto"
                                   onClick={() => openBusModal(bus)}
                                 >
                                   <Eye className="h-4 w-4" />
@@ -1149,7 +1225,6 @@ export default function BookingPage() {
                           </div>
                         </div>
 
-                        {/* Compact Stats */}
                         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                           <MiniStat label="Total" value={totalSeats} bg="bg-orange-50" text="text-orange-600" />
                           <MiniStat label="Booked" value={booked} bg="bg-slate-100" text="text-slate-700" />
@@ -1160,7 +1235,6 @@ export default function BookingPage() {
                       </div>
                     </div>
 
-                    {/* Bottom Row */}
                     <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
                       <CompactInfoCard
                         icon={<Route className="h-4 w-4 text-[#f97316]" />}
@@ -1170,7 +1244,10 @@ export default function BookingPage() {
                       <CompactInfoCard
                         icon={<MapPin className="h-4 w-4 text-[#f97316]" />}
                         label="Path"
-                        value={`${resolvePointValue(bus.startPoint, "--")} → ${resolvePointValue(bus.endPoint, "--")}`}
+                        value={`${resolvePointValue(bus.startPoint, "--")} → ${resolvePointValue(
+                          bus.endPoint,
+                          "--"
+                        )}`}
                       />
                       <CompactInfoCard
                         icon={<Clock3 className="h-4 w-4 text-[#f97316]" />}
@@ -1185,11 +1262,11 @@ export default function BookingPage() {
           )}
         </div>
       </div>
+
       {/* Seat Layout Modal */}
       {selectedBus && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
-            {/* Modal Header */}
             <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-3xl border-b border-slate-200 bg-white px-6 py-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#f97316]">
@@ -1207,21 +1284,6 @@ export default function BookingPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                {/* {user?.role === "admin" && (
-                  <button
-                    onClick={() =>
-                      router.push(
-                        `/admin/schedule?busId=${encodeURIComponent(
-                          selectedBus.busId
-                        )}&date=${encodeURIComponent(date)}`
-                      )
-                    }
-                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Manage Route / Edit Fare
-                  </button>
-                )} */}
-
                 <button
                   onClick={closeBusModal}
                   className="rounded-2xl p-2 text-slate-500 transition hover:bg-slate-100"
@@ -1231,7 +1293,6 @@ export default function BookingPage() {
               </div>
             </div>
 
-            {/* Modal Body */}
             <div className="p-6">
               <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-4">
                 <SummaryCard
@@ -1251,8 +1312,7 @@ export default function BookingPage() {
                 />
                 <SummaryCard
                   title="Time"
-                  value={`${selectedBus.startTime || "--:--"} → ${selectedBus.endTime || "--:--"
-                    }`}
+                  value={`${selectedBus.startTime || "--:--"} → ${selectedBus.endTime || "--:--"}`}
                   icon={<Clock3 className="h-6 w-6 text-[#f97316]" />}
                 />
               </div>
@@ -1294,7 +1354,6 @@ export default function BookingPage() {
                     }}
                   />
 
-                  {/* Admin controls */}
                   {user && (user.role === "admin" || user.role === "owner") && (
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                       <button
@@ -1321,7 +1380,6 @@ export default function BookingPage() {
                   )}
                 </div>
 
-                {/* Booking Form + Existing Bookings */}
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                   {/* Booking Form */}
                   <div className="md:col-span-2 rounded-2xl border p-4">
@@ -1358,7 +1416,7 @@ export default function BookingPage() {
                         disabled={!editingSeat && selectedSeats.length === 0}
                       />
 
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                         {/* Pickup */}
                         <div>
                           <select
@@ -1427,11 +1485,10 @@ export default function BookingPage() {
                                 stop,
                                 date
                               );
+
                               return (
                                 <option key={i} value={stop}>
-                                  {fare !== null
-                                    ? `${stop} — ₹${fare}`
-                                    : `${stop} — Fare N/A`}
+                                  {fare !== null ? `${stop} — ₹${fare}` : `${stop} — Fare N/A`}
                                 </option>
                               );
                             })}
@@ -1463,34 +1520,52 @@ export default function BookingPage() {
                         </div>
                       </div>
 
-                      {/* Fare Summary */}
                       {(editingSeat ? 1 : selectedSeats.length) > 0 && (
                         <div className="mt-2 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
                           {computedFare !== null || bookingForm.fareOverride ? (
                             (() => {
-                              const perSeat = bookingForm.fareOverride && String(bookingForm.fareOverride).trim() !== "" ? Number(bookingForm.fareOverride) : Number(computedFare);
+                              const perSeat =
+                                bookingForm.fareOverride &&
+                                  String(bookingForm.fareOverride).trim() !== ""
+                                  ? Number(bookingForm.fareOverride)
+                                  : Number(computedFare);
+
                               const seatsCount = editingSeat ? 1 : selectedSeats.length;
                               const total = Number(perSeat) * seatsCount;
+
                               return (
                                 <div className="flex flex-wrap items-center gap-6">
                                   <div className="text-sm text-slate-600">
                                     Fare per seat:{" "}
-                                    <span className="font-semibold">{perSeat && !Number.isNaN(perSeat) ? `₹${perSeat.toFixed(2)}` : "—"}</span>
+                                    <span className="font-semibold">
+                                      {perSeat && !Number.isNaN(perSeat)
+                                        ? `₹${perSeat.toFixed(2)}`
+                                        : "—"}
+                                    </span>
                                   </div>
 
                                   <div className="text-sm text-slate-700">
                                     Total:{" "}
-                                    <span className="text-lg font-bold">{!Number.isNaN(total) ? `₹${total.toFixed(2)}` : "—"}</span>
+                                    <span className="text-lg font-bold">
+                                      {!Number.isNaN(total) ? `₹${total.toFixed(2)}` : "—"}
+                                    </span>
                                   </div>
 
                                   <div className="ml-2">
-                                    <label className="block text-xs text-slate-500">Override fare</label>
+                                    <label className="block text-xs text-slate-500">
+                                      Override fare
+                                    </label>
                                     <input
                                       type="number"
                                       step="0.01"
                                       min="0"
                                       value={bookingForm.fareOverride ?? ""}
-                                      onChange={(e) => setBookingForm((p) => ({ ...p, fareOverride: e.target.value }))}
+                                      onChange={(e) =>
+                                        setBookingForm((p) => ({
+                                          ...p,
+                                          fareOverride: e.target.value,
+                                        }))
+                                      }
                                       className="mt-1 w-40 rounded-lg border px-3 py-2 text-sm"
                                     />
                                   </div>
@@ -1498,12 +1573,13 @@ export default function BookingPage() {
                               );
                             })()
                           ) : (
-                            <div className="text-sm font-medium text-red-600">Fare not available for selected pickup & drop</div>
+                            <div className="text-sm font-medium text-red-600">
+                              Fare not available for selected pickup & drop
+                            </div>
                           )}
                         </div>
                       )}
 
-                      {/* Action Buttons */}
                       <div className="flex flex-wrap gap-2">
                         {editingSeat ? (
                           <>
@@ -1554,7 +1630,10 @@ export default function BookingPage() {
                         </div>
                       ) : (
                         visibleBookings.map(([seat, b]) => (
-                          <div key={seat} className="rounded-2xl border border-slate-200 bg-white p-4">
+                          <div
+                            key={seat}
+                            className="rounded-2xl border border-slate-200 bg-white p-4"
+                          >
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
                                 <div className="text-lg font-bold text-slate-900">
@@ -1567,9 +1646,7 @@ export default function BookingPage() {
                                 </div>
 
                                 {b.email ? (
-                                  <div className="mt-1 text-sm text-slate-500">
-                                    {b.email}
-                                  </div>
+                                  <div className="mt-1 text-sm text-slate-500">{b.email}</div>
                                 ) : null}
 
                                 <div className="mt-2 text-sm text-slate-400">
@@ -1604,7 +1681,10 @@ export default function BookingPage() {
                                       pickupTime: b.pickupTime || "",
                                       drop: b.drop || "",
                                       dropTime: b.dropTime || "",
-                                      fareOverride: b.fare !== undefined && b.fare !== null ? String(b.fare) : "",
+                                      fareOverride:
+                                        b.fare !== undefined && b.fare !== null
+                                          ? String(b.fare)
+                                          : "",
                                     });
 
                                     const fare = calculateFare(
@@ -1655,7 +1735,7 @@ export default function BookingPage() {
             setConfirmLoading(true);
             try {
               await confirmAction();
-            } catch (e) {
+            } catch {
               // already handled
             } finally {
               setConfirmLoading(false);
@@ -1846,6 +1926,8 @@ export default function BookingPage() {
                         pickupTime: b.pickupTime || "",
                         drop: b.drop || "",
                         dropTime: b.dropTime || "",
+                        fareOverride:
+                          b.fare !== undefined && b.fare !== null ? String(b.fare) : "",
                       });
 
                       const fare = calculateFare(selectedBus, b.pickup || "", b.drop || "", date);
@@ -1894,20 +1976,6 @@ function SummaryCard({ title, value, icon }) {
           <h3 className="break-words text-lg font-bold text-slate-900">{value}</h3>
         </div>
       </div>
-    </div>
-  );
-}
-
-function InfoCard({ icon, label, value }) {
-  return (
-    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-      <div className="mb-2 flex items-center gap-2">
-        {icon}
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          {label}
-        </p>
-      </div>
-      <p className="text-sm font-medium text-slate-800">{value}</p>
     </div>
   );
 }
@@ -1979,7 +2047,7 @@ function CompactInfoCard({ icon, label, value }) {
           {label}
         </p>
       </div>
-      <p className="text-base md:text-lg font-semibold text-slate-900">{value}</p>
+      <p className="text-base font-semibold text-slate-900 md:text-lg">{value}</p>
     </div>
   );
 }

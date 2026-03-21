@@ -167,7 +167,6 @@ function buildExpandedFareEntries(rawFareRules, pickupPoints, dropPoints) {
             rule?.applyToAllNextPickupsBeforeDrop ?? rule?.applyToAllPreviousPickups
         );
 
-
         // new flag: apply same fare to the selected drop and all previous drops
         const applyToAllPreviousDrops = Boolean(
             rule?.applyToAllPreviousDrops ?? rule?.applyToAllNextDropsAfterPickup
@@ -258,7 +257,7 @@ function buildExpandedFareEntries(rawFareRules, pickupPoints, dropPoints) {
                 const et = dropPoints[j].name;
                 const key = `${normalizeKey(ef)}|${normalizeKey(et)}`;
                 if (seenForRule.has(key)) continue;
-                // only include valid direction: pickup index must be <= drop index in booking flow? keep existing behavior
+
                 seenForRule.add(key);
                 pushExpanded(ef, et, i, j);
             }
@@ -351,6 +350,11 @@ function sanitizeFareRulesRaw(fareRules, pickupPoints, dropPoints) {
             rule?.applyToAllNextPickupsBeforeDrop ?? rule?.applyToAllPreviousPickups
         );
 
+        // ✅ FIXED: define this before using
+        const applyToAllPreviousDrops = Boolean(
+            rule?.applyToAllPreviousDrops ?? rule?.applyToAllNextDropsAfterPickup
+        );
+
         if (
             !from &&
             !to &&
@@ -426,17 +430,24 @@ function buildEffectiveFareRules(fareRules, pickupPoints, dropPoints) {
 function getSanitizedBusData(body) {
     const busNumber = normalizeText(body.busNumber);
     const busName = normalizeText(body.busName);
+
     // normalize busType to canonical server values: 'AC' or 'Non-AC'
     const rawBusType = normalizeText(body.busType);
     let busType = "Non-AC";
     if (rawBusType) {
         const lower = rawBusType.toLowerCase();
-        if (lower.includes("non") || lower.includes("non-ac") || lower.includes("non ac") || lower.includes("nonac")) {
+        if (
+            lower.includes("non") ||
+            lower.includes("non-ac") ||
+            lower.includes("non ac") ||
+            lower.includes("nonac")
+        ) {
             busType = "Non-AC";
         } else if (lower.includes("ac")) {
             busType = "AC";
         }
     }
+
     const routeName = normalizeText(body.routeName);
     const startTime = normalizeText(body.startTime);
     const endTime = normalizeText(body.endTime);
@@ -493,7 +504,10 @@ function validateBusPayload(body, isUpdate = false) {
         }
     }
 
-    if (!["AC", "Non-AC"].includes(normalizeText(body.busType))) {
+    // Allow flexible input from frontend but validate against sanitized value
+    const { busType } = getSanitizedBusData(body);
+
+    if (!["AC", "Non-AC"].includes(busType)) {
         return "Invalid bus type";
     }
 
@@ -505,12 +519,7 @@ function validateBusPayload(body, isUpdate = false) {
         return "busId is required for update";
     }
 
-    const {
-        startPoint,
-        endPoint,
-        pickupPoints,
-        dropPoints,
-    } = getSanitizedBusData(body);
+    const { startPoint, endPoint, pickupPoints, dropPoints } = getSanitizedBusData(body);
 
     const startPointError = validateSinglePoint(startPoint, "Start point");
     if (startPointError) return startPointError;
@@ -536,17 +545,13 @@ function validateBusPayload(body, isUpdate = false) {
 
     // Extra safety:
     // startPoint must not match any pickupPoint after cleanup
-    if (
-        pickupPoints.some((p) => normalizeKey(p.name) === normalizeKey(startPoint.name))
-    ) {
+    if (pickupPoints.some((p) => normalizeKey(p.name) === normalizeKey(startPoint.name))) {
         return "Start point cannot be repeated inside pickup points";
     }
 
     // Extra safety:
     // endPoint must not match any dropPoint after cleanup
-    if (
-        dropPoints.some((p) => normalizeKey(p.name) === normalizeKey(endPoint.name))
-    ) {
+    if (dropPoints.some((p) => normalizeKey(p.name) === normalizeKey(endPoint.name))) {
         return "End point cannot be repeated inside drop points";
     }
 
@@ -674,8 +679,15 @@ export async function POST(req) {
         }
 
         // For fare validation, include startPoint as the first pickup option and endPoint as the last drop option
-        const pickupPointsForFare = (startPoint && startPoint.name) ? [{ name: startPoint.name, time: startPoint.time }, ...pickupPoints] : pickupPoints;
-        const dropPointsForFare = (endPoint && endPoint.name) ? [...dropPoints, { name: endPoint.name, time: endPoint.time }] : dropPoints;
+        const pickupPointsForFare =
+            startPoint && startPoint.name
+                ? [{ name: startPoint.name, time: startPoint.time }, ...pickupPoints]
+                : pickupPoints;
+
+        const dropPointsForFare =
+            endPoint && endPoint.name
+                ? [...dropPoints, { name: endPoint.name, time: endPoint.time }]
+                : dropPoints;
 
         const strictFareError = validateFareRulesStrict(
             body.fareRules,
@@ -730,9 +742,17 @@ export async function POST(req) {
         const busId = generateBusId();
         const now = new Date().toISOString();
 
-        const fareRulesRaw = sanitizeFareRulesRaw(body.fareRules, pickupPointsForFare, dropPointsForFare);
+        const fareRulesRaw = sanitizeFareRulesRaw(
+            body.fareRules,
+            pickupPointsForFare,
+            dropPointsForFare
+        );
 
-        const fareRules = buildEffectiveFareRules(body.fareRules, pickupPointsForFare, dropPointsForFare);
+        const fareRules = buildEffectiveFareRules(
+            body.fareRules,
+            pickupPointsForFare,
+            dropPointsForFare
+        );
 
         const newBus = {
             busId,
@@ -863,8 +883,15 @@ export async function PUT(req) {
         }
 
         // For fare validation on update, include start/end points in the options
-        const pickupPointsForFareU = (startPoint && startPoint.name) ? [{ name: startPoint.name, time: startPoint.time }, ...pickupPoints] : pickupPoints;
-        const dropPointsForFareU = (endPoint && endPoint.name) ? [...dropPoints, { name: endPoint.name, time: endPoint.time }] : dropPoints;
+        const pickupPointsForFareU =
+            startPoint && startPoint.name
+                ? [{ name: startPoint.name, time: startPoint.time }, ...pickupPoints]
+                : pickupPoints;
+
+        const dropPointsForFareU =
+            endPoint && endPoint.name
+                ? [...dropPoints, { name: endPoint.name, time: endPoint.time }]
+                : dropPoints;
 
         const strictFareError = validateFareRulesStrict(
             body.fareRules,
@@ -932,9 +959,17 @@ export async function PUT(req) {
 
         const existingData = busSnapshot.val() || {};
 
-        const fareRulesRaw = sanitizeFareRulesRaw(body.fareRules, pickupPointsForFareU, dropPointsForFareU);
+        const fareRulesRaw = sanitizeFareRulesRaw(
+            body.fareRules,
+            pickupPointsForFareU,
+            dropPointsForFareU
+        );
 
-        const fareRules = buildEffectiveFareRules(body.fareRules, pickupPointsForFareU, dropPointsForFareU);
+        const fareRules = buildEffectiveFareRules(
+            body.fareRules,
+            pickupPointsForFareU,
+            dropPointsForFareU
+        );
 
         const updatedBusData = {
             busId,

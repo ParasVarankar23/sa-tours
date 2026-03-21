@@ -12,7 +12,6 @@ import {
     ROUTES,
 } from "../../../lib/fare";
 import { getAdminDb } from "../../../lib/firebaseAdmin";
-// verifyAuthToken is imported dynamically where needed to avoid startup cost
 
 /* =========================
    Helpers
@@ -45,18 +44,13 @@ async function isAdminOrOwnerFromRequest(req) {
         const decoded = await verifyAuthToken(token);
 
         return !!decoded && (decoded.role === "admin" || decoded.role === "owner");
-    } catch (e) {
+    } catch {
         return false;
     }
 }
 
 /* =========================
    New Bus Structure Helpers
-   Supports:
-   - startPoint: { name, time }
-   - pickupPoints: [{ name, time }]
-   - dropPoints: [{ name, time }]
-   - endPoint: { name, time }
 ========================= */
 
 function getStartPoint(busData) {
@@ -103,6 +97,54 @@ function getEndPoint(busData) {
     };
 }
 
+function buildRouteStops(busData) {
+    const startPoint = getStartPoint(busData);
+    const endPoint = getEndPoint(busData);
+
+    const pickupPoints = Array.isArray(busData?.pickupPoints)
+        ? busData.pickupPoints
+            .map((p) => ({
+                name: normalizeText(typeof p === "string" ? p : p?.name),
+                time: normalizeText(typeof p === "object" ? p?.time : ""),
+            }))
+            .filter((p) => p.name)
+        : [];
+
+    const dropPoints = Array.isArray(busData?.dropPoints)
+        ? busData.dropPoints
+            .map((p) => ({
+                name: normalizeText(typeof p === "string" ? p : p?.name),
+                time: normalizeText(typeof p === "object" ? p?.time : ""),
+            }))
+            .filter((p) => p.name)
+        : [];
+
+    const all = [];
+
+    if (startPoint.name) {
+        all.push({ name: startPoint.name, time: startPoint.time });
+    }
+
+    for (const p of pickupPoints) {
+        const exists = all.some((x) => normalizeKey(x.name) === normalizeKey(p.name));
+        if (!exists) all.push(p);
+    }
+
+    for (const d of dropPoints) {
+        const exists = all.some((x) => normalizeKey(x.name) === normalizeKey(d.name));
+        if (!exists) all.push(d);
+    }
+
+    if (endPoint.name) {
+        const exists = all.some((x) => normalizeKey(x.name) === normalizeKey(endPoint.name));
+        if (!exists) {
+            all.push({ name: endPoint.name, time: endPoint.time });
+        }
+    }
+
+    return all;
+}
+
 function getPickupOptions(busData) {
     const startPoint = getStartPoint(busData);
 
@@ -117,12 +159,10 @@ function getPickupOptions(busData) {
 
     const all = [];
 
-    // include start point if available
     if (startPoint.name) {
         all.push(startPoint);
     }
 
-    // include pickup points, avoid duplicate names
     for (const p of pickupPoints) {
         const exists = all.some((x) => normalizeKey(x.name) === normalizeKey(p.name));
         if (!exists) all.push(p);
@@ -131,35 +171,18 @@ function getPickupOptions(busData) {
     return all;
 }
 
-function getDropOptions(busData) {
-    const endPoint = getEndPoint(busData);
+function getDropOptions(busData, pickup = "") {
+    const allStops = buildRouteStops(busData);
+    const pickupOptions = getPickupOptions(busData);
+    const pickupSet = new Set(pickupOptions.map((p) => normalizeKey(p.name)));
 
-    const dropPoints = Array.isArray(busData?.dropPoints)
-        ? busData.dropPoints
-            .map((p) => ({
-                name: normalizeText(p?.name),
-                time: normalizeText(p?.time),
-            }))
-            .filter((p) => p.name)
-        : [];
-
-    const all = [];
-
-    // include drop points first
-    for (const p of dropPoints) {
-        const exists = all.some((x) => normalizeKey(x.name) === normalizeKey(p.name));
-        if (!exists) all.push(p);
+    let startIndex = 0;
+    if (pickup) {
+        const idx = allStops.findIndex((s) => normalizeKey(s.name) === normalizeKey(pickup));
+        if (idx !== -1) startIndex = idx + 1;
     }
 
-    // include end point if available
-    if (endPoint.name) {
-        const exists = all.some((x) => normalizeKey(x.name) === normalizeKey(endPoint.name));
-        if (!exists) {
-            all.push(endPoint);
-        }
-    }
-
-    return all;
+    return allStops.filter((s, idx) => idx >= startIndex && !pickupSet.has(normalizeKey(s.name)));
 }
 
 function isValidPickup(busData, pickup) {
@@ -184,71 +207,140 @@ function getDropTime(busData, drop) {
     return found ? normalizeText(found.time) : "";
 }
 
-function findExactFare(busData, fromStop, toStop) {
-    // Prefer using expanded effective fareRules when available
-    const rules = Array.isArray(busData?.fareRules) ? busData.fareRules : [];
-    const raw = Array.isArray(busData?.fareRulesRaw) ? busData.fareRulesRaw : [];
+function ruleAppliesOnDate(rule, dateStr) {
+    if (!dateStr) return true;
 
-    // 1) exact lookup on expanded fareRules
-    const rule = rules.find(
-        (r) =>
-            normalizeKey(r?.from) === normalizeKey(fromStop) &&
-            normalizeKey(r?.to) === normalizeKey(toStop)
-    );
+    const toDateOnly = (s) => String(s || "").slice(0, 10);
 
-    if (rule) {
-        const fare = Number(rule.fare);
-        if (Number.isFinite(fare) && fare > 0) return fare;
+    const d = toDateOnly(dateStr);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+
+    if (rule.fareStartDate) {
+        const s = toDateOnly(rule.fareStartDate);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+        if (d < s) return false;
     }
 
-    // 2) fallback: expand raw fare rules
-    if (raw.length > 0) {
-        const pickupOptions = getPickupOptions(busData); // [{ name, time }]
-        const expanded = [];
+    if (rule.fareEndDate) {
+        const e = toDateOnly(rule.fareEndDate);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(e)) return false;
+        if (d > e) return false;
+    }
 
-        for (let i = 0; i < raw.length; i++) {
-            const r = raw[i] || {};
-            const from = normalizeText(r.from);
-            const to = normalizeText(r.to);
-            const fare = Number(r.fare);
-            const apply = !!r.applyToAllNextPickupsBeforeDrop;
+    return true;
+}
 
-            if (!from || !to || !Number.isFinite(fare) || fare <= 0) continue;
+function expandFareRules(busData, dateStr = "") {
+    const raw = Array.isArray(busData?.fareRulesRaw)
+        ? busData.fareRulesRaw
+        : Array.isArray(busData?.fareRules)
+            ? busData.fareRules
+            : [];
 
-            if (apply) {
-                const fromIndex = pickupOptions.findIndex(
-                    (p) => normalizeKey(p?.name) === normalizeKey(from)
-                );
+    if (!raw.length) return [];
 
-                if (fromIndex !== -1) {
-                    for (let j = fromIndex; j < pickupOptions.length; j++) {
-                        expanded.push({
-                            from: pickupOptions[j].name,
-                            to,
-                            fare,
-                        });
-                    }
-                } else {
-                    expanded.push({ from, to, fare });
-                }
-            } else {
-                expanded.push({ from, to, fare });
+    const pickupOptions = getPickupOptions(busData);
+    const allStops = buildRouteStops(busData);
+
+    const pickupSet = new Set(pickupOptions.map((p) => normalizeKey(p.name)));
+    const dropCandidates = allStops.filter((s) => !pickupSet.has(normalizeKey(s.name)));
+
+    const expanded = [];
+
+    for (let i = 0; i < raw.length; i++) {
+        const r = raw[i] || {};
+
+        const from = normalizeText(r.from);
+        const to = normalizeText(r.to);
+        const fare = Number(r.fare);
+        const fareStartDate = r.fareStartDate || "";
+        const fareEndDate = r.fareEndDate || "";
+
+        const applyNextPickups = !!r.applyToAllNextPickupsBeforeDrop;
+        const applyPreviousDrops = !!r.applyToAllPreviousDrops;
+
+        if (!from || !to || !Number.isFinite(fare) || fare <= 0) continue;
+
+        let fromList = [from];
+        if (applyNextPickups) {
+            const fromIndex = pickupOptions.findIndex(
+                (p) => normalizeKey(p.name) === normalizeKey(from)
+            );
+            if (fromIndex !== -1) {
+                fromList = pickupOptions.slice(fromIndex).map((p) => p.name);
             }
         }
 
-        const match = expanded.find(
-            (r) =>
-                normalizeKey(r.from) === normalizeKey(fromStop) &&
-                normalizeKey(r.to) === normalizeKey(toStop)
-        );
+        let toList = [to];
+        if (applyPreviousDrops) {
+            const toIndex = dropCandidates.findIndex(
+                (d) => normalizeKey(d.name) === normalizeKey(to)
+            );
+            if (toIndex !== -1) {
+                toList = dropCandidates.slice(0, toIndex + 1).map((d) => d.name);
+            } else if (dropCandidates.length) {
+                toList = dropCandidates.map((d) => d.name);
+            }
+        }
 
-        if (match) {
-            const fare = Number(match.fare);
-            if (Number.isFinite(fare) && fare > 0) return fare;
+        for (const fromStop of fromList) {
+            for (const toStop of toList) {
+                const fromIdx = allStops.findIndex(
+                    (s) => normalizeKey(s.name) === normalizeKey(fromStop)
+                );
+                const toIdx = allStops.findIndex(
+                    (s) => normalizeKey(s.name) === normalizeKey(toStop)
+                );
+
+                if (fromIdx !== -1 && toIdx !== -1 && toIdx > fromIdx) {
+                    const expandedRule = {
+                        from: fromStop,
+                        to: toStop,
+                        fare,
+                        fareStartDate,
+                        fareEndDate,
+                        sourceIndex: i,
+                    };
+
+                    if (ruleAppliesOnDate(expandedRule, dateStr)) {
+                        expanded.push(expandedRule);
+                    }
+                }
+            }
         }
     }
 
-    // 3) fallback to fare.js route-based calculation
+    return expanded;
+}
+
+function findExactFare(busData, fromStop, toStop, dateStr = "") {
+    const rules = Array.isArray(busData?.fareRules) ? busData.fareRules : [];
+
+    const datedExact = rules.find(
+        (r) =>
+            normalizeKey(r?.from) === normalizeKey(fromStop) &&
+            normalizeKey(r?.to) === normalizeKey(toStop) &&
+            ruleAppliesOnDate(r, dateStr)
+    );
+
+    if (datedExact) {
+        const fare = Number(datedExact.fare);
+        if (Number.isFinite(fare) && fare > 0) return fare;
+    }
+
+    const expanded = expandFareRules(busData, dateStr);
+
+    const match = expanded.find(
+        (r) =>
+            normalizeKey(r.from) === normalizeKey(fromStop) &&
+            normalizeKey(r.to) === normalizeKey(toStop)
+    );
+
+    if (match) {
+        const fare = Number(match.fare);
+        if (Number.isFinite(fare) && fare > 0) return fare;
+    }
+
     try {
         const pickupNorm = normalizeStopName(fromStop);
         const dropNorm = normalizeStopName(toStop);
@@ -296,8 +388,8 @@ function findExactFare(busData, fromStop, toStop) {
                 return Number(base.amount);
             }
         }
-    } catch (e) {
-        console.error("findExactFare base lookup failed", e);
+    } catch {
+        // silent fallback
     }
 
     return null;
@@ -322,9 +414,16 @@ function validatePickupDrop(busData, pickup, drop) {
         return { ok: false, error: "Invalid drop point" };
     }
 
-    // prevent same pickup and drop
     if (normalizeKey(pickup) === normalizeKey(drop)) {
         return { ok: false, error: "Pickup and drop cannot be the same" };
+    }
+
+    const allStops = buildRouteStops(busData);
+    const pickupIndex = allStops.findIndex((s) => normalizeKey(s.name) === normalizeKey(pickup));
+    const dropIndex = allStops.findIndex((s) => normalizeKey(s.name) === normalizeKey(drop));
+
+    if (pickupIndex === -1 || dropIndex === -1 || dropIndex <= pickupIndex) {
+        return { ok: false, error: "Drop must be after pickup in route order" };
     }
 
     return { ok: true };
@@ -388,7 +487,6 @@ export async function POST(req) {
 
         const db = getAdminDb();
 
-        // schedule check
         const schedSnap = await db.ref(`schedules/${busId}/${date}`).once("value");
         if (!schedSnap.exists() || !schedSnap.val()?.available) {
             return NextResponse.json(
@@ -397,7 +495,6 @@ export async function POST(req) {
             );
         }
 
-        // bus fetch
         const busSnap = await db.ref(`buses/${busId}`).once("value");
         if (!busSnap.exists()) {
             return NextResponse.json(
@@ -408,7 +505,6 @@ export async function POST(req) {
 
         const busData = busSnap.val() || {};
 
-        // pickup/drop required + validate
         const routeValidation = validatePickupDrop(busData, pickup, drop);
         if (!routeValidation.ok) {
             return NextResponse.json(
@@ -417,10 +513,9 @@ export async function POST(req) {
             );
         }
 
-        let exactFare = findExactFare(busData, pickup, drop);
+        let exactFare = findExactFare(busData, pickup, drop, date);
         let finalFare = exactFare;
 
-        // If there is no configured exact fare, allow admin override with a valid fare
         if (exactFare === null) {
             const adminAllowed = await isAdminOrOwnerFromRequest(req);
 
@@ -449,7 +544,6 @@ export async function POST(req) {
             finalFare = sentFareOnly;
         }
 
-        // If frontend sent fare, validate it. Allow override if caller is authenticated admin/owner.
         if (body.fare !== undefined && body.fare !== null && body.fare !== "") {
             const sentFare = Number(body.fare);
 
@@ -607,7 +701,6 @@ export async function PUT(req) {
             updatedAt: new Date().toISOString(),
         };
 
-        // safer partial updates (supports clearing email)
         if (body.name !== undefined) {
             updates.name = name || existingVal.name || "";
         }
@@ -634,7 +727,7 @@ export async function PUT(req) {
                 );
             }
 
-            let exactFare = findExactFare(busData, finalPickup, finalDrop);
+            let exactFare = findExactFare(busData, finalPickup, finalDrop, date);
 
             if (exactFare === null) {
                 const adminAllowed = await isAdminOrOwnerFromRequest(req);
@@ -672,7 +765,6 @@ export async function PUT(req) {
             finalFare = exactFare;
         }
 
-        // allow admin to override fare via body.fare even when updating
         if (body.fare !== undefined && body.fare !== null && body.fare !== "") {
             const sentFare = Number(body.fare);
 
@@ -704,7 +796,6 @@ export async function PUT(req) {
                 }
             }
 
-            // if there was no fare from route calc and no pickup/drop change, still allow admin override
             if (currentFareForCompare === null) {
                 const allowed = await isAdminOrOwnerFromRequest(req);
 
@@ -723,7 +814,6 @@ export async function PUT(req) {
             updates.fare = finalFare;
         }
 
-        // allow payment fields update if sent
         if (body.payment !== undefined) {
             updates.payment = body.payment ? normalizeText(body.payment) : null;
         }
