@@ -159,10 +159,13 @@ export default function LoginPage() {
             showAppToast("success", "Login successful.");
 
             const role = data.user?.role;
+            const position = data.user?.position;
 
             setTimeout(() => {
                 if (role === "admin") {
                     router.push("/admin/booking");
+                } else if (role === "staff" || position) {
+                    router.push("/staff-portal/booking");
                 } else {
                     router.push("/user/booking");
                 }

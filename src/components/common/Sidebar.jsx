@@ -34,7 +34,7 @@ const roleLinks = {
 
     staff: [
         { href: "/staff-portal/bus", label: "View Bus", icon: BusFront },
-        { href: "/staff/schedule", label: "Schedule", icon: CalendarDays },
+        { href: "/staff-portal/schedule", label: "Schedule", icon: CalendarDays },
         { href: "/staff-portal/booking", label: "View Booking", icon: Ticket },
         { href: "/staff-portal/payment", label: "View Payment History", icon: ReceiptText },
         { href: "/notifications", label: "Notifications", icon: Bell },
