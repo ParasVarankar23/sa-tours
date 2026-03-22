@@ -188,7 +188,7 @@ export default function ForgotPasswordPage() {
                         variants={stagger}
                         initial="hidden"
                         animate="show"
-                        className="order-2 lg:order-1"
+                        className="hidden order-2 lg:order-1 lg:block"
                     >
                         <motion.p
                             variants={fadeUp}

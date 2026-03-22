@@ -118,14 +118,14 @@ export default function AboutPreview() {
                         viewport={{ once: true, amount: 0.15 }}
                         className="relative"
                     >
-                        <div className="grid gap-3 sm:grid-cols-[1.1fr_0.9fr]">
+                        <div className="grid gap-4 grid-cols-1 sm:grid-cols-[1.1fr_0.9fr]">
                             {/* BIG IMAGE */}
                             <motion.div
                                 variants={fadeUp}
                                 whileHover={{ y: -4 }}
                                 className="relative overflow-hidden rounded-[28px] bg-white p-2.5 shadow-lg shadow-slate-200/50"
                             >
-                                <div className="relative h-[260px] sm:h-[300px] lg:h-[340px] overflow-hidden rounded-[22px]">
+                                <div className="relative h-[220px] sm:h-[300px] lg:h-[340px] overflow-hidden rounded-[22px]">
                                     <Image
                                         src="/bus1.jpeg"
                                         alt="SA Tours Main Bus"
@@ -156,12 +156,12 @@ export default function AboutPreview() {
                                     whileHover={{ y: -4 }}
                                     className="overflow-hidden rounded-[24px] bg-white p-2.5 shadow-md shadow-slate-200/50"
                                 >
-                                    <div className="relative h-[120px] sm:h-[135px] lg:h-[150px] overflow-hidden rounded-[18px]">
+                                    <div className="relative h-[160px] sm:h-[145px] lg:h-[140px] overflow-hidden rounded-[18px]">
                                         <Image
                                             src="/sa3.jpeg"
                                             alt="SA Tours Bus Side View"
                                             fill
-                                            className="object-cover transition duration-500 hover:scale-105"
+                                            className="object-cover object-center lg:object-top transition duration-500 hover:scale-105"
                                         />
                                     </div>
                                 </motion.div>
@@ -171,12 +171,12 @@ export default function AboutPreview() {
                                     whileHover={{ y: -4 }}
                                     className="overflow-hidden rounded-[24px] bg-white p-2.5 shadow-md shadow-slate-200/50"
                                 >
-                                    <div className="relative h-[120px] sm:h-[135px] lg:h-[150px] overflow-hidden rounded-[18px]">
+                                    <div className="relative h-[160px] sm:h-[135px] lg:h-[170px] overflow-hidden rounded-[18px]">
                                         <Image
                                             src="/bus3.jpeg"
                                             alt="SA Tours Travel Vehicle"
                                             fill
-                                            className="object-cover transition duration-500 hover:scale-105"
+                                            className="object-cover object-center lg:object-top transition duration-500 hover:scale-105"
                                         />
                                     </div>
                                 </motion.div>
