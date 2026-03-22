@@ -151,8 +151,8 @@ function getPaymentMethod(booking = {}) {
     if (value.includes("card")) return "Card";
     if (value.includes("netbank")) return "Net Banking";
     if (value.includes("wallet")) return "Wallet";
-    if (value.includes("cash")) return "Cash";
-    if (value.includes("razorpay")) return "Razorpay";
+    if (value.includes("cash") || value.includes("offline") || value.includes("cod") || value.includes("cashcollected") || value.includes("cash_collected")) return "Cash";
+    if (value.includes("razorpay")) return "Online Payment";
 
     return raw;
 }
@@ -620,6 +620,7 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
             }`
         )}
             ${infoRow("Seat Number", booking.seatNo || "--")}
+            ${infoRow("Ticket No", booking.ticket || "--")}
             ${infoRow("Helpline", helpline)}
             ${infoRow("Bus Booking", bookingContact)}
             ${infoRow("Bus Contact", busContact)}
@@ -672,7 +673,18 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
 
     let attachments = [];
     try {
-        const PDFDocument = require("pdfkit");
+        let PDFDocument;
+        try {
+            const pdfMod = await import("pdfkit");
+            PDFDocument = pdfMod?.default || pdfMod;
+        } catch (impErr) {
+            try {
+                PDFDocument = require("pdfkit");
+            } catch (reqErr) {
+                throw new Error("pdfkit import failed");
+            }
+        }
+
         const doc = new PDFDocument({
             size: "A4",
             margin: 40,
@@ -729,6 +741,7 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
             ["Passenger Name", name || "Passenger"],
             ["Bus", `${booking.busNumber || "--"}${booking.routeName ? ` — ${booking.routeName}` : ""}`],
             ["Seat Number", booking.seatNo || "--"],
+            ["Ticket No", booking.ticket || "--"],
         ];
 
         let rowY = y + 14;

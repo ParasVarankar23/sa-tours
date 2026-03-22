@@ -15,14 +15,21 @@ export async function POST(req) {
         const payload = { amount: Math.round(amount * 100), currency, receipt, payment_capture: 1 };
 
         const basic = Buffer.from(keyId + ":" + keySecret).toString("base64");
-        const resp = await fetch("https://api.razorpay.com/v1/orders", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: "Basic " + basic,
-            },
-            body: JSON.stringify(payload),
-        });
+        let resp;
+        try {
+            resp = await fetch("https://api.razorpay.com/v1/orders", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: "Basic " + basic,
+                },
+                body: JSON.stringify(payload),
+            });
+        } catch (fetchErr) {
+            console.error("Razorpay create order fetch failed:", fetchErr);
+            const message = fetchErr?.message || "Network error contacting Razorpay";
+            return NextResponse.json({ success: false, error: message }, { status: 502 });
+        }
 
         const data = await resp.json();
         if (!resp.ok) {

@@ -619,6 +619,75 @@ export async function POST(req) {
         }
 
         const now = new Date().toISOString();
+        // Generate monthly ticket number (e.g. 26JAN0001)
+        let ticket = null;
+        try {
+            const y = String(date || "");
+            const yearShort = y.slice(2, 4); // '2026' -> '26'
+            const monthIdx = Number(y.slice(5, 7)) || 0;
+            const MONTHS = [
+                "JAN",
+                "FEB",
+                "MAR",
+                "APR",
+                "MAY",
+                "JUN",
+                "JUL",
+                "AUG",
+                "SEP",
+                "OCT",
+                "NOV",
+                "DEC",
+            ];
+            const mon = MONTHS[monthIdx - 1] || "UNK";
+            const key = `${yearShort}${mon}`;
+
+            // Try to reuse a cancelled ticket from the pool first (transactionally remove first child)
+            try {
+                const poolSnap = await db.ref(`ticketPools/${key}`).orderByKey().limitToFirst(1).once("value");
+                if (poolSnap.exists()) {
+                    const entries = Object.entries(poolSnap.val() || {});
+                    if (entries.length) {
+                        const childKey = entries[0][0];
+                        let popped = null;
+                        const childRef = db.ref(`ticketPools/${key}/${childKey}`);
+                        await childRef.transaction((curr) => {
+                            if (curr === null) return; // nothing to do
+                            popped = curr;
+                            return null; // remove
+                        });
+
+                        if (popped) {
+                            ticket = String(popped);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("Ticket pool reuse check failed:", e?.message || e);
+            }
+
+            if (!ticket) {
+                const counterRef = db.ref(`ticketCounters/${key}`);
+                const trans = await counterRef.transaction((curr) => {
+                    return (Number(curr) || 0) + 1;
+                });
+
+                const seq = (trans && trans.snapshot && Number(trans.snapshot.val())) ? Number(trans.snapshot.val()) : 1;
+                const seqStr = String(seq).padStart(4, "0");
+                ticket = `${yearShort}${mon}${seqStr}`;
+            }
+        } catch (e) {
+            console.error("Ticket generation failed:", e?.message || e);
+            ticket = null;
+        }
+
+        // Normalize payment method: prefer 'Online Payment' label for gateway payments
+        let paymentMethodNormalized = body.paymentMethod ? normalizeText(body.paymentMethod) : null;
+        if (paymentMethodNormalized && /razor/i.test(paymentMethodNormalized)) {
+            paymentMethodNormalized = "Online Payment";
+        } else if (!paymentMethodNormalized && body.payment) {
+            paymentMethodNormalized = "Online Payment";
+        }
 
         const payload = {
             name,
@@ -648,9 +717,9 @@ export async function POST(req) {
             createdAt: now,
             updatedAt: now,
             status: "booked",
-
             payment: body.payment ? normalizeText(body.payment) : null,
-            paymentMethod: body.paymentMethod ? normalizeText(body.paymentMethod) : null,
+            paymentMethod: paymentMethodNormalized,
+            ticket: ticket,
         };
 
         await seatRef.set(payload);
@@ -961,6 +1030,35 @@ export async function DELETE(req) {
         const existingVal = existing.val() || {};
 
         await seatRef.remove();
+
+        // if booking had a ticket, push it to monthly pool for reuse
+        try {
+            const t = existingVal.ticket;
+            if (t) {
+                const d = String(date || "");
+                const yearShort = d.slice(2, 4);
+                const monthIdx = Number(d.slice(5, 7)) || 0;
+                const MONTHS = [
+                    "JAN",
+                    "FEB",
+                    "MAR",
+                    "APR",
+                    "MAY",
+                    "JUN",
+                    "JUL",
+                    "AUG",
+                    "SEP",
+                    "OCT",
+                    "NOV",
+                    "DEC",
+                ];
+                const mon = MONTHS[monthIdx - 1] || "UNK";
+                const key = `${yearShort}${mon}`;
+                await db.ref(`ticketPools/${key}`).push(String(t));
+            }
+        } catch (e) {
+            console.warn("Failed to return ticket to pool:", e?.message || e);
+        }
 
         let emailResult = { attempted: false, sent: false, error: null };
 
