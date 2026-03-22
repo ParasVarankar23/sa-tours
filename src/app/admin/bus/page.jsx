@@ -56,6 +56,8 @@ export default function AdminBusPage() {
     const [showEditModal, setShowEditModal] = useState(false);
     const [showLayoutModal, setShowLayoutModal] = useState(false);
     const [layoutModalBus, setLayoutModalBus] = useState(null);
+    const [rulesModalOpen, setRulesModalOpen] = useState(false);
+    const [rulesModalBus, setRulesModalBus] = useState(null);
 
     const [formData, setFormData] = useState(initialForm);
     const [editData, setEditData] = useState(initialForm);
@@ -1158,162 +1160,328 @@ export default function AdminBusPage() {
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Bus
-                                </th>
-                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Route
-                                </th>
-                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Time
-                                </th>
-                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Pickup / Drop
-                                </th>
-                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Layout
-                                </th>
-                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Fare Rules
-                                </th>
-                                <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
+                <>
+                    {/* =========================
+      MOBILE VIEW ONLY
+      (Desktop unchanged)
+     ========================= */}
+                    <div className="space-y-4 p-4 md:hidden">
+                        {loading ? (
+                            <div className="rounded-3xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 shadow-sm">
+                                Loading buses...
+                            </div>
+                        ) : paginatedBuses.length === 0 ? (
+                            <div className="rounded-3xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 shadow-sm">
+                                No buses found.
+                            </div>
+                        ) : (
+                            paginatedBuses.map((bus) => (
+                                <div
+                                    key={bus.busId}
+                                    className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+                                >
+                                    {/* Top Section */}
+                                    <div className="flex flex-col gap-4">
+                                        <div className="flex items-start gap-3">
+                                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50">
+                                                <BusFront className="h-6 w-6 text-[#f97316]" />
+                                            </div>
 
-                        <tbody className="divide-y divide-slate-100">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={7} className="px-5 py-12 text-center text-slate-500">
-                                        Loading buses...
-                                    </td>
-                                </tr>
-                            ) : paginatedBuses.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} className="px-5 py-12 text-center text-slate-500">
-                                        No buses found.
-                                    </td>
-                                </tr>
-                            ) : (
-                                paginatedBuses.map((bus) => (
-                                    <tr key={bus.busId} className="transition hover:bg-orange-50/30">
-                                        <td className="px-5 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50">
-                                                    <BusFront className="h-5 w-5 text-[#f97316]" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-semibold text-slate-900">{bus.busNumber}</p>
-                                                    <p className="text-xs text-slate-500">
-                                                        {bus.busName} • {bus.busType}
-                                                    </p>
+                                            <div className="min-w-0 flex-1">
+                                                <h3 className="text-xl font-bold tracking-tight text-slate-900 leading-tight break-words">
+                                                    {bus.busNumber}
+                                                </h3>
+
+                                                <p className="mt-1 text-sm text-slate-500 leading-relaxed break-words">
+                                                    {bus.busName} • {bus.busType}
+                                                </p>
+
+                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setLayoutModalBus(bus);
+                                                            setShowLayoutModal(true);
+                                                        }}
+                                                        className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]"
+                                                    >
+                                                        {bus.seatLayout} Seats
+                                                    </button>
+
+                                                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                                                        {bus.busType}
+                                                    </span>
                                                 </div>
                                             </div>
-                                        </td>
+                                        </div>
+                                    </div>
 
-                                        <td className="px-5 py-4">
-                                            <p className="text-sm font-medium text-slate-800">{bus.routeName}</p>
-                                        </td>
+                                    {/* Route + Time */}
+                                    <div className="mt-5 grid grid-cols-1 gap-3">
+                                        <div className="rounded-2xl bg-slate-50 p-4">
+                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                Route
+                                            </p>
+                                            <p className="mt-2 text-base font-semibold text-slate-900 break-words">
+                                                {bus.routeName}
+                                            </p>
+                                        </div>
 
-                                        <td className="px-5 py-4">
-                                            <p className="text-sm text-slate-700">
+                                        <div className="rounded-2xl bg-slate-50 p-4">
+                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                Time
+                                            </p>
+                                            <p className="mt-2 text-sm font-medium text-slate-800">
                                                 {bus.startTime} → {bus.endTime}
                                             </p>
-                                        </td>
+                                        </div>
+                                    </div>
 
-                                        <td className="px-5 py-4">
-                                            <div className="space-y-1">
-                                                <p className="text-xs text-slate-600">
-                                                    Pickup: <span className="font-semibold">{bus.pickupPoints?.length || 0}</span>
-                                                </p>
-                                                <p className="text-xs text-slate-600">
-                                                    Drop: <span className="font-semibold">{bus.dropPoints?.length || 0}</span>
-                                                </p>
-                                            </div>
-                                        </td>
+                                    {/* Pickup / Drop */}
+                                    <div className="mt-4 grid grid-cols-2 gap-3">
+                                        <div className="rounded-2xl bg-slate-50 p-4 text-center">
+                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                Pickup
+                                            </p>
+                                            <p className="mt-2 text-lg font-bold text-slate-900">
+                                                {bus.pickupPoints?.length || 0}
+                                            </p>
+                                        </div>
 
-                                        <td className="px-5 py-4">
-                                            <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
-                                                <button
-                                                    onClick={() => {
-                                                        setLayoutModalBus(bus);
-                                                        setShowLayoutModal(true);
-                                                    }}
-                                                    className="cursor-pointer"
-                                                >
-                                                    {bus.seatLayout} Seats
-                                                </button>
-                                            </span>
-                                        </td>
+                                        <div className="rounded-2xl bg-slate-50 p-4 text-center">
+                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                Drop
+                                            </p>
+                                            <p className="mt-2 text-lg font-bold text-slate-900">
+                                                {bus.dropPoints?.length || 0}
+                                            </p>
+                                        </div>
+                                    </div>
 
-                                        <td className="px-5 py-4">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                                                    {(bus.fareRulesRaw?.length || bus.fareRules?.length || 0)} Rules
+                                    {/* Fare Rules */}
+                                    <div className="mt-4 flex flex-wrap gap-2">
+                                        <button
+                                            onClick={() => {
+                                                setRulesModalBus(bus);
+                                                setRulesModalOpen(true);
+                                            }}
+                                            className="inline-flex rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                                        >
+                                            {(bus.fareRulesRaw?.length || bus.fareRules?.length || 0)} Rules
+                                        </button>
+
+                                        {(bus.fareRulesRaw?.some((r) => r.fareStartDate || r.fareEndDate) ||
+                                            bus.fareRules?.some((r) => r.fareStartDate || r.fareEndDate)) && (
+                                                <span className="inline-flex rounded-full bg-orange-100 px-3 py-2 text-xs font-semibold text-[#f97316]">
+                                                    Date Based
                                                 </span>
+                                            )}
 
-                                                {(bus.fareRulesRaw?.some((r) => r.fareStartDate || r.fareEndDate) ||
-                                                    bus.fareRules?.some((r) => r.fareStartDate || r.fareEndDate)) && (
-                                                        <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
-                                                            Date Based
-                                                        </span>
-                                                    )}
+                                        {(() => {
+                                            const bf = computeBaseFareForBus(bus);
+                                            return (
+                                                <span className="inline-flex items-center rounded-full bg-green-50 px-3 py-2 text-xs font-semibold text-green-700">
+                                                    Base: {bf ? `₹${bf}` : "N/A"}
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
 
-                                                {/* show a base fare preview derived from fare.js when available */}
-                                                {(() => {
-                                                    const bf = computeBaseFareForBus(bus);
-                                                    return (
-                                                        <span className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                                                            Base: {bf ? `₹${bf}` : "N/A"}
-                                                        </span>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </td>
+                                    {/* Actions */}
+                                    <div className="mt-5 grid grid-cols-1 gap-3">
+                                        <button
+                                            onClick={() => openEditModal(bus)}
+                                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-[#f97316]"
+                                        >
+                                            <Pencil className="h-4 w-4" />
+                                            Edit
+                                        </button>
 
-                                        <td className="px-5 py-4">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button
-                                                    onClick={() => openEditModal(bus)}
-                                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-[#f97316]"
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                    Edit
-                                                </button>
+                                        <button
+                                            onClick={() => {
+                                                router.push(`/admin/bus/fares?busId=${encodeURIComponent(bus.busId)}`);
+                                            }}
+                                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                        >
+                                            View fares
+                                        </button>
 
+                                        <button
+                                            onClick={() => handleDeleteBus(bus.busId)}
+                                            disabled={deletingId === bus.busId}
+                                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 px-4 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            {deletingId === bus.busId ? "Deleting..." : "Delete"}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
 
+                    {/* =========================
+      DESKTOP / TABLET VIEW
+      (UNCHANGED - your original table)
+     ========================= */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="min-w-full">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Bus
+                                    </th>
+                                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Route
+                                    </th>
+                                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Time
+                                    </th>
+                                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Pickup / Drop
+                                    </th>
+                                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Layout
+                                    </th>
+                                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Fare Rules
+                                    </th>
+                                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
 
-                                                <button
-                                                    onClick={() => {
-                                                        // navigate to fare viewer with preselected bus
-                                                        router.push(`/admin/bus/fares?busId=${encodeURIComponent(bus.busId)}`);
-                                                    }}
-                                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                                                >
-                                                    View fares
-                                                </button>
-
-                                                <button
-                                                    onClick={() => handleDeleteBus(bus.busId)}
-                                                    disabled={deletingId === bus.busId}
-                                                    className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-60"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                    {deletingId === bus.busId ? "Deleting..." : "Delete"}
-                                                </button>
-                                            </div>
+                            <tbody className="divide-y divide-slate-100">
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={7} className="px-5 py-12 text-center text-slate-500">
+                                            Loading buses...
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                ) : paginatedBuses.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7} className="px-5 py-12 text-center text-slate-500">
+                                            No buses found.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    paginatedBuses.map((bus) => (
+                                        <tr key={bus.busId} className="transition hover:bg-orange-50/30">
+                                            <td className="px-5 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50">
+                                                        <BusFront className="h-5 w-5 text-[#f97316]" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-semibold text-slate-900">{bus.busNumber}</p>
+                                                        <p className="text-xs text-slate-500">
+                                                            {bus.busName} • {bus.busType}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <td className="px-5 py-4">
+                                                <p className="text-sm font-medium text-slate-800">{bus.routeName}</p>
+                                            </td>
+
+                                            <td className="px-5 py-4">
+                                                <p className="text-sm text-slate-700">
+                                                    {bus.startTime} → {bus.endTime}
+                                                </p>
+                                            </td>
+
+                                            <td className="px-5 py-4">
+                                                <div className="flex flex-wrap items-center gap-3 flex-nowrap whitespace-nowrap">
+                                                    <p className="text-xs text-slate-600">
+                                                        Pickup: <span className="font-semibold">{bus.pickupPoints?.length || 0}</span>
+                                                    </p>
+                                                    <p className="text-xs text-slate-600">
+                                                        Drop: <span className="font-semibold">{bus.dropPoints?.length || 0}</span>
+                                                    </p>
+                                                </div>
+                                            </td>
+
+                                            <td className="px-5 py-4">
+                                                <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
+                                                    <button
+                                                        onClick={() => {
+                                                            setLayoutModalBus(bus);
+                                                            setShowLayoutModal(true);
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        {bus.seatLayout} Seats
+                                                    </button>
+                                                </span>
+                                            </td>
+
+                                            <td className="px-5 py-4">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setRulesModalBus(bus);
+                                                            setRulesModalOpen(true);
+                                                        }}
+                                                        className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                                                    >
+                                                        {(bus.fareRulesRaw?.length || bus.fareRules?.length || 0)} Rules
+                                                    </button>
+
+                                                    {(bus.fareRulesRaw?.some((r) => r.fareStartDate || r.fareEndDate) ||
+                                                        bus.fareRules?.some((r) => r.fareStartDate || r.fareEndDate)) && (
+                                                            <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
+                                                                Date Based
+                                                            </span>
+                                                        )}
+
+                                                    {(() => {
+                                                        const bf = computeBaseFareForBus(bus);
+                                                        return (
+                                                            <span className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                                                                Base: {bf ? `₹${bf}` : "N/A"}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            </td>
+
+                                            <td className="px-5 py-4">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => openEditModal(bus)}
+                                                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-[#f97316]"
+                                                    >
+                                                        <Pencil className="h-4 w-4" />
+                                                        Edit
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => {
+                                                            router.push(`/admin/bus/fares?busId=${encodeURIComponent(bus.busId)}`);
+                                                        }}
+                                                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                                    >
+                                                        View fares
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => handleDeleteBus(bus.busId)}
+                                                        disabled={deletingId === bus.busId}
+                                                        className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                        {deletingId === bus.busId ? "Deleting..." : "Delete"}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
 
                 {!loading && filteredBuses.length > 0 && (
                     <div className="flex flex-col gap-4 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1434,6 +1602,60 @@ export default function AdminBusPage() {
                                 cabins={layoutModalBus.cabins || []}
                                 compact={false}
                             />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {rulesModalOpen && rulesModalBus && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-4">
+                    <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">Fare Rules — {rulesModalBus.busNumber}</h3>
+                                <p className="text-sm text-slate-500">{rulesModalBus.busName} • {rulesModalBus.routeName}</p>
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    setRulesModalOpen(false);
+                                    setRulesModalBus(null);
+                                }}
+                                className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="mt-4 max-h-[60vh] overflow-y-auto space-y-3">
+                            {(() => {
+                                const rules = Array.isArray(rulesModalBus.fareRulesRaw)
+                                    ? rulesModalBus.fareRulesRaw
+                                    : Array.isArray(rulesModalBus.fareRules)
+                                        ? rulesModalBus.fareRules
+                                        : [];
+
+                                if (!rules || rules.length === 0) {
+                                    return <div className="text-sm text-slate-500">No fare rules defined for this bus.</div>;
+                                }
+
+                                return rules.map((r, i) => (
+                                    <div key={i} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="font-semibold text-slate-900">{r.name || `Rule ${i + 1}`}</div>
+                                            {r.baseFare !== undefined || r.fare !== undefined ? (
+                                                <div className="text-sm font-semibold text-green-700">{r.baseFare || r.fare ? `₹${r.baseFare || r.fare}` : null}</div>
+                                            ) : null}
+                                        </div>
+
+                                        {r.fareStartDate || r.fareEndDate ? (
+                                            <div className="mt-1 text-xs text-slate-500">{r.fareStartDate || ""}{r.fareStartDate && r.fareEndDate ? " — " : ""}{r.fareEndDate || ""}</div>
+                                        ) : null}
+
+                                        {r.note ? <div className="mt-2 text-sm text-slate-700">{r.note}</div> : null}
+                                    </div>
+                                ));
+                            })()}
                         </div>
                     </div>
                 </div>

@@ -34,16 +34,14 @@ export default function NotificationsPage() {
 
             try {
                 const params = new URLSearchParams(window.location.search);
-                if (params.get("show") === "all") {
-                    setItemsPerPage(list.length || 1);
-                } else {
-                    setItemsPerPage(10);
-                }
+                // default to 10 items per page always; support ?page= N to navigate directly
+                setItemsPerPage(10);
+                const p = parseInt(params.get("page"), 10);
+                setCurrentPage(!isNaN(p) && p >= 1 ? Math.max(1, p) : 1);
             } catch {
                 setItemsPerPage(10);
+                setCurrentPage(1);
             }
-
-            setCurrentPage(1);
         } catch (err) {
             console.error(err);
             showAppToast("error", err.message || "Failed to load notifications");

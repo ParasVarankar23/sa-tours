@@ -433,105 +433,202 @@ export default function AdminStaffPage() {
                 </div>
 
                 {/* Table */}
-                <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Staff
-                                </th>
-                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Email
-                                </th>
-                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Phone
-                                </th>
-                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Position
-                                </th>
-                                <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
+                <>
+                    {/* =========================
+      MOBILE VIEW ONLY
+      (Desktop unchanged)
+     ========================= */}
+                    <div className="space-y-4 p-4 md:hidden">
+                        {loading ? (
+                            <div className="rounded-3xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 shadow-sm">
+                                Loading staff...
+                            </div>
+                        ) : paginatedStaff.length === 0 ? (
+                            <div className="rounded-3xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 shadow-sm">
+                                No staff found.
+                            </div>
+                        ) : (
+                            paginatedStaff.map((staff) => (
+                                <div
+                                    key={staff.uid}
+                                    className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+                                >
+                                    {/* Top Section */}
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 overflow-hidden">
+                                            {staff.photoUrl ? (
+                                                <img
+                                                    src={staff.photoUrl}
+                                                    alt={staff.name || "staff"}
+                                                    className="h-12 w-12 rounded-2xl object-cover"
+                                                />
+                                            ) : (
+                                                <UserRound className="h-6 w-6 text-[#f97316]" />
+                                            )}
+                                        </div>
 
-                        <tbody className="divide-y divide-slate-100">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={5} className="px-5 py-12 text-center text-slate-500">
-                                        Loading staff...
-                                    </td>
-                                </tr>
-                            ) : paginatedStaff.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-5 py-12 text-center text-slate-500">
-                                        No staff found.
-                                    </td>
-                                </tr>
-                            ) : (
-                                paginatedStaff.map((staff) => (
-                                    <tr key={staff.uid} className="hover:bg-orange-50/30 transition">
-                                        <td className="px-5 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50">
-                                                    {staff.photoUrl ? (
-                                                        <img
-                                                            src={staff.photoUrl}
-                                                            alt={staff.name || "staff"}
-                                                            className="h-11 w-11 rounded-2xl object-cover"
-                                                        />
-                                                    ) : (
-                                                        <UserRound className="h-5 w-5 text-[#f97316]" />
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <p className="font-semibold text-slate-900">
-                                                        {staff.name || "-"}
-                                                    </p>
-                                                </div>
+                                        <div className="min-w-0 flex-1">
+                                            <h3 className="text-lg font-bold text-slate-900 break-words">
+                                                {staff.name || "-"}
+                                            </h3>
+
+                                            <div className="mt-2">
+                                                <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
+                                                    {staff.position || "-"}
+                                                </span>
                                             </div>
-                                        </td>
+                                        </div>
+                                    </div>
 
-                                        <td className="px-5 py-4 text-sm text-slate-700">
-                                            {staff.email || "-"}
-                                        </td>
+                                    {/* Info Section */}
+                                    <div className="mt-4 space-y-3">
+                                        <div className="rounded-2xl bg-slate-50 p-3">
+                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                Email
+                                            </p>
+                                            <p className="mt-1 text-sm text-slate-800 break-all">
+                                                {staff.email || "-"}
+                                            </p>
+                                        </div>
 
-                                        <td className="px-5 py-4 text-sm text-slate-700">
-                                            {staff.phoneNumber || "-"}
-                                        </td>
+                                        <div className="rounded-2xl bg-slate-50 p-3">
+                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                Phone
+                                            </p>
+                                            <p className="mt-1 text-sm font-medium text-slate-800 break-words">
+                                                {staff.phoneNumber || "-"}
+                                            </p>
+                                        </div>
+                                    </div>
 
-                                        <td className="px-5 py-4">
-                                            <span className="inline-flex items-center whitespace-nowrap rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
-                                                {staff.position || "-"}
-                                            </span>
-                                        </td>
+                                    {/* Actions */}
+                                    <div className="mt-5 grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={() => openEditModal(staff)}
+                                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-[#f97316]"
+                                        >
+                                            <Pencil className="h-4 w-4" />
+                                            Edit
+                                        </button>
 
-                                        <td className="px-5 py-4">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button
-                                                    onClick={() => openEditModal(staff)}
-                                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-[#f97316]"
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                    Edit
-                                                </button>
+                                        <button
+                                            onClick={() => handleDeleteStaff(staff.uid)}
+                                            disabled={deletingId === staff.uid || confirmOpen}
+                                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 px-4 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            {deletingId === staff.uid ? "Deleting..." : "Delete"}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
 
-                                                <button
-                                                    onClick={() => handleDeleteStaff(staff.uid)}
-                                                    disabled={deletingId === staff.uid || confirmOpen}
-                                                    className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-60"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                    {deletingId === staff.uid ? "Deleting..." : "Delete"}
-                                                </button>
-                                            </div>
+                    {/* =========================
+      DESKTOP / TABLET VIEW
+      (UNCHANGED - your original table)
+     ========================= */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="min-w-full">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Staff
+                                    </th>
+                                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Email
+                                    </th>
+                                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Phone
+                                    </th>
+                                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Position
+                                    </th>
+                                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody className="divide-y divide-slate-100">
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-5 py-12 text-center text-slate-500">
+                                            Loading staff...
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                ) : paginatedStaff.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-5 py-12 text-center text-slate-500">
+                                            No staff found.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    paginatedStaff.map((staff) => (
+                                        <tr key={staff.uid} className="hover:bg-orange-50/30 transition">
+                                            <td className="px-5 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50">
+                                                        {staff.photoUrl ? (
+                                                            <img
+                                                                src={staff.photoUrl}
+                                                                alt={staff.name || "staff"}
+                                                                className="h-11 w-11 rounded-2xl object-cover"
+                                                            />
+                                                        ) : (
+                                                            <UserRound className="h-5 w-5 text-[#f97316]" />
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-semibold text-slate-900">
+                                                            {staff.name || "-"}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <td className="px-5 py-4 text-sm text-slate-700">
+                                                {staff.email || "-"}
+                                            </td>
+
+                                            <td className="px-5 py-4 text-sm text-slate-700">
+                                                {staff.phoneNumber || "-"}
+                                            </td>
+
+                                            <td className="px-5 py-4">
+                                                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
+                                                    {staff.position || "-"}
+                                                </span>
+                                            </td>
+
+                                            <td className="px-5 py-4">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => openEditModal(staff)}
+                                                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-[#f97316]"
+                                                    >
+                                                        <Pencil className="h-4 w-4" />
+                                                        Edit
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => handleDeleteStaff(staff.uid)}
+                                                        disabled={deletingId === staff.uid || confirmOpen}
+                                                        className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                        {deletingId === staff.uid ? "Deleting..." : "Delete"}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
 
                 {/* Pagination */}
                 {!loading && filteredStaff.length > 0 && (

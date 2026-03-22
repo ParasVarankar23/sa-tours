@@ -1642,7 +1642,7 @@
       align-items: flex-end;
       min-height: 10px;
       padding: 0 1px 1px 1px;
-      font-size: 6px;
+      font-size: 5px;
       line-height: 1;
       white-space: nowrap;
       overflow: hidden;
@@ -2189,34 +2189,41 @@
                     >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-orange-100 bg-orange-50">
-                              <BusFront className="h-7 w-7 text-[#f97316]" />
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                            {/* Bus Icon */}
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-orange-100 bg-orange-50 sm:h-14 sm:w-14">
+                              <BusFront className="h-6 w-6 text-[#f97316] sm:h-7 sm:w-7" />
                             </div>
 
+                            {/* Right Content */}
                             <div className="min-w-0 flex-1">
-                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                <div className="min-w-0">
-                                  <h3 className="truncate text-2xl font-bold tracking-tight text-slate-900">
+                              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+
+                                {/* Bus Info */}
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="break-words text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
                                     {bus.busNumber}
                                   </h3>
-                                  <p className="mt-1 text-sm text-slate-500 md:text-base">
+
+                                  <p className="mt-1 text-sm text-slate-500 sm:text-base break-words">
                                     {bus.busName} • {bus.busType}
                                   </p>
 
                                   <div className="mt-3 flex flex-wrap gap-2">
-                                    <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316]">
+                                    <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[#f97316] sm:text-sm">
                                       {String(bus.seatLayout || "")} Seats
                                     </span>
-                                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+
+                                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 sm:text-sm">
                                       {bus.busType}
                                     </span>
                                   </div>
                                 </div>
 
+                                {/* View Seats Button */}
                                 <div className="w-full lg:w-auto">
                                   <button
-                                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] lg:w-auto"
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f97316] px-4 py-3 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-[#ea580c] sm:px-5 lg:w-auto"
                                     onClick={() => openBusModal(bus)}
                                   >
                                     <Eye className="h-4 w-4" />
@@ -2274,15 +2281,29 @@
         {selectedBus && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
-              <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-3xl border-b border-slate-200 bg-white px-6 py-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#f97316]">
+              <div className="sticky top-0 z-10 rounded-t-3xl border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+                <div className="relative pr-12">
+                  {/* Close Button - Fixed Top Right */}
+                  <button
+                    onClick={closeBusModal}
+                    className="absolute right-0 top-0 rounded-2xl p-2 text-slate-500 transition hover:bg-slate-100"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5 sm:h-6 sm:w-6" />
+                  </button>
+
+                  {/* Header Content */}
+                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.22em] sm:tracking-[0.25em] text-[#f97316]">
                     SEAT LAYOUT VIEW
                   </p>
-                  <h2 className="mt-1 text-xl font-bold text-slate-900">
-                    {selectedBus.busNumber} — {selectedBus.routeName}
+
+                  <h2 className="mt-2 text-xl sm:text-2xl font-bold leading-tight text-slate-900">
+                    <span className="block sm:inline">{selectedBus.busNumber}</span>
+                    <span className="hidden sm:inline"> — </span>
+                    <span className="block sm:inline break-words">{selectedBus.routeName}</span>
                   </h2>
-                  <p className="mt-1 text-sm text-slate-500">
+
+                  <p className="mt-2 text-xs sm:text-sm leading-relaxed text-slate-500 break-words">
                     {`${resolvePointValue(selectedBus.startPoint, "--")} → ${resolvePointValue(
                       selectedBus.endPoint,
                       "--"
@@ -2290,26 +2311,20 @@
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                {/* Buttons */}
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
                   <button
                     onClick={handlePrintSeatTemplate}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    className="w-full sm:w-auto rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
                     Print Template
                   </button>
 
                   <button
                     onClick={handleDownloadSeatTemplate}
-                    className="rounded-2xl bg-[#f97316] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea580c]"
+                    className="w-full sm:w-auto rounded-2xl bg-[#f97316] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#ea580c]"
                   >
                     Download PDF
-                  </button>
-
-                  <button
-                    onClick={closeBusModal}
-                    className="rounded-2xl p-2 text-slate-500 transition hover:bg-slate-100"
-                  >
-                    <X className="h-6 w-6" />
                   </button>
                 </div>
               </div>

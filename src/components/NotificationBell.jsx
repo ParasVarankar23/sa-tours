@@ -108,15 +108,24 @@ export default function NotificationBell({ pollInterval = 10000 }) {
             </button>
 
             {open && (
-                <div className="absolute right-0 z-50 mt-3 w-[92vw] max-w-[92vw] rounded-3xl border border-slate-200 bg-white shadow-2xl sm:w-[380px] sm:max-w-[380px]">
+                <div
+                    className="
+    fixed left-1/2 top-[88px] z-[9999]
+    w-[calc(100vw-24px)] max-w-[calc(100vw-24px)]
+    -translate-x-1/2
+    rounded-3xl border border-slate-200 bg-white shadow-2xl
+    sm:absolute sm:right-0 sm:left-auto sm:top-full sm:mt-3
+    sm:w-[380px] sm:max-w-[380px] sm:translate-x-0
+  "
+                >
                     <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                         <div>
                             <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
                             <p className="text-xs text-slate-500">Recent updates & alerts • {meta.total || 0} total</p>
                         </div>
                         <div className="flex items-center gap-2">
-                            <button onClick={markAllRead} className="rounded-xl px-3 py-1.5 text-xs font-semibold text-orange-600 transition hover:bg-orange-50">Mark all read</button>
-                            <button onClick={() => { setOpen(false); window.open('/notifications?show=all', '_blank'); }} className="rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">View all</button>
+                            <button onClick={markAllRead} className="rounded-xl px-3 py-1.5 text-xs font-semibold text-orange-600 transition hover:bg-orange-50 flex-nowrap whitespace-nowrap">Mark all read</button>
+                            <button onClick={() => { setOpen(false); window.open('/notifications?show=all&page=1', '_blank'); }} className="rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 flex-nowrap whitespace-nowrap">View all</button>
                         </div>
                     </div>
 
@@ -147,7 +156,7 @@ export default function NotificationBell({ pollInterval = 10000 }) {
                                             {!n.read && (
                                                 <button onClick={(e) => { e.stopPropagation(); markRead(n); }} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-white">Mark as read</button>
                                             )}
-                                            <button onClick={(e) => { e.stopPropagation(); setOpen(false); window.open('/notifications?show=all', '_blank'); }} className="rounded-xl bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-orange-600">Open</button>
+                                            <button onClick={(e) => { e.stopPropagation(); setOpen(false); window.open('/notifications?show=all&page=1', '_blank'); }} className="rounded-xl bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-orange-600">Open</button>
                                         </div>
                                     </div>
                                 ))}

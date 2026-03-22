@@ -496,100 +496,228 @@ export default function AdminPaymentPage() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="min-w-[1200px] w-full text-sm">
-                  <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50">
-                    <tr className="text-left">
-                      <th className="px-4 py-4 font-semibold text-slate-700">Passenger</th>
-                      <th className="px-4 py-4 font-semibold text-slate-700">Phone</th>
-                      <th className="px-4 py-4 font-semibold text-slate-700">Email</th>
-                      <th className="px-4 py-4 font-semibold text-slate-700">Pickup</th>
-                      <th className="px-4 py-4 font-semibold text-slate-700">Drop</th>
-                      <th className="px-4 py-4 font-semibold text-slate-700">Amount</th>
-                      <th className="px-4 py-4 font-semibold text-slate-700">Date</th>
-                      <th className="px-4 py-4 font-semibold text-slate-700">Status</th>
-                      <th className="px-4 py-4 font-semibold text-slate-700">Action</th>
-                    </tr>
-                  </thead>
+                  <>
+                    {/* =========================
+      MOBILE VIEW ONLY
+      ========================= */}
+                    <div className="space-y-4 md:hidden">
+                      {visiblePayments.length === 0 ? (
+                        <div className="rounded-3xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm">
+                          No payments found
+                        </div>
+                      ) : (
+                        visiblePayments.map((p, idx) => {
+                          const amount = getAmount(p);
+                          const currency = getCurrency(p);
+                          const date = getDate(p);
+                          const user = getUserData(p);
 
-                  <tbody>
-                    {visiblePayments.map((p, idx) => {
-                      const amount = getAmount(p);
-                      const currency = getCurrency(p);
-                      const date = getDate(p);
-                      const user = getUserData(p);
-
-                      return (
-                        <tr
-                          key={p.id || idx}
-                          className="border-b border-slate-100 transition hover:bg-orange-50/40"
-                        >
-                          <td className="px-4 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
-                                <User className="h-5 w-5 text-orange-600" />
-                              </div>
-                              <div>
-                                <p className="font-semibold text-slate-900">{user.name}</p>
-                                <p className="text-xs text-slate-500">Passenger</p>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-4 text-slate-700">{user.phone}</td>
-
-                          <td className="px-4 py-4 text-slate-700 break-all">{user.email}</td>
-
-                          <td className="px-4 py-4">
-                            <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700">
-                              <MapPin className="h-3.5 w-3.5" />
-                              {user.pickup}
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-4">
-                            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-                              <MapPin className="h-3.5 w-3.5" />
-                              {user.drop}
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-4">
-                            <div className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700">
-                              <IndianRupee className="h-3.5 w-3.5" />
-                              {amount.toFixed(2)} {currency.toUpperCase()}
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-4">
-                            <div className="flex items-start gap-2 text-slate-700">
-                              <Calendar className="mt-0.5 h-4 w-4 text-slate-400" />
-                              <span>{formatDate(date)}</span>
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-4">
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Verified
-                            </span>
-                          </td>
-
-                          <td className="px-4 py-4">
-                            <button
-                              onClick={() => setSelectedPayment(p)}
-                              className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-600"
+                          return (
+                            <div
+                              key={p.id || idx}
+                              className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
                             >
-                              <Eye className="h-4 w-4" />
-                              View Details
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                              {/* Passenger Top */}
+                              <div className="flex items-start gap-3">
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-100">
+                                  <User className="h-6 w-6 text-orange-600" />
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="text-lg font-bold text-slate-900 break-words">
+                                    {user.name}
+                                  </h3>
+                                  <p className="mt-1 text-sm text-slate-500">Passenger</p>
+
+                                  <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    Verified
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Contact Info */}
+                              <div className="mt-4 space-y-3">
+                                <div className="rounded-2xl bg-slate-50 p-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                    Phone
+                                  </p>
+                                  <p className="mt-1 text-sm font-medium text-slate-800 break-words">
+                                    {user.phone || "-"}
+                                  </p>
+                                </div>
+
+                                <div className="rounded-2xl bg-slate-50 p-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                    Email
+                                  </p>
+                                  <p className="mt-1 text-sm text-slate-800 break-all">
+                                    {user.email || "-"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Pickup / Drop */}
+                              <div className="mt-4 grid grid-cols-1 gap-3">
+                                <div className="rounded-2xl bg-orange-50 p-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider text-orange-600">
+                                    Pickup
+                                  </p>
+                                  <div className="mt-1 flex items-start gap-2 text-sm font-medium text-orange-700">
+                                    <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span className="break-words">{user.pickup || "-"}</span>
+                                  </div>
+                                </div>
+
+                                <div className="rounded-2xl bg-emerald-50 p-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600">
+                                    Drop
+                                  </p>
+                                  <div className="mt-1 flex items-start gap-2 text-sm font-medium text-emerald-700">
+                                    <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span className="break-words">{user.drop || "-"}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Amount + Date */}
+                              <div className="mt-4 grid grid-cols-2 gap-3">
+                                <div className="rounded-2xl bg-slate-50 p-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                    Amount
+                                  </p>
+                                  <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 ">
+                                    <IndianRupee className="h-3.5 w-3.5" />
+                                    {amount.toFixed(2)} {currency.toUpperCase()}
+                                  </div>
+                                </div>
+
+                                <div className="rounded-2xl bg-slate-50 p-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                    Date
+                                  </p>
+                                  <div className="mt-2 flex items-start gap-2 text-sm text-slate-700">
+                                    <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                                    <span>{formatDate(date)}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Action */}
+                              <div className="mt-5">
+                                <button
+                                  onClick={() => setSelectedPayment(p)}
+                                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-600"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  View Details
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* =========================
+      DESKTOP / TABLET VIEW
+      (UNCHANGED)
+      ========================= */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="min-w-[1200px] w-full text-sm">
+                        <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50">
+                          <tr className="text-left">
+                            <th className="px-4 py-4 font-semibold text-slate-700">Passenger</th>
+                            <th className="px-4 py-4 font-semibold text-slate-700">Phone</th>
+                            <th className="px-4 py-4 font-semibold text-slate-700">Email</th>
+                            <th className="px-4 py-4 font-semibold text-slate-700">Pickup</th>
+                            <th className="px-4 py-4 font-semibold text-slate-700">Drop</th>
+                            <th className="px-4 py-4 font-semibold text-slate-700">Amount</th>
+                            <th className="px-4 py-4 font-semibold text-slate-700">Date</th>
+                            <th className="px-4 py-4 font-semibold text-slate-700">Status</th>
+                            <th className="px-4 py-4 font-semibold text-slate-700">Action</th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {visiblePayments.map((p, idx) => {
+                            const amount = getAmount(p);
+                            const currency = getCurrency(p);
+                            const date = getDate(p);
+                            const user = getUserData(p);
+
+                            return (
+                              <tr
+                                key={p.id || idx}
+                                className="border-b border-slate-100 transition hover:bg-orange-50/40"
+                              >
+                                <td className="px-4 py-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
+                                      <User className="h-5 w-5 text-orange-600" />
+                                    </div>
+                                    <div>
+                                      <p className="font-semibold text-slate-900">{user.name}</p>
+                                      <p className="text-xs text-slate-500">Passenger</p>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td className="px-4 py-4 text-slate-700">{user.phone}</td>
+
+                                <td className="px-4 py-4 text-slate-700 break-all">{user.email}</td>
+
+                                <td className="px-4 py-4">
+                                  <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700">
+                                    <MapPin className="h-3.5 w-3.5" />
+                                    {user.pickup}
+                                  </div>
+                                </td>
+
+                                <td className="px-4 py-4">
+                                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                                    <MapPin className="h-3.5 w-3.5" />
+                                    {user.drop}
+                                  </div>
+                                </td>
+
+                                <td className="px-4 py-4">
+                                  <div className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 flex-nowrap whitespace-nowrap">
+                                    <IndianRupee className="h-3.5 w-3.5" />
+                                    {amount.toFixed(2)} {currency.toUpperCase()}
+                                  </div>
+                                </td>
+
+                                <td className="px-4 py-4">
+                                  <div className="flex items-start gap-2 text-slate-700">
+                                    <Calendar className="mt-0.5 h-4 w-4 text-slate-400" />
+                                    <span>{formatDate(date)}</span>
+                                  </div>
+                                </td>
+
+                                <td className="px-4 py-4">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    Verified
+                                  </span>
+                                </td>
+
+                                <td className="px-4 py-4">
+                                  <button
+                                    onClick={() => setSelectedPayment(p)}
+                                    className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-600"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                    View Details
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
 
               {/* Pagination */}
               <div className="flex flex-col gap-3 border-t border-slate-100 bg-white px-4 py-4 md:flex-row md:items-center md:justify-between">
