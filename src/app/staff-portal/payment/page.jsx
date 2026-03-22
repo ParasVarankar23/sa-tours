@@ -1,16 +1,20 @@
 "use client";
 
 import {
-    X,
-    Search,
-    Eye,
-    IndianRupee,
-    CreditCard,
+    Calendar,
     CheckCircle2,
     Clock3,
-    User,
+    CreditCard,
+    Eye,
+    IndianRupee,
+    Mail,
+    MapPin,
     Phone,
-    Bus,
+    RefreshCw,
+    Search,
+    User,
+    Wallet,
+    X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -18,35 +22,32 @@ export default function StaffPaymentPage() {
     const [payments, setPayments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
-    const [selected, setSelected] = useState(null);
+    const [selectedPayment, setSelectedPayment] = useState(null);
+    const [dateFilter, setDateFilter] = useState("all");
+    const [currentPage, setCurrentPage] = useState(1);
+    const PAGE_SIZE = 10;
+
+    const fetchPayments = async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem("authToken");
+            const res = await fetch(`/api/public/payments?all=true`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setPayments(data.payments || []);
+            }
+        } catch (e) {
+            console.error("Failed to fetch payments:", e);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        let mounted = true;
-
-        const fetchPayments = async () => {
-            try {
-                const token = localStorage.getItem("authToken");
-                const res = await fetch(`/api/public/payments?all=true`, {
-                    headers: token ? { Authorization: `Bearer ${token}` } : {},
-                });
-
-                const data = await res.json();
-
-                if (res.ok && data.payments) {
-                    if (mounted) setPayments(data.payments || []);
-                }
-            } catch (e) {
-                console.error(e);
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        };
-
         fetchPayments();
-
-        return () => {
-            mounted = false;
-        };
     }, []);
 
     const getAmount = (p) => {
@@ -55,537 +56,721 @@ export default function StaffPaymentPage() {
         return 0;
     };
 
-    const getName = (p) => {
-        const meta = p?.metadata || {};
-        const user = meta.user || {};
-        const first =
-            Array.isArray(meta.bookings) && meta.bookings.length ? meta.bookings[0] : {};
-        return user.name || first.name || p.userId || "-";
-    };
-
-    const getPhone = (p) => {
-        const meta = p?.metadata || {};
-        const user = meta.user || {};
-        const first =
-            Array.isArray(meta.bookings) && meta.bookings.length ? meta.bookings[0] : {};
-        return user.phone || first.phone || "-";
-    };
-
-    const getBusNumber = (p) => {
-        return (
-            (p?.metadata?.bookings && p.metadata.bookings[0]?.busNumber) ||
-            p?.metadata?.busNumber ||
-            "-"
-        );
-    };
-
-    const getRoute = (p) => {
-        const first =
-            Array.isArray(p?.metadata?.bookings) && p.metadata.bookings.length
-                ? p.metadata.bookings[0]
-                : {};
-        return (
-            first.routeName ||
-            `${first.pickup || first.from || "-"} - ${first.drop || first.to || "-"}`
-        );
-    };
-
-    const getStatus = (p) => {
-        return (
-            p?.status ||
-            p?.paymentStatus ||
-            p?.details?.status ||
-            "success"
-        );
+    const getCurrency = (p) => {
+        return p?.details?.currency || p?.currency || "INR";
     };
 
     const getDate = (p) => {
-        return (
-            p?.createdAt ||
-            p?.date ||
-            p?.paymentDate ||
-            p?.details?.created_at ||
-            null
-        );
+        return p?.createdAt || p?.verifiedAt || null;
     };
 
-    const formatDate = (date) => {
-        if (!date) return "-";
+    const getUserData = (p) => {
+        const meta = p?.metadata || {};
+        const user = meta.user || {};
+        const firstBooking =
+            Array.isArray(meta.bookings) && meta.bookings.length ? meta.bookings[0] : null;
+
+        return {
+            name: user?.name || firstBooking?.name || p?.userId || "-",
+            phone: user?.phone || firstBooking?.phone || "-",
+            email: user?.email || firstBooking?.email || "-",
+            pickup: user?.pickup || firstBooking?.pickup || "-",
+            pickupTime: user?.pickupTime || firstBooking?.pickupTime || "-",
+            pickupDate: firstBooking?.date || meta?.booking?.date || "-",
+            drop: user?.drop || firstBooking?.drop || "-",
+            dropTime: user?.dropTime || firstBooking?.dropTime || "-",
+            dropDate: firstBooking?.date || meta?.booking?.date || "-",
+            busNumber:
+                firstBooking?.busNumber ||
+                meta?.booking?.busNumber ||
+                meta?.booking?.busId ||
+                "-",
+        };
+    };
+
+    const passesDateFilter = (p) => {
+        if (!dateFilter || dateFilter === "all") return true;
+        const d = getDate(p);
+        if (!d) return false;
+
+        const pd = new Date(d);
+        if (isNaN(pd.getTime())) return false;
+
+        const now = new Date();
+        let start = null;
+
+        switch (dateFilter) {
+            case "today":
+                start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                break;
+            case "week":
+                start = new Date(now);
+                start.setHours(0, 0, 0, 0);
+                start.setDate(now.getDate() - now.getDay());
+                break;
+            case "month":
+                start = new Date(now.getFullYear(), now.getMonth(), 1);
+                break;
+            case "year":
+                start = new Date(now.getFullYear(), 0, 1);
+                break;
+            default:
+                return true;
+        }
+
+        return pd >= start && pd <= now;
+    };
+
+    const filteredPayments = useMemo(() => {
+        const base = (payments || []).filter((p) => passesDateFilter(p));
+
+        if (!search.trim()) return base;
+
+        const q = search.toLowerCase();
+
+        return base.filter((p) => {
+            const user = getUserData(p);
+
+            return (
+                String(user.name).toLowerCase().includes(q) ||
+                String(user.phone).toLowerCase().includes(q) ||
+                String(user.email).toLowerCase().includes(q) ||
+                String(user.pickup).toLowerCase().includes(q) ||
+                String(user.drop).toLowerCase().includes(q) ||
+                String(user.busNumber).toLowerCase().includes(q)
+            );
+        });
+    }, [payments, search, dateFilter]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filteredPayments.length, search, dateFilter]);
+
+    const totalPages = Math.max(1, Math.ceil((filteredPayments || []).length / PAGE_SIZE));
+
+    useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [totalPages, currentPage]);
+
+    const visiblePayments = useMemo(() => {
+        const start = (currentPage - 1) * PAGE_SIZE;
+        return (filteredPayments || []).slice(start, start + PAGE_SIZE);
+    }, [filteredPayments, currentPage]);
+
+    const totalRevenue = useMemo(() => {
+        return payments.reduce((sum, p) => sum + getAmount(p), 0);
+    }, [payments]);
+
+    const latestPayment = useMemo(() => {
+        if (!payments.length) return null;
+
+        return [...payments].sort((a, b) => {
+            const da = new Date(getDate(a) || 0).getTime();
+            const db = new Date(getDate(b) || 0).getTime();
+            return db - da;
+        })[0];
+    }, [payments]);
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return "-";
         try {
-            return new Date(date).toLocaleString("en-IN", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
+            return new Date(dateStr).toLocaleString("en-IN", {
+                dateStyle: "medium",
+                timeStyle: "short",
             });
         } catch {
-            return "-";
+            return dateStr;
         }
     };
 
-    const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        if (!q) return payments;
+    const StatCard = ({ title, value, icon: Icon, colorClass, subText }) => (
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <p className="text-sm font-medium text-slate-500">{title}</p>
+                    <h3 className="mt-2 text-2xl font-bold text-slate-900">{value}</h3>
+                    {subText ? <p className="mt-1 text-xs text-slate-400">{subText}</p> : null}
+                </div>
+                <div className={`rounded-2xl p-3 shadow-sm ${colorClass}`}>
+                    <Icon className="h-5 w-5 text-white" />
+                </div>
+            </div>
+        </div>
+    );
 
-        return payments.filter((p) => {
-            const name = String(getName(p)).toLowerCase();
-            const phone = String(getPhone(p)).toLowerCase();
-            const bus = String(getBusNumber(p)).toLowerCase();
-            const paymentId = String(p.paymentId || p.id || "").toLowerCase();
+    const PaymentModal = ({ payment, onClose }) => {
+        if (!payment) return null;
 
-            return (
-                name.includes(q) ||
-                phone.includes(q) ||
-                bus.includes(q) ||
-                paymentId.includes(q)
-            );
-        });
-    }, [payments, search]);
+        const user = getUserData(payment);
+        const amount = getAmount(payment);
+        const currency = getCurrency(payment);
+        const date = getDate(payment);
+        const paymentId = payment?.paymentId || payment?.id || "-";
 
-    const stats = useMemo(() => {
-        const totalPayments = payments.length;
-        const totalAmount = payments.reduce((sum, p) => sum + getAmount(p), 0);
-        const successCount = payments.filter((p) =>
-            String(getStatus(p)).toLowerCase().includes("success")
-        ).length;
-        const pendingCount = payments.filter((p) =>
-            String(getStatus(p)).toLowerCase().includes("pending")
-        ).length;
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+                    {/* Modal Header */}
+                    <div className="flex items-center justify-between border-b border-orange-100 bg-gradient-to-r from-orange-50 via-white to-orange-50 px-6 py-5">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900">Payment Details</h2>
+                            <p className="mt-1 text-sm text-slate-500">
+                                Complete passenger booking & payment information
+                            </p>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
 
-        return {
-            totalPayments,
-            totalAmount,
-            successCount,
-            pendingCount,
-        };
-    }, [payments]);
+                    {/* Modal Body */}
+                    <div className="max-h-[72vh] space-y-6 overflow-y-auto p-6">
+                        {/* Payment Summary */}
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                                    Payment ID
+                                </p>
+                                <p className="break-all text-sm font-semibold text-slate-900">{paymentId}</p>
+                            </div>
+
+                            <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+                                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-orange-600">
+                                    Amount
+                                </p>
+                                <p className="text-lg font-bold text-orange-700">
+                                    ₹{amount.toFixed(2)} {currency.toUpperCase()}
+                                </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                                    Verified On
+                                </p>
+                                <p className="text-sm font-semibold text-slate-900">{formatDate(date)}</p>
+                            </div>
+                        </div>
+
+                        {/* Passenger Details */}
+                        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                            <div className="mb-5 flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-900">Passenger Details</h3>
+                                    <p className="text-sm text-slate-500">Verified passenger information</p>
+                                </div>
+                                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    Verified
+                                </div>
+                            </div>
+
+                            <div className="mb-5 flex items-center gap-3">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100">
+                                    <User className="h-6 w-6 text-orange-600" />
+                                </div>
+                                <div>
+                                    <p className="text-lg font-semibold text-slate-900">{user.name}</p>
+                                    <p className="text-sm text-slate-500">Passenger Profile</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <Phone className="h-5 w-5 text-slate-500" />
+                                    <div>
+                                        <p className="text-xs text-slate-500">Phone Number</p>
+                                        <p className="font-medium text-slate-900">{user.phone}</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <Mail className="h-5 w-5 text-slate-500" />
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-slate-500">Email Address</p>
+                                        <p className="break-all font-medium text-slate-900">{user.email}</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 rounded-2xl border border-orange-100 bg-orange-50 p-4">
+                                    <MapPin className="h-5 w-5 text-orange-600" />
+                                    <div>
+                                        <p className="text-xs text-slate-500">Pickup Location</p>
+                                        <p className="font-medium text-slate-900">{user.pickup}</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                                    <MapPin className="h-5 w-5 text-emerald-600" />
+                                    <div>
+                                        <p className="text-xs text-slate-500">Drop Location</p>
+                                        <p className="font-medium text-slate-900">{user.drop}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Booking Details */}
+                        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                            <h3 className="mb-4 text-lg font-bold text-slate-900">Booking Details</h3>
+
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <CreditCard className="h-5 w-5 text-slate-500" />
+                                    <div>
+                                        <p className="text-xs text-slate-500">Bus / Vehicle</p>
+                                        <p className="font-medium text-slate-900">{user.busNumber}</p>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+                                    <div className="mb-2 flex items-center gap-2">
+                                        <Calendar className="h-4 w-4 text-orange-600" />
+                                        <p className="text-xs font-medium uppercase tracking-wide text-orange-600">
+                                            Pickup
+                                        </p>
+                                    </div>
+                                    <p className="text-sm font-semibold text-slate-900">{user.pickupDate}</p>
+                                    <p className="mt-1 text-sm text-slate-600">{user.pickupTime}</p>
+                                </div>
+
+                                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                                    <div className="mb-2 flex items-center gap-2">
+                                        <Clock3 className="h-4 w-4 text-emerald-600" />
+                                        <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
+                                            Drop
+                                        </p>
+                                    </div>
+                                    <p className="text-sm font-semibold text-slate-900">{user.dropDate}</p>
+                                    <p className="mt-1 text-sm text-slate-600">{user.dropTime}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Status */}
+                        <div className="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                                <span className="font-medium text-emerald-700">Payment Verified Successfully</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     return (
-        <div className="min-h-screen bg-[#f8fafc] p-4 sm:p-6 lg:p-8">
-            {/* Header */}
-            <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-[#f97316] sm:text-sm">
-                        SA TOURS DASHBOARD
-                    </p>
-                    <h1 className="text-3xl font-bold text-[#0f172a] sm:text-4xl">
-                        Payment Management
-                    </h1>
-                    <p className="mt-2 text-sm text-slate-500 sm:text-base">
-                        View all payment records, booking payments and customer transaction details.
-                    </p>
-                </div>
+        <div className="min-h-screen bg-slate-50 p-4 md:p-6">
+            <div className="mx-auto max-w-[1600px]">
+                {/* Premium Header */}
+                <div className="mb-6 rounded-3xl border border-orange-100 bg-gradient-to-r from-orange-500 via-orange-400 to-amber-400 p-6 text-white shadow-sm">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+                                <Wallet className="h-4 w-4" />
+                                Admin Panel
+                            </div>
+                            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+                                Payment Management
+                            </h1>
+                            <p className="mt-2 text-sm text-orange-50 md:text-base">
+                                View verified payments, passenger details, booking information, and revenue summary.
+                            </p>
+                        </div>
 
-                <div className="rounded-2xl border border-orange-100 bg-orange-50 px-5 py-3 text-sm font-semibold text-orange-600 shadow-sm">
-                    View Only Access
-                </div>
-            </div>
-
-            {/* Stats */}
-            <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard
-                    title="Total Payments"
-                    value={stats.totalPayments}
-                    icon={<CreditCard className="h-8 w-8 text-orange-500" />}
-                />
-                <StatCard
-                    title="Total Amount"
-                    value={`₹${stats.totalAmount.toFixed(0)}`}
-                    icon={<IndianRupee className="h-8 w-8 text-orange-500" />}
-                />
-                <StatCard
-                    title="Successful"
-                    value={stats.successCount}
-                    icon={<CheckCircle2 className="h-8 w-8 text-orange-500" />}
-                />
-                <StatCard
-                    title="Pending"
-                    value={stats.pendingCount}
-                    icon={<Clock3 className="h-8 w-8 text-orange-500" />}
-                />
-            </div>
-
-            {/* Main Table Card */}
-            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-                {/* Top Controls */}
-                <div className="flex flex-col gap-4 border-b border-slate-200 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <h2 className="text-2xl font-bold text-[#0f172a]">Payment List</h2>
-                        <p className="mt-1 text-sm text-slate-500">
-                            Showing {filtered.length} of {payments.length} result(s)
-                        </p>
+                        <button
+                            onClick={fetchPayments}
+                            disabled={loading}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-orange-600 shadow-sm transition hover:bg-orange-50 disabled:opacity-70"
+                        >
+                            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                            Refresh Data
+                        </button>
                     </div>
+                </div>
 
-                    <div className="flex w-full lg:w-auto">
-                        <div className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 lg:w-[420px]">
-                            <Search className="h-5 w-5 text-slate-400" />
-                            <input
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search payment ID, customer, phone, bus..."
-                                className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-                            />
+                {/* Stats */}
+                {!loading && (
+                    <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        <StatCard
+                            title="Total Payments"
+                            value={payments.length}
+                            icon={CreditCard}
+                            colorClass="bg-orange-500"
+                            subText="All verified payment records"
+                        />
+                        <StatCard
+                            title="Total Revenue"
+                            value={`₹${totalRevenue.toFixed(2)}`}
+                            icon={IndianRupee}
+                            colorClass="bg-emerald-500"
+                            subText="Total collected amount"
+                        />
+                        <StatCard
+                            title="Successful Payments"
+                            value={payments.length}
+                            icon={CheckCircle2}
+                            colorClass="bg-blue-500"
+                            subText="Verified successful transactions"
+                        />
+                        <StatCard
+                            title="Latest Payment"
+                            value={latestPayment ? `₹${getAmount(latestPayment).toFixed(2)}` : "-"}
+                            icon={Clock3}
+                            colorClass="bg-purple-500"
+                            subText={latestPayment ? formatDate(getDate(latestPayment)) : "No recent payment"}
+                        />
+                    </div>
+                )}
+
+                {/* Main Table Card */}
+                <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                    {/* Table Header */}
+                    <div className="border-b border-slate-200 bg-white p-4 md:p-5">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900 md:text-xl">
+                                    Payment History
+                                </h2>
+                            </div>
+
+                            <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center xl:w-auto">
+                                {/* Search */}
+                                <div className="relative w-full lg:w-96">
+                                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search name, phone, email, route, bus..."
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                                    />
+                                </div>
+
+                                {/* Filter */}
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                    <select
+                                        value={dateFilter}
+                                        onChange={(e) => setDateFilter(e.target.value)}
+                                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                                    >
+                                        <option value="all">All Time</option>
+                                        <option value="today">Today</option>
+                                        <option value="week">This Week</option>
+                                        <option value="month">This Month</option>
+                                        <option value="year">This Year</option>
+                                    </select>
+
+                                    <button
+                                        onClick={fetchPayments}
+                                        disabled={loading}
+                                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                                    >
+                                        <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                                        Refresh
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                {/* Desktop Table */}
-                <div className="hidden overflow-x-auto lg:block">
-                    <table className="min-w-full">
-                        <thead className="bg-slate-50">
-                            <tr className="text-left text-sm font-semibold uppercase tracking-wide text-slate-500">
-                                <th className="px-6 py-5">Customer</th>
-                                <th className="px-6 py-5">Bus</th>
-                                <th className="px-6 py-5">Payment ID</th>
-                                <th className="px-6 py-5">Amount</th>
-                                <th className="px-6 py-5">Status</th>
-                                <th className="px-6 py-5">Date</th>
-                                <th className="px-6 py-5">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan="7" className="px-6 py-10 text-center text-slate-500">
-                                        Loading payments...
-                                    </td>
-                                </tr>
-                            ) : filtered.length === 0 ? (
-                                <tr>
-                                    <td colSpan="7" className="px-6 py-10 text-center text-slate-500">
-                                        No payments found
-                                    </td>
-                                </tr>
-                            ) : (
-                                filtered.map((p, index) => {
-                                    const amount = getAmount(p);
-                                    const status = String(getStatus(p)).toLowerCase();
-
-                                    return (
-                                        <tr
-                                            key={p.paymentId || p.id || index}
-                                            className="border-t border-slate-100 hover:bg-slate-50/70"
-                                        >
-                                            <td className="px-6 py-6">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50">
-                                                        <User className="h-7 w-7 text-orange-500" />
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-[15px] font-bold text-slate-800">
-                                                            {getName(p)}
-                                                        </div>
-                                                        <div className="text-sm text-slate-500">
-                                                            {getPhone(p)}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </td>
-
-                                            <td className="px-6 py-6">
-                                                <div className="text-[15px] font-semibold text-slate-800">
-                                                    {getBusNumber(p)}
-                                                </div>
-                                                <div className="text-sm text-slate-500">{getRoute(p)}</div>
-                                            </td>
-
-                                            <td className="px-6 py-6">
-                                                <div className="max-w-[180px] truncate text-sm font-medium text-slate-700">
-                                                    {p.paymentId || p.id || "-"}
-                                                </div>
-                                            </td>
-
-                                            <td className="px-6 py-6">
-                                                <div className="inline-flex rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
-                                                    ₹{amount.toFixed(2)}
-                                                </div>
-                                            </td>
-
-                                            <td className="px-6 py-6">
-                                                <StatusBadge status={status} />
-                                            </td>
-
-                                            <td className="px-6 py-6">
-                                                <div className="text-sm text-slate-600">
-                                                    {formatDate(getDate(p))}
-                                                </div>
-                                            </td>
-
-                                            <td className="px-6 py-6">
-                                                <button
-                                                    onClick={() => setSelected(p)}
-                                                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                                                >
-                                                    <Eye className="h-4 w-4" />
-                                                    View
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Mobile Cards */}
-                <div className="space-y-4 p-4 lg:hidden">
+                    {/* Content */}
                     {loading ? (
-                        <div className="rounded-2xl border border-slate-200 bg-white p-5 text-center text-slate-500">
-                            Loading payments...
+                        <div className="space-y-4 p-6">
+                            {[1, 2, 3, 4, 5].map((i) => (
+                                <div key={i} className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+                            ))}
                         </div>
-                    ) : filtered.length === 0 ? (
-                        <div className="rounded-2xl border border-slate-200 bg-white p-5 text-center text-slate-500">
-                            No payments found
+                    ) : filteredPayments.length === 0 ? (
+                        <div className="p-10 text-center">
+                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-orange-50">
+                                <CreditCard className="h-8 w-8 text-orange-400" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-800">No Payments Found</h3>
+                            <p className="mt-1 text-sm text-slate-500">
+                                No payment records available for the current search or filter.
+                            </p>
                         </div>
                     ) : (
-                        filtered.map((p, index) => {
-                            const amount = getAmount(p);
-                            const status = String(getStatus(p)).toLowerCase();
+                        <>
+                            <>
+                                {/* =========================
+      MOBILE VIEW ONLY
+      ========================= */}
+                                <div className="space-y-4 md:hidden">
+                                    {visiblePayments.length === 0 ? (
+                                        <div className="rounded-3xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm">
+                                            No payments found
+                                        </div>
+                                    ) : (
+                                        visiblePayments.map((p, idx) => {
+                                            const amount = getAmount(p);
+                                            const currency = getCurrency(p);
+                                            const date = getDate(p);
+                                            const user = getUserData(p);
 
-                            return (
-                                <div
-                                    key={p.paymentId || p.id || index}
-                                    className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
-                                >
-                                    <div className="mb-4 flex items-start gap-3">
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50">
-                                            <User className="h-6 w-6 text-orange-500" />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <h3 className="truncate text-lg font-bold text-slate-800">
-                                                {getName(p)}
-                                            </h3>
-                                            <p className="truncate text-sm text-slate-500">
-                                                {getPhone(p)}
-                                            </p>
-                                        </div>
-                                    </div>
+                                            return (
+                                                <div
+                                                    key={p.id || idx}
+                                                    className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+                                                >
+                                                    {/* Passenger Top */}
+                                                    <div className="flex items-start gap-3">
+                                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-100">
+                                                            <User className="h-6 w-6 text-orange-600" />
+                                                        </div>
 
-                                    <div className="grid grid-cols-2 gap-3 text-sm">
-                                        <div className="rounded-2xl bg-slate-50 p-3">
-                                            <p className="text-xs text-slate-500">Bus</p>
-                                            <p className="mt-1 font-semibold text-slate-800">
-                                                {getBusNumber(p)}
-                                            </p>
-                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <h3 className="text-lg font-bold text-slate-900 break-words">
+                                                                {user.name}
+                                                            </h3>
+                                                            <p className="mt-1 text-sm text-slate-500">Passenger</p>
 
-                                        <div className="rounded-2xl bg-slate-50 p-3">
-                                            <p className="text-xs text-slate-500">Amount</p>
-                                            <p className="mt-1 font-semibold text-emerald-700">
-                                                ₹{amount.toFixed(2)}
-                                            </p>
-                                        </div>
+                                                            <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                                                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                                                Verified
+                                                            </div>
+                                                        </div>
+                                                    </div>
 
-                                        <div className="rounded-2xl bg-slate-50 p-3">
-                                            <p className="text-xs text-slate-500">Status</p>
-                                            <div className="mt-1">
-                                                <StatusBadge status={status} />
-                                            </div>
-                                        </div>
+                                                    {/* Contact Info */}
+                                                    <div className="mt-4 space-y-3">
+                                                        <div className="rounded-2xl bg-slate-50 p-3">
+                                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                                Phone
+                                                            </p>
+                                                            <p className="mt-1 text-sm font-medium text-slate-800 break-words">
+                                                                {user.phone || "-"}
+                                                            </p>
+                                                        </div>
 
-                                        <div className="rounded-2xl bg-slate-50 p-3">
-                                            <p className="text-xs text-slate-500">Date</p>
-                                            <p className="mt-1 font-semibold text-slate-800 text-xs">
-                                                {formatDate(getDate(p))}
-                                            </p>
-                                        </div>
+                                                        <div className="rounded-2xl bg-slate-50 p-3">
+                                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                                Email
+                                                            </p>
+                                                            <p className="mt-1 text-sm text-slate-800 break-all">
+                                                                {user.email || "-"}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Pickup / Drop */}
+                                                    <div className="mt-4 grid grid-cols-1 gap-3">
+                                                        <div className="rounded-2xl bg-orange-50 p-3">
+                                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-orange-600">
+                                                                Pickup
+                                                            </p>
+                                                            <div className="mt-1 flex items-start gap-2 text-sm font-medium text-orange-700">
+                                                                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                                                                <span className="break-words">{user.pickup || "-"}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="rounded-2xl bg-emerald-50 p-3">
+                                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600">
+                                                                Drop
+                                                            </p>
+                                                            <div className="mt-1 flex items-start gap-2 text-sm font-medium text-emerald-700">
+                                                                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                                                                <span className="break-words">{user.drop || "-"}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Amount + Date */}
+                                                    <div className="mt-4 grid grid-cols-2 gap-3">
+                                                        <div className="rounded-2xl bg-slate-50 p-3">
+                                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                                Amount
+                                                            </p>
+                                                            <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 ">
+                                                                <IndianRupee className="h-3.5 w-3.5" />
+                                                                {amount.toFixed(2)} {currency.toUpperCase()}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="rounded-2xl bg-slate-50 p-3">
+                                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                                Date
+                                                            </p>
+                                                            <div className="mt-2 flex items-start gap-2 text-sm text-slate-700">
+                                                                <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                                                                <span>{formatDate(date)}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Action */}
+                                                    <div className="mt-5">
+                                                        <button
+                                                            onClick={() => setSelectedPayment(p)}
+                                                            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-600"
+                                                        >
+                                                            <Eye className="h-4 w-4" />
+                                                            View Details
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+
+                                {/* =========================
+      DESKTOP / TABLET VIEW
+      (UNCHANGED)
+      ========================= */}
+                                <div className="hidden md:block overflow-x-auto">
+                                    <table className="min-w-[1200px] w-full text-sm">
+                                        <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50">
+                                            <tr className="text-left">
+                                                <th className="px-4 py-4 font-semibold text-slate-700">Passenger</th>
+                                                <th className="px-4 py-4 font-semibold text-slate-700">Phone</th>
+                                                <th className="px-4 py-4 font-semibold text-slate-700">Email</th>
+                                                <th className="px-4 py-4 font-semibold text-slate-700">Pickup</th>
+                                                <th className="px-4 py-4 font-semibold text-slate-700">Drop</th>
+                                                <th className="px-4 py-4 font-semibold text-slate-700">Amount</th>
+                                                <th className="px-4 py-4 font-semibold text-slate-700">Date</th>
+                                                <th className="px-4 py-4 font-semibold text-slate-700">Status</th>
+                                                <th className="px-4 py-4 font-semibold text-slate-700">Action</th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            {visiblePayments.map((p, idx) => {
+                                                const amount = getAmount(p);
+                                                const currency = getCurrency(p);
+                                                const date = getDate(p);
+                                                const user = getUserData(p);
+
+                                                return (
+                                                    <tr
+                                                        key={p.id || idx}
+                                                        className="border-b border-slate-100 transition hover:bg-orange-50/40"
+                                                    >
+                                                        <td className="px-4 py-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
+                                                                    <User className="h-5 w-5 text-orange-600" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-semibold text-slate-900">{user.name}</p>
+                                                                    <p className="text-xs text-slate-500">Passenger</p>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+
+                                                        <td className="px-4 py-4 text-slate-700">{user.phone}</td>
+
+                                                        <td className="px-4 py-4 text-slate-700 break-all">{user.email}</td>
+
+                                                        <td className="px-4 py-4">
+                                                            <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700">
+                                                                <MapPin className="h-3.5 w-3.5" />
+                                                                {user.pickup}
+                                                            </div>
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
+                                                            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                                                                <MapPin className="h-3.5 w-3.5" />
+                                                                {user.drop}
+                                                            </div>
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
+                                                            <div className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 flex-nowrap whitespace-nowrap">
+                                                                <IndianRupee className="h-3.5 w-3.5" />
+                                                                {amount.toFixed(2)} {currency.toUpperCase()}
+                                                            </div>
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
+                                                            <div className="flex items-start gap-2 text-slate-700">
+                                                                <Calendar className="mt-0.5 h-4 w-4 text-slate-400" />
+                                                                <span>{formatDate(date)}</span>
+                                                            </div>
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
+                                                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                                                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                                                Verified
+                                                            </span>
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
+                                                            <button
+                                                                onClick={() => setSelectedPayment(p)}
+                                                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-600"
+                                                            >
+                                                                <Eye className="h-4 w-4" />
+                                                                View Details
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+
+                            {/* Pagination */}
+                            <div className="flex flex-col gap-3 border-t border-slate-100 bg-white px-4 py-4 md:flex-row md:items-center md:justify-between">
+                                <div className="text-sm text-slate-600">
+                                    Showing{" "}
+                                    <span className="font-semibold text-slate-900">
+                                        {visiblePayments.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}
+                                    </span>{" "}
+                                    -{" "}
+                                    <span className="font-semibold text-slate-900">
+                                        {visiblePayments.length
+                                            ? (currentPage - 1) * PAGE_SIZE + visiblePayments.length
+                                            : 0}
+                                    </span>{" "}
+                                    of{" "}
+                                    <span className="font-semibold text-orange-600">{filteredPayments.length}</span>{" "}
+                                    records
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                        disabled={currentPage <= 1}
+                                        className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        Prev
+                                    </button>
+
+                                    <div className="rounded-xl bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700">
+                                        Page {currentPage} of {totalPages}
                                     </div>
 
                                     <button
-                                        onClick={() => setSelected(p)}
-                                        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage >= totalPages}
+                                        className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
-                                        <Eye className="h-4 w-4" />
-                                        View Details
+                                        Next
                                     </button>
                                 </div>
-                            );
-                        })
+                            </div>
+                        </>
                     )}
                 </div>
             </div>
 
-            {/* View Modal */}
-            {selected ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[28px] bg-white shadow-2xl">
-                        <div className="flex items-start justify-between border-b border-slate-200 px-5 py-5 sm:px-6">
-                            <div>
-                                <h2 className="text-2xl font-bold text-slate-800">
-                                    Payment Details
-                                </h2>
-                                <p className="mt-1 text-sm text-slate-500">
-                                    View only payment information
-                                </p>
-                            </div>
-
-                            <button
-                                onClick={() => setSelected(null)}
-                                className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"
-                            >
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
-
-                        <div className="space-y-6 px-5 py-5 sm:px-6">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <InfoCard
-                                    icon={<User className="h-4 w-4" />}
-                                    label="Customer Name"
-                                    value={getName(selected)}
-                                />
-                                <InfoCard
-                                    icon={<Phone className="h-4 w-4" />}
-                                    label="Phone Number"
-                                    value={getPhone(selected)}
-                                />
-                                <InfoCard
-                                    icon={<Bus className="h-4 w-4" />}
-                                    label="Bus Number"
-                                    value={getBusNumber(selected)}
-                                />
-                                <InfoCard
-                                    icon={<CreditCard className="h-4 w-4" />}
-                                    label="Payment ID"
-                                    value={selected.paymentId || selected.id || "-"}
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                <InfoChip
-                                    label="Amount"
-                                    value={`₹${getAmount(selected).toFixed(2)}`}
-                                    color="green"
-                                />
-                                <InfoChip
-                                    label="Status"
-                                    value={String(getStatus(selected))}
-                                    color={
-                                        String(getStatus(selected)).toLowerCase().includes("success")
-                                            ? "green"
-                                            : String(getStatus(selected)).toLowerCase().includes("pending")
-                                                ? "orange"
-                                                : "slate"
-                                    }
-                                />
-                                <InfoChip
-                                    label="Date"
-                                    value={formatDate(getDate(selected))}
-                                    color="slate"
-                                />
-                            </div>
-
-                            <div className="rounded-2xl border border-slate-200 p-4">
-                                <h3 className="mb-3 text-lg font-semibold text-slate-800">
-                                    Route / Booking Info
-                                </h3>
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                    <div className="rounded-2xl bg-slate-50 p-4">
-                                        <p className="text-xs text-slate-500">Route</p>
-                                        <p className="mt-1 font-semibold text-slate-800">{getRoute(selected)}</p>
-                                    </div>
-                                    <div className="rounded-2xl bg-slate-50 p-4">
-                                        <p className="text-xs text-slate-500">Booking Count</p>
-                                        <p className="mt-1 font-semibold text-slate-800">
-                                            {Array.isArray(selected?.metadata?.bookings)
-                                                ? selected.metadata.bookings.length
-                                                : 0}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end">
-                                <button
-                                    onClick={() => setSelected(null)}
-                                    className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow hover:bg-orange-600"
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
-        </div>
-    );
-}
-
-function StatCard({ title, value, icon }) {
-    return (
-        <div className="rounded-[28px] border border-orange-100 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50">
-                    {icon}
-                </div>
-                <div>
-                    <p className="text-lg text-slate-500">{title}</p>
-                    <p className="mt-1 text-3xl sm:text-4xl font-bold text-[#0f172a]">{value}</p>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function StatusBadge({ status }) {
-    const s = String(status || "").toLowerCase();
-
-    if (s.includes("success") || s.includes("paid") || s.includes("captured")) {
-        return (
-            <span className="inline-flex rounded-full bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700">
-                Success
-            </span>
-        );
-    }
-
-    if (s.includes("pending") || s.includes("created")) {
-        return (
-            <span className="inline-flex rounded-full bg-orange-50 px-4 py-2 text-xs font-semibold text-orange-600">
-                Pending
-            </span>
-        );
-    }
-
-    if (s.includes("failed")) {
-        return (
-            <span className="inline-flex rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-600">
-                Failed
-            </span>
-        );
-    }
-
-    return (
-        <span className="inline-flex rounded-full bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-700">
-            {status || "Unknown"}
-        </span>
-    );
-}
-
-function InfoCard({ icon, label, value }) {
-    return (
-        <div className="rounded-2xl bg-slate-50 p-4">
-            <div className="mb-2 flex items-center gap-2 text-slate-500">
-                {icon}
-                <p className="text-sm font-medium">{label}</p>
-            </div>
-            <p className="text-lg font-semibold text-slate-800 break-words">{value || "-"}</p>
-        </div>
-    );
-}
-
-function InfoChip({ label, value, color = "slate" }) {
-    const styles = {
-        orange: "bg-orange-50 text-orange-600",
-        green: "bg-emerald-50 text-emerald-700",
-        slate: "bg-slate-100 text-slate-700",
-    };
-
-    return (
-        <div className={`rounded-2xl p-4 ${styles[color]}`}>
-            <p className="text-xs font-medium opacity-80">{label}</p>
-            <p className="mt-2 text-sm sm:text-base font-bold break-words">{value}</p>
+            {/* Modal */}
+            {selectedPayment && (
+                <PaymentModal
+                    payment={selectedPayment}
+                    onClose={() => setSelectedPayment(null)}
+                />
+            )}
         </div>
     );
 }
