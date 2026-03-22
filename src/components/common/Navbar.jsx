@@ -412,15 +412,10 @@ export default function Navbar({
                                 </div>
                             </div>
 
-                            {/* RIGHT */}
-                            <div className="flex items-center gap-2 sm:gap-3">
-                                {/* Desktop Search */}
-                                <div className="hidden xl:block">
-                                    <div className="flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 transition focus-within:border-orange-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-orange-100">
-                                        <Search
-                                            size={16}
-                                            className="shrink-0 text-slate-400"
-                                        />
+                            {/* CENTER */}
+                            <div className="flex-1 flex items-center justify-center">
+                                <div className="hidden xl:block w-full max-w-[640px]">
+                                    <div className="mx-auto flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 transition focus-within:border-orange-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-orange-100">
                                         <input
                                             type="text"
                                             placeholder="Search pages (e.g. booking, payments, profile, settings)"
@@ -444,7 +439,10 @@ export default function Navbar({
                                         </button>
                                     </div>
                                 </div>
+                            </div>
 
+                            {/* RIGHT */}
+                            <div className="flex items-center gap-2 sm:gap-3">
                                 <NotificationBell />
 
                                 {/* Profile Dropdown */}
