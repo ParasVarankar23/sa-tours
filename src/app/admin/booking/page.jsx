@@ -1282,16 +1282,16 @@
       const backRow = layout.backRow || [];
 
       // =========================
-      // Dynamic main body height
+      // BODY HEIGHT (balanced)
       // =========================
       const bodyMinHeight =
-        totalSeats === 23 ? 500 :
-          totalSeats === 27 ? 560 :
-            totalSeats === 31 ? 620 :
-              560;
+        totalSeats === 23 ? 660 :
+          totalSeats === 27 ? 760 :
+            totalSeats === 31 ? 860 :
+              760;
 
       // =========================
-      // Window logic
+      // WINDOW LOGIC
       // =========================
       const windowSeatSet = new Set();
 
@@ -1325,18 +1325,31 @@
           ${isBlocked ? `<span class="blocked-tag">BLOCKED</span>` : ""}
         </div>
 
-        <div class="line-row"><span class="label">Name:-</span><span class="value">${safe(data.name || "")}</span></div>
-        <div class="line-row"><span class="label">Email:-</span><span class="value value-email">${safe(data.email || "")}</span></div>
-        <div class="line-row"><span class="label">Phone:-</span><span class="value">${safe(data.phone || data.mobile || "")}</span></div>
-        <div class="line-row"><span class="label">Pickup:-</span><span class="value">${safe(data.pickup || "")}</span></div>
-        <div class="line-row"><span class="label">Drop:-</span><span class="value">${safe(data.drop || "")}</span></div>
-        <div class="line-row"><span class="label">Amount:-</span><span class="value">${safe(data.amount ?? data.fare ?? "")}</span></div>
+        <div class="line-row">
+          <span class="label">Name:-</span>
+          <span class="value">${safe(data.name || "")}</span>
+        </div>
+
+        <div class="line-row">
+          <span class="label">Phone:-</span>
+          <span class="value">${safe(data.phone || data.mobile || "")}</span>
+        </div>
+
+        <div class="line-row">
+          <span class="label">Pickup:-</span>
+          <span class="value">${safe(data.pickup || "")}</span>
+        </div>
+
+        <div class="line-row">
+          <span class="label">Drop:-</span>
+          <span class="value">${safe(data.drop || "")}</span>
+        </div>
       </div>
     `;
       };
 
       // =========================
-      // LEFT COLUMN (balanced with bottom invisible spacers)
+      // LEFT COLUMN
       // =========================
       const leftVisibleCount = topOffsetRows + leftSeats.length;
       const rightVisibleCount = rightRows.length;
@@ -1384,34 +1397,6 @@
     </div>
   `;
 
-      // =========================
-      // CABIN: 31 seats = 2 cabin seats, others = 6 cabin seats
-      // =========================
-      const cabinSeatNos =
-        totalSeats === 31
-          ? ["CB1", "CB2"]
-          : ["CB1", "CB2", "CB3", "CB4", "CB5", "CB6"];
-
-      const cabinRows = cabinSeatNos
-        .map((cabinSeat) => {
-          const data = seatMap[String(cabinSeat)] || {};
-          const isBlocked = data?.status === "blocked";
-          const amount = data?.amount ?? data?.fare ?? "";
-
-          return `
-      <tr class="${isBlocked ? "blocked-row" : ""}">
-        <td>${safe(cabinSeat)}</td>
-        <td>${safe(data.name || "")}</td>
-        <td>${safe(data.email || "")}</td>
-        <td>${safe(data.phone || data.mobile || "")}</td>
-        <td>${safe(data.pickup || "")}</td>
-        <td>${safe(data.drop || "")}</td>
-        <td>${safe(amount)}</td>
-      </tr>
-    `;
-        })
-        .join("");
-
       return `
 <!DOCTYPE html>
 <html>
@@ -1421,7 +1406,7 @@
   <style>
     @page {
       size: A4 portrait;
-      margin: 5mm;
+      margin: 4mm;
     }
 
     * {
@@ -1436,14 +1421,14 @@
       background: #fff;
       color: #111;
       font-family: "Times New Roman", serif;
-      font-size: 9px;
+      font-size: 14px;
     }
 
     .sheet {
       width: 100%;
-      max-width: 200mm;
+      max-width: 202mm;
       margin: 0 auto;
-      border: 1px solid #666;
+      border: 1px solid #555;
       padding: 6px;
       background: #fff;
     }
@@ -1452,8 +1437,8 @@
       display: grid;
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      margin-bottom: 2px;
-      font-size: 11px;
+      margin-bottom: 5px;
+      font-size: 15px;
       font-weight: 700;
     }
 
@@ -1466,17 +1451,17 @@
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
       gap: 8px;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
     }
 
     .bus-number {
-      font-size: 11px;
+      font-size: 16px;
       font-weight: 700;
       text-align: left;
     }
 
     .company {
-      font-size: 18px;
+      font-size: 28px;
       font-weight: 700;
       text-transform: uppercase;
       text-align: center;
@@ -1484,26 +1469,26 @@
     }
 
     .route {
-      font-size: 11px;
+      font-size: 16px;
       font-weight: 700;
       text-align: right;
     }
 
     .divider {
       border-top: 1px solid #777;
-      margin: 4px 0 6px;
+      margin: 5px 0 8px;
     }
 
     .main-layout {
       display: grid;
-      grid-template-columns: 135px 1fr 270px;
+      grid-template-columns: 190px 1fr 380px;
       align-items: start;
       gap: 0;
       min-height: ${bodyMinHeight}px;
     }
 
     .left-column {
-      width: 135px;
+      width: 190px;
       display: flex;
       flex-direction: column;
       gap: 0;
@@ -1516,7 +1501,7 @@
     }
 
     .right-column {
-      width: 270px;
+      width: 380px;
       display: flex;
       flex-direction: column;
       gap: 0;
@@ -1524,34 +1509,34 @@
     }
 
     .left-seat-wrap {
-      width: 135px;
+      width: 190px;
       margin-bottom: 0;
     }
 
     .left-seat-wrap.left-empty {
-      min-height: 96px;
+      min-height: 150px;
       border: none;
       background: transparent;
     }
 
     .right-row {
-      width: 270px;
+      width: 380px;
       display: grid;
       gap: 0;
       margin-bottom: 0;
     }
 
     .right-count-1 {
-      grid-template-columns: 135px;
+      grid-template-columns: 190px;
       justify-content: end;
     }
 
     .right-count-2 {
-      grid-template-columns: repeat(2, 135px);
+      grid-template-columns: repeat(2, 190px);
     }
 
     .right-seat-wrap {
-      width: 135px;
+      width: 190px;
     }
 
     .back-row {
@@ -1574,9 +1559,9 @@
 
     .seat-box {
       width: 100%;
-      min-height: 96px;
+      min-height: 150px;
       border: 1px solid #444;
-      padding: 5px 7px;
+      padding: 10px 12px;
       background: #fff;
       overflow: hidden;
     }
@@ -1587,107 +1572,53 @@
     }
 
     .seat-title {
-      font-size: 9px;
+      font-size: 16px;
       font-weight: 700;
-      line-height: 1.2;
-      margin-bottom: 3px;
+      line-height: 1.1;
+      margin-bottom: 8px;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       flex-wrap: wrap;
     }
 
     .blocked-tag {
-      font-size: 6px;
+      font-size: 10px;
       border: 1px solid #ea580c;
       color: #ea580c;
-      padding: 0 3px;
+      padding: 1px 6px;
       border-radius: 8px;
-      line-height: 1.2;
+      line-height: 1.1;
     }
 
-    .line-row {
-      display: grid;
-      grid-template-columns: 38px 1fr;
-      align-items: end;
-      column-gap: 4px;
-      margin: 1px 0;
-      min-height: 11px;
-    }
+   .line-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 0px;
+  margin: 3px 0;
+  min-height: 22px;
+}
 
     .label {
-      font-size: 7px;
+      font-size: 16px;
       font-weight: 700;
       line-height: 1.1;
       white-space: nowrap;
     }
 
     .value {
-      display: flex;
-      align-items: flex-end;
-      min-height: 10px;
-      padding: 0 1px 1px 1px;
-      font-size: 7px;
-      line-height: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border-bottom: 1px solid #555;
-    }
-
-    
-      
-    .value-email {
-      display: flex;
-      align-items: flex-end;
-      min-height: 10px;
-      padding: 0 1px 1px 1px;
-      font-size: 5px;
-      line-height: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border-bottom: 1px solid #555;
-    }
-
-    .cabin-title {
-      text-align: center;
-      font-size: 18px;
-      font-weight: 700;
-      margin: 2px 0 0;
-      line-height: 1.1;
-      text-transform: uppercase;
-      border-top: 1px solid #444;
-      border-left: 1px solid #444;
-      border-right: 1px solid #444;
-      padding: 2px 0;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      margin-top: 0;
-    }
-
-    th, td {
-      border: 1px solid #444;
-      padding: 5px 6px;
-      font-size: 9px;
-      text-align: left;
-      line-height: 1.2;
-      word-wrap: break-word;
-      vertical-align: top;
-    }
-
-    th {
-      background: #f5f5f5;
-      font-weight: 700;
-    }
-
-    .blocked-row td {
-      background: #fff7ed;
-    }
+  display: block;
+  min-height: 18px;
+  padding: 0 0 1px 0;
+  font-size: 16px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid #555;
+  width: 100%;
+}
 
     @media print {
       body {
@@ -1730,24 +1661,6 @@
     </div>
 
     ${backRowHtml}
-
-    <div class="cabin-title">CABIN</div>
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 10%;">Seat</th>
-          <th style="width: 18%;">Name</th>
-          <th style="width: 22%;">Email</th>
-          <th style="width: 15%;">Phone</th>
-          <th style="width: 12%;">Pickup</th>
-          <th style="width: 12%;">Drop</th>
-          <th style="width: 11%;">Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${cabinRows}
-      </tbody>
-    </table>
   </div>
 </body>
 </html>
