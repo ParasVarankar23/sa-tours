@@ -2769,7 +2769,7 @@ export default function StaffBookingPage() {
                                   <button
                                     disabled
                                     title="Cancel booking: admin only"
-                                      className="rounded-full border border-red-200 px-4 py-2 text-sm text-red-300 bg-red-50 cursor-not-allowed"
+                                    className="rounded-full border border-red-200 px-4 py-2 text-sm text-red-300 bg-red-50 cursor-not-allowed"
                                   >
                                     Cancel
                                   </button>
@@ -2914,6 +2914,7 @@ export default function StaffBookingPage() {
                       </>
                     ) : null}
                   </div>
+                  <div className="mt-2 text-sm text-slate-700">Ticket: <span className="font-semibold">{viewBooking.booking?.ticket || "—"}</span></div>
 
                   {viewBooking.booking?.status === "blocked" ? (
                     <div className="mt-2 inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">

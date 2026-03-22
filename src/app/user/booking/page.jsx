@@ -2,7 +2,15 @@
 
 import SeatLayout from "@/components/SeatLayout";
 import { showAppToast } from "@/lib/client/toast";
-import { BUS_TYPES, getFare, isBorliVillageStop, isCityStop, isDighiVillageStop, normalizeStopName, ROUTES } from "@/lib/fare";
+import {
+    BUS_TYPES,
+    getFare,
+    isBorliVillageStop,
+    isCityStop,
+    isDighiVillageStop,
+    normalizeStopName,
+    ROUTES,
+} from "@/lib/fare";
 import {
     BusFront,
     CalendarDays,
@@ -40,7 +48,11 @@ function buildRouteStops(bus) {
         return normalizeText(p);
     };
 
-    return [resolvePoint(bus.startPoint), ...middleStops, resolvePoint(bus.endPoint)].filter(Boolean);
+    return [
+        resolvePoint(bus.startPoint),
+        ...middleStops,
+        resolvePoint(bus.endPoint),
+    ].filter(Boolean);
 }
 
 function getStartEnd(bus) {
@@ -50,13 +62,18 @@ function getStartEnd(bus) {
 
 function getStopTime(bus, stopName) {
     if (!bus || !stopName) return "";
-    const startName = typeof bus.startPoint === "object" ? normalizeText(bus.startPoint.name) : normalizeText(bus.startPoint);
-    const endName = typeof bus.endPoint === "object" ? normalizeText(bus.endPoint.name) : normalizeText(bus.endPoint);
+    const startName =
+        typeof bus.startPoint === "object"
+            ? normalizeText(bus.startPoint.name)
+            : normalizeText(bus.startPoint);
+    const endName =
+        typeof bus.endPoint === "object"
+            ? normalizeText(bus.endPoint.name)
+            : normalizeText(bus.endPoint);
 
     if (normalizeKey(startName) === normalizeKey(stopName)) return normalizeText(bus.startTime);
     if (normalizeKey(endName) === normalizeKey(stopName)) return normalizeText(bus.endTime);
 
-    // prefer explicit pickupPoints/dropPoints when available
     if (Array.isArray(bus.pickupPoints)) {
         const p = bus.pickupPoints.find((x) => {
             const name = typeof x === "string" ? x : x?.name;
@@ -85,11 +102,18 @@ function getStopTime(bus, stopName) {
 function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
     if (!bus || !fromStop || !toStop) return { fare: 0 };
 
-    // derive canonical route key expected by getFare
     let routeKey = null;
     try {
-        const start = normalizeStopName(fromStop || (bus.startPoint && (typeof bus.startPoint === "object" ? bus.startPoint.name : bus.startPoint)));
-        const end = normalizeStopName(toStop || (bus.endPoint && (typeof bus.endPoint === "object" ? bus.endPoint.name : bus.endPoint)));
+        const start = normalizeStopName(
+            fromStop ||
+            (bus.startPoint &&
+                (typeof bus.startPoint === "object" ? bus.startPoint.name : bus.startPoint))
+        );
+        const end = normalizeStopName(
+            toStop ||
+            (bus.endPoint &&
+                (typeof bus.endPoint === "object" ? bus.endPoint.name : bus.endPoint))
+        );
 
         if (isBorliVillageStop(start) && isCityStop(end)) routeKey = ROUTES.BORLI_TO_DONGRI;
         else if (isDighiVillageStop(start) && isCityStop(end)) routeKey = ROUTES.DIGHI_TO_DONGRI;
@@ -99,10 +123,11 @@ function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
         routeKey = null;
     }
 
-    // fallback: try parsing routeName like "Borli - Dongri"
     if (!routeKey && bus && bus.routeName) {
         try {
-            const parts = String(bus.routeName || "").split("-").map((x) => x.trim());
+            const parts = String(bus.routeName || "")
+                .split("-")
+                .map((x) => x.trim());
             if (parts.length === 2) {
                 const a = normalizeStopName(parts[0]);
                 const b = normalizeStopName(parts[1]);
@@ -111,14 +136,11 @@ function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
                 else if (isCityStop(a) && isBorliVillageStop(b)) routeKey = ROUTES.DONGRI_TO_BORLI;
                 else if (isCityStop(a) && isDighiVillageStop(b)) routeKey = ROUTES.DONGRI_TO_DIGHI;
             }
-        } catch (e) {
-            // ignore
-        }
+        } catch (e) { }
     }
 
     if (!routeKey) return { fare: 0 };
 
-    // normalize bus type to BUS_TYPES
     const normalizeBusType = (raw) => {
         if (!raw) return BUS_TYPES.NON_AC;
         const s = String(raw || "").trim().toLowerCase();
@@ -127,29 +149,27 @@ function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
         return BUS_TYPES.NON_AC;
     };
 
-    // base fare from fare.js
     try {
         const mappedType = normalizeBusType(busType || bus?.busType || "NON_AC");
         const base = getFare({ route: routeKey, pickup: fromStop, drop: toStop, busType: mappedType });
         let amount = Number(base?.amount || 0);
         let ruleApplied = false;
 
-        // apply any bus-specific fareRules overrides if present and applicable for selected date
         const collectRawRules = () => {
             if (Array.isArray(bus.fareRules) && bus.fareRules.length) return bus.fareRules;
             if (Array.isArray(bus.fareRulesRaw) && bus.fareRulesRaw.length) return bus.fareRulesRaw;
             if (bus.pricingRules) {
-                if (Array.isArray(bus.pricingRules.fareRules) && bus.pricingRules.fareRules.length) return bus.pricingRules.fareRules;
-                if (Array.isArray(bus.pricingRules.fareRulesRaw) && bus.pricingRules.fareRulesRaw.length) return bus.pricingRules.fareRulesRaw;
+                if (Array.isArray(bus.pricingRules.fareRules) && bus.pricingRules.fareRules.length)
+                    return bus.pricingRules.fareRules;
+                if (Array.isArray(bus.pricingRules.fareRulesRaw) && bus.pricingRules.fareRulesRaw.length)
+                    return bus.pricingRules.fareRulesRaw;
                 if (Array.isArray(bus.pricingRules) && bus.pricingRules.length) return bus.pricingRules;
             }
             return [];
         };
 
         const rawRules = collectRawRules();
-        if (typeof window !== "undefined" && window && window.location) {
-            // fare debug removed
-        }
+
         if (rawRules.length > 0) {
             const pickupOptions = (() => {
                 if (Array.isArray(bus.pickupPoints)) {
@@ -185,14 +205,25 @@ function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
                 const fareVal = r.fare !== undefined ? r.fare : r.amount;
                 const fareStartDate = toDateOnly(r.fareStartDate || r.startDate || "");
                 const fareEndDate = toDateOnly(r.fareEndDate || r.endDate || "");
-                const apply = Boolean(r.applyToAllNextPickupsBeforeDrop || r.applyToAllPreviousPickups || r.apply);
+                const apply = Boolean(
+                    r.applyToAllNextPickupsBeforeDrop || r.applyToAllPreviousPickups || r.apply
+                );
+
                 if (!from && !to && (fareVal === undefined || fareVal === "")) continue;
+
                 if (apply) {
                     const fromIndex = pickupOptions.findIndex((p) => normalizeKey(p) === normalizeKey(from));
                     const endIndex = pickupOptions.length;
                     const startIdx = fromIndex === -1 ? 0 : fromIndex;
                     for (let j = startIdx; j < endIndex; j++) {
-                        expanded.push({ from: pickupOptions[j], to, fare: fareVal, fareStartDate, fareEndDate, sourceIndex: i });
+                        expanded.push({
+                            from: pickupOptions[j],
+                            to,
+                            fare: fareVal,
+                            fareStartDate,
+                            fareEndDate,
+                            sourceIndex: i,
+                        });
                     }
                 } else {
                     expanded.push({ from, to, fare: fareVal, fareStartDate, fareEndDate, sourceIndex: i });
@@ -205,38 +236,27 @@ function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
                     const d = new Date(dateStr);
                     if (Number.isNaN(d.getTime())) return false;
                     const target = d.toISOString().split("T")[0];
-                    if (rule.fareStartDate) {
-                        if (target < rule.fareStartDate) return false;
-                    }
-                    if (rule.fareEndDate) {
-                        if (target > rule.fareEndDate) return false;
-                    }
+                    if (rule.fareStartDate && target < rule.fareStartDate) return false;
+                    if (rule.fareEndDate && target > rule.fareEndDate) return false;
                     return true;
                 } catch (e) {
                     return false;
                 }
             };
 
-            if (typeof window !== "undefined" && window && window.location) {
-                // fare debug removed
-            }
+            const matches = expanded.filter(
+                (r) =>
+                    normalizeKey(r.from) === normalizeKey(fromStop) &&
+                    normalizeKey(r.to) === normalizeKey(toStop) &&
+                    ruleAppliesOnDate(r, dateStr)
+            );
 
-            const matches = expanded.filter((r) => normalizeKey(r.from) === normalizeKey(fromStop) && normalizeKey(r.to) === normalizeKey(toStop) && ruleAppliesOnDate(r, dateStr));
-            if (typeof window !== "undefined" && window && window.location) {
-                // fare debug removed
-            }
             if (matches && matches.length > 0) {
                 const chosen = matches[matches.length - 1];
-                if (typeof window !== "undefined" && window && window.location) {
-                    // fare debug removed
-                }
                 const overrideFare = Number(chosen.fare);
                 if (Number.isFinite(overrideFare) && overrideFare > 0) {
                     amount = overrideFare;
                     ruleApplied = true;
-                    if (typeof window !== "undefined" && window && window.location) {
-                        // fare debug removed
-                    }
                 }
             }
         }
@@ -249,7 +269,7 @@ function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
 
 export default function BookingPage() {
     const { user } = useAuth();
-    // sanitizers and validators for passenger inputs
+
     const sanitizeNameInput = (v) => {
         if (typeof v !== "string") return "";
         return v.replace(/\d+/g, "").replace(/[^A-Za-z\s'\-]/g, "").slice(0, 100);
@@ -268,6 +288,7 @@ export default function BookingPage() {
     const isValidName = (v) => /^[A-Za-z\s'\-]{2,}$/.test(String(v || "").trim());
     const isValidPhone = (v) => /^\d{10}$/.test(String(v || "").trim());
     const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
+
     const [date, setDate] = useState("");
     const [buses, setBuses] = useState([]);
     const [schedules, setSchedules] = useState({});
@@ -276,15 +297,27 @@ export default function BookingPage() {
     const [bookings, setBookings] = useState({});
     const [selectedSeats, setSelectedSeats] = useState([]);
     const [bookingForms, setBookingForms] = useState({});
-    const [bookingForm, setBookingForm] = useState({ name: "", phone: "", email: "", pickup: "", pickupTime: "", drop: "", dropTime: "" });
+    const [bookingForm, setBookingForm] = useState({
+        name: "",
+        phone: "",
+        email: "",
+        pickup: "",
+        pickupTime: "",
+        drop: "",
+        dropTime: "",
+    });
     const [viewBooking, setViewBooking] = useState(null);
     const [computedFares, setComputedFares] = useState({});
 
-    // cabin/seat counts
     const totalSeats = Number(selectedBus?.seatLayout) || Number(selectedBus?.seatCount) || 0;
-    const bookedCount = Object.values(bookings || {}).filter((b) => b && String(b.status || "").toLowerCase() === "booked").length;
-    const blockedCount = Object.values(bookings || {}).filter((b) => b && String(b.status || "").toLowerCase() === "blocked").length;
+    const bookedCount = Object.values(bookings || {}).filter(
+        (b) => b && String(b.status || "").toLowerCase() === "booked"
+    ).length;
+    const blockedCount = Object.values(bookings || {}).filter(
+        (b) => b && String(b.status || "").toLowerCase() === "blocked"
+    ).length;
     const availableCount = Math.max(0, totalSeats - bookedCount - blockedCount);
+
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmLoading, setConfirmLoading] = useState(false);
     const [confirmMessage, setConfirmMessage] = useState("");
@@ -302,13 +335,8 @@ export default function BookingPage() {
             const bData = await bRes.json();
             const sData = await sRes.json();
 
-            if (!bRes.ok) {
-                throw new Error(bData.error || "Failed to load buses");
-            }
-
-            if (!sRes.ok) {
-                throw new Error(sData.error || "Failed to load schedules");
-            }
+            if (!bRes.ok) throw new Error(bData.error || "Failed to load buses");
+            if (!sRes.ok) throw new Error(sData.error || "Failed to load schedules");
 
             setBuses(bData.buses || []);
             setSchedules(sData.schedules || {});
@@ -323,37 +351,33 @@ export default function BookingPage() {
     useEffect(() => {
         fetchAllData();
 
-        // default date to today so users see today's availability by default
         try {
             const today = new Date();
             const iso = today.toISOString().split("T")[0];
             if (!date) setDate(iso);
-        } catch (e) {
-            // ignore
-        }
+        } catch (e) { }
     }, []);
 
-    // listen for bus updates from admin actions in other tabs
     useEffect(() => {
-        if (typeof window === "undefined" || !('BroadcastChannel' in window)) return;
-        const ch = new BroadcastChannel('sa-tours-buses');
+        if (typeof window === "undefined" || !("BroadcastChannel" in window)) return;
+        const ch = new BroadcastChannel("sa-tours-buses");
+
         const onMsg = (ev) => {
             try {
                 const data = ev.data || {};
-                if (data && data.type === 'bus-updated') {
-                    // refetch buses/schedules so fares reflect latest rules
+                if (data && data.type === "bus-updated") {
                     fetchAllData();
-                    // also refetch bookings for selected bus/date if open
                     fetchBookings();
                 }
-            } catch (e) {
-                // ignore
-            }
+            } catch (e) { }
         };
-        ch.addEventListener('message', onMsg);
+
+        ch.addEventListener("message", onMsg);
         return () => {
-            ch.removeEventListener('message', onMsg);
-            try { ch.close(); } catch (e) { }
+            ch.removeEventListener("message", onMsg);
+            try {
+                ch.close();
+            } catch (e) { }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedBus, date]);
@@ -364,13 +388,22 @@ export default function BookingPage() {
                 setBookings({});
                 return;
             }
+
             const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}`);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Failed to load bookings");
-            // sanitize bookings keys
+
             const raw = data.bookings || {};
-            const entries = Object.entries(raw).filter(([k]) => /^[0-9]+$/.test(k));
-            const safe = Object.fromEntries(entries.map(([k, v]) => [k, v && typeof v === "object" ? v : {}]));
+
+            // ✅ supports numeric seats + cabin seats like CB1, CB2
+            const entries = Object.entries(raw).filter(([k]) =>
+                /^[0-9]+$|^CB[0-9]+$/i.test(String(k))
+            );
+
+            const safe = Object.fromEntries(
+                entries.map(([k, v]) => [String(k), v && typeof v === "object" ? v : {}])
+            );
+
             setBookings(safe);
         } catch (err) {
             console.error(err);
@@ -383,7 +416,6 @@ export default function BookingPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedBus, date]);
 
-    // compute fares for selected seats whenever forms/selection/bus/schedules change
     useEffect(() => {
         const out = {};
 
@@ -392,14 +424,22 @@ export default function BookingPage() {
 
             try {
                 const busForPricing = { ...(selectedBus || {}) };
-                const sched = (schedules && selectedBus && schedules[selectedBus.busId] && schedules[selectedBus.busId][date]) || null;
+                const sched =
+                    (schedules &&
+                        selectedBus &&
+                        schedules[selectedBus.busId] &&
+                        schedules[selectedBus.busId][date]) ||
+                    null;
+
                 if (sched && sched.pricingOverride) {
                     busForPricing.pricingRules = {
-                        ...(selectedBus.pricingRules || {}),
+                        ...(selectedBus?.pricingRules || {}),
                         ...(sched.pricingOverride || {}),
                     };
                 }
+
                 const season = !!(sched && sched.season);
+
                 const fareRes = calculateFare({
                     bus: busForPricing,
                     fromStop: form.pickup,
@@ -428,20 +468,15 @@ export default function BookingPage() {
             const busSched = schedules[bus.busId] || {};
             const sched = busSched[date] || null;
 
-            // include if admin marked available
             if (sched && sched.available) return true;
 
-            // if selecting today, allow booking if current time is before (startTime - cutoffMinutes)
             if (date === todayIso && sched && sched.startTime) {
                 try {
-                    // flexible time parsing for values like "04:00", "4:00 AM", "4:00am", "4:00"
                     const parseTimeToDate = (dateIso, timeStr) => {
                         if (!timeStr) return null;
                         let t = String(timeStr || "").trim().toLowerCase();
-                        // normalize am/pm spacing
                         t = t.replace(/\s+/g, " ");
 
-                        // detect am/pm
                         const ampmMatch = t.match(/(am|pm)$/);
                         let isPM = false;
                         if (ampmMatch) {
@@ -451,6 +486,7 @@ export default function BookingPage() {
 
                         const parts = t.split(":").map((x) => Number(x));
                         if (!parts.length || !Number.isFinite(parts[0])) return null;
+
                         let hh = parts[0];
                         const mm = parts.length > 1 && Number.isFinite(parts[1]) ? parts[1] : 0;
 
@@ -467,7 +503,10 @@ export default function BookingPage() {
                     const startDt = parseTimeToDate(todayIso, sched.startTime);
                     if (!startDt) return false;
 
-                    const cutoffMinutes = Number.isFinite(Number(sched.bookingCutoffMinutes)) ? Number(sched.bookingCutoffMinutes) : 30;
+                    const cutoffMinutes = Number.isFinite(Number(sched.bookingCutoffMinutes))
+                        ? Number(sched.bookingCutoffMinutes)
+                        : 30;
+
                     const cutoff = new Date(startDt.getTime() - cutoffMinutes * 60 * 1000);
                     if (now < cutoff) return true;
                 } catch (e) {
@@ -479,6 +518,28 @@ export default function BookingPage() {
         });
     }, [date, buses, schedules]);
 
+    // ✅ create safe booked map so other users' details are hidden
+    const safeBookedMap = useMemo(() => {
+        return Object.fromEntries(
+            Object.entries(bookings || {}).map(([seatNo, booking]) => {
+                const isMine = canCancelBookingForUser(booking, user);
+
+                if (isMine) {
+                    return [String(seatNo), booking];
+                }
+
+                return [
+                    String(seatNo),
+                    {
+                        status: booking?.status || "booked",
+                        seatNo: String(seatNo),
+                        private: true,
+                    },
+                ];
+            })
+        );
+    }, [bookings, user]);
+
     return (
         <div className="min-h-screen w-full bg-[#f8fafc] p-4 md:p-6 lg:p-8">
             {/* Header */}
@@ -487,9 +548,7 @@ export default function BookingPage() {
                     <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#f97316]">
                         SA TOURS BOOKING
                     </p>
-                    <h1 className="mt-1 text-3xl font-bold text-slate-900">
-                        Book a Bus — Select Date
-                    </h1>
+                    <h1 className="mt-1 text-3xl font-bold text-slate-900">Book a Bus — Select Date</h1>
                     <p className="mt-1 text-sm text-slate-500">
                         Choose a date to see available buses and view the seat layout before booking.
                     </p>
@@ -497,9 +556,7 @@ export default function BookingPage() {
 
                 <div className="inline-flex items-center gap-2 rounded-2xl border border-orange-100 bg-white px-4 py-3 shadow-sm">
                     <ShieldCheck className="h-5 w-5 text-[#f97316]" />
-                    <span className="text-sm font-semibold text-slate-700">
-                        Live Bus Availability
-                    </span>
+                    <span className="text-sm font-semibold text-slate-700">Live Bus Availability</span>
                 </div>
             </div>
 
@@ -518,9 +575,7 @@ export default function BookingPage() {
                 />
 
                 <div className="xl:col-span-2 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <label className="mb-3 block text-sm font-semibold text-slate-700">
-                        Select Travel Date
-                    </label>
+                    <label className="mb-3 block text-sm font-semibold text-slate-700">Select Travel Date</label>
 
                     <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
                         <CalendarDays className="h-5 w-5 text-[#f97316]" />
@@ -549,9 +604,7 @@ export default function BookingPage() {
             {/* Bus List */}
             <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 px-5 py-4">
-                    <h2 className="text-lg font-semibold text-slate-900">
-                        Available Buses
-                    </h2>
+                    <h2 className="text-lg font-semibold text-slate-900">Available Buses</h2>
                     <p className="text-sm text-slate-500">
                         {date
                             ? `Showing ${availableBuses.length} bus(es) available on ${date}`
@@ -562,27 +615,19 @@ export default function BookingPage() {
                 <div className="p-5">
                     {loading ? (
                         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-12 text-center">
-                            <p className="text-sm font-medium text-slate-700">
-                                Loading buses...
-                            </p>
+                            <p className="text-sm font-medium text-slate-700">Loading buses...</p>
                         </div>
                     ) : !date ? (
                         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-12 text-center">
-                            <p className="text-sm font-medium text-slate-700">
-                                Select a date first
-                            </p>
+                            <p className="text-sm font-medium text-slate-700">Select a date first</p>
                             <p className="mt-1 text-xs text-slate-500">
                                 Available buses will appear here after choosing a travel date.
                             </p>
                         </div>
                     ) : availableBuses.length === 0 ? (
                         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-12 text-center">
-                            <p className="text-sm font-medium text-slate-700">
-                                No buses available for this date
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500">
-                                Please try another date or contact admin.
-                            </p>
+                            <p className="text-sm font-medium text-slate-700">No buses available for this date</p>
+                            <p className="mt-1 text-xs text-slate-500">Please try another date or contact admin.</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-5">
@@ -592,7 +637,6 @@ export default function BookingPage() {
                                     className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-orange-200 hover:shadow-md"
                                 >
                                     <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                                        {/* Left Details */}
                                         <div className="flex-1">
                                             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                                                 <div className="flex items-center gap-4">
@@ -601,9 +645,7 @@ export default function BookingPage() {
                                                     </div>
 
                                                     <div>
-                                                        <h3 className="text-lg font-bold text-slate-900">
-                                                            {bus.busNumber}
-                                                        </h3>
+                                                        <h3 className="text-lg font-bold text-slate-900">{bus.busNumber}</h3>
                                                         <p className="text-sm text-slate-500">
                                                             {bus.busName} • {bus.busType}
                                                         </p>
@@ -637,7 +679,6 @@ export default function BookingPage() {
                                             </div>
                                         </div>
 
-                                        {/* Right Button */}
                                         <div className="flex xl:justify-end">
                                             <button
                                                 className="inline-flex items-center gap-2 rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:bg-[#ea580c]"
@@ -671,7 +712,8 @@ export default function BookingPage() {
                                 <p className="mt-1 text-sm text-slate-500">
                                     {(() => {
                                         const p = getStartEnd(selectedBus);
-                                        return `${p.start || "--"} → ${p.end || "--"} • ${selectedBus?.startTime || "--:--"} → ${selectedBus?.endTime || "--:--"}`;
+                                        return `${p.start || "--"} → ${p.end || "--"} • ${selectedBus?.startTime || "--:--"
+                                            } → ${selectedBus?.endTime || "--:--"}`;
                                     })()}
                                 </p>
                             </div>
@@ -734,9 +776,7 @@ export default function BookingPage() {
                             {/* Seat Layout Section */}
                             <div className="rounded-3xl border border-orange-100 bg-orange-50/30 p-5">
                                 <div className="mb-4">
-                                    <h3 className="text-lg font-bold text-slate-900">
-                                        Bus Seat Layout
-                                    </h3>
+                                    <h3 className="text-lg font-bold text-slate-900">Bus Seat Layout</h3>
                                     <p className="text-sm text-slate-500">
                                         View the full seat layout before starting the booking process.
                                     </p>
@@ -764,14 +804,13 @@ export default function BookingPage() {
                                         layout={String(selectedBus.seatLayout || "31")}
                                         cabins={selectedBus.cabins || []}
                                         bookedSeats={Object.keys(bookings || {}).map((k) => String(k))}
-                                        bookedMap={bookings}
+                                        bookedMap={safeBookedMap}
                                         selectedSeats={selectedSeats}
                                         onSelect={(s) => {
                                             const id = String(s);
+
                                             setSelectedSeats((prev) => {
-                                                // toggle
                                                 if (prev.includes(id)) {
-                                                    // remove seat and its form
                                                     setBookingForms((bf) => {
                                                         const copy = { ...bf };
                                                         delete copy[id];
@@ -780,7 +819,11 @@ export default function BookingPage() {
                                                     return prev.filter((x) => x !== id);
                                                 }
 
-                                                // add seat and initialize form (copy top-level bookingForm if present)
+                                                // prevent selecting booked seat
+                                                if (bookings[id]) {
+                                                    return prev;
+                                                }
+
                                                 setBookingForms((bf) => ({
                                                     ...bf,
                                                     [id]: bf[id] || { ...bookingForm },
@@ -790,6 +833,17 @@ export default function BookingPage() {
                                             });
                                         }}
                                         onViewBooking={(seat, booking) => {
+                                            // only own seats details visible
+                                            if (!booking || booking.private) {
+                                                showAppToast("info", "This seat is already booked");
+                                                return;
+                                            }
+
+                                            if (!canCancelBookingForUser(booking, user)) {
+                                                showAppToast("info", "You can only view your own booking details");
+                                                return;
+                                            }
+
                                             setViewBooking({ seat, booking });
                                         }}
                                     />
@@ -798,7 +852,6 @@ export default function BookingPage() {
 
                             {/* Booking Footer */}
                             <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                                {/* Header Row */}
                                 <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-between">
                                     <div className="flex items-center gap-3">
                                         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50">
@@ -818,12 +871,17 @@ export default function BookingPage() {
                                             : "No seat selected"}
                                     </div>
 
-                                    <div className="mt-2 md:mt-0 md:ml-4 text-sm text-slate-700">
-                                        Total fare: <span className="font-semibold">₹{Object.values(computedFares).reduce((s, v) => s + (Number(v) || 0), 0).toFixed(2)}</span>
+                                    <div className="mt-2 text-sm text-slate-700 md:ml-4 md:mt-0">
+                                        Total fare:{" "}
+                                        <span className="font-semibold">
+                                            ₹
+                                            {Object.values(computedFares)
+                                                .reduce((s, v) => s + (Number(v) || 0), 0)
+                                                .toFixed(2)}
+                                        </span>
                                     </div>
                                 </div>
 
-                                {/* Form Content */}
                                 <div className="mt-5 space-y-4">
                                     {selectedSeats.length === 0 ? (
                                         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
@@ -839,20 +897,21 @@ export default function BookingPage() {
                                             return (
                                                 <div
                                                     key={seat}
-                                                    className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 md:p-5 shadow-sm"
+                                                    className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm md:p-5"
                                                 >
-                                                    {/* Seat Header */}
                                                     <div className="mb-4 flex items-center justify-between">
                                                         <div className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-sm font-semibold text-slate-900">
                                                             <Ticket className="h-4 w-4 text-[#f97316]" />
                                                             Seat {seat}
                                                         </div>
                                                         <div className="text-sm font-medium text-slate-700">
-                                                            Fare: <span className="font-semibold">₹{Number(computedFares[String(seat)] || 0).toFixed(2)}</span>
+                                                            Fare:{" "}
+                                                            <span className="font-semibold">
+                                                                ₹{Number(computedFares[String(seat)] || 0).toFixed(2)}
+                                                            </span>
                                                         </div>
                                                     </div>
 
-                                                    {/* Inputs */}
                                                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                                                         <input
                                                             placeholder="Passenger Name"
@@ -895,7 +954,6 @@ export default function BookingPage() {
                                                         />
                                                     </div>
 
-                                                    {/* Pickup / Drop */}
                                                     <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
                                                         <div className="space-y-2">
                                                             <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -954,7 +1012,6 @@ export default function BookingPage() {
                                                         </div>
                                                     </div>
 
-                                                    {/* Timing Info */}
                                                     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                                                         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                                                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -986,6 +1043,7 @@ export default function BookingPage() {
                                         onClick={() => {
                                             setSelectedBus(null);
                                             setSelectedSeats([]);
+                                            setBookingForms({});
                                             setBookingForm({
                                                 name: "",
                                                 phone: "",
@@ -1003,9 +1061,10 @@ export default function BookingPage() {
 
                                     <button
                                         onClick={async () => {
-                                            if (!selectedSeats.length) return showAppToast("error", "Select at least one seat to book");
+                                            if (!selectedSeats.length) {
+                                                return showAppToast("error", "Select at least one seat to book");
+                                            }
 
-                                            // Ensure each selected seat has a passenger name and phone
                                             for (const s of selectedSeats) {
                                                 const form = bookingForms[String(s)];
                                                 if (!form || !form.name || !form.phone) {
@@ -1013,7 +1072,6 @@ export default function BookingPage() {
                                                 }
                                             }
 
-                                            // Validate each passenger's details
                                             for (const s of selectedSeats) {
                                                 const form = bookingForms[String(s)] || {};
                                                 if (!isValidName(form.name)) {
@@ -1025,11 +1083,17 @@ export default function BookingPage() {
                                                 if (form.email && !isValidEmail(form.email)) {
                                                     return showAppToast("error", `Enter a valid email for seat ${s}`);
                                                 }
+                                                if (!form.pickup) {
+                                                    return showAppToast("error", `Select pickup point for seat ${s}`);
+                                                }
+                                                if (!form.drop) {
+                                                    return showAppToast("error", `Select drop point for seat ${s}`);
+                                                }
                                             }
 
                                             try {
-                                                // Build booking payloads and compute fare per seat
                                                 const bookingsPayload = [];
+
                                                 for (const seatNo of selectedSeats) {
                                                     const form = bookingForms[String(seatNo)] || {};
                                                     const payload = {
@@ -1056,13 +1120,16 @@ export default function BookingPage() {
                                                                 schedules[selectedBus.busId] &&
                                                                 schedules[selectedBus.busId][date]) ||
                                                             null;
+
                                                         if (sched && sched.pricingOverride) {
                                                             busForPricing.pricingRules = {
                                                                 ...(selectedBus.pricingRules || {}),
                                                                 ...(sched.pricingOverride || {}),
                                                             };
                                                         }
+
                                                         const season = !!(sched && sched.season);
+
                                                         const fareRes = calculateFare({
                                                             bus: busForPricing,
                                                             fromStop: form.pickup,
@@ -1071,11 +1138,9 @@ export default function BookingPage() {
                                                             season,
                                                             dateStr: date,
                                                         });
-                                                        if (fareRes && fareRes.fare !== undefined) {
-                                                            payload.fare = Number(fareRes.fare) || 0;
-                                                        }
+
+                                                        payload.fare = Number(fareRes?.fare || 0);
                                                     } catch (err) {
-                                                        // ignore fare calculation errors
                                                         payload.fare = 0;
                                                     }
 
@@ -1086,26 +1151,29 @@ export default function BookingPage() {
                                                     (s, b) => s + (Number(b.fare) || 0),
                                                     0
                                                 );
+
                                                 if (!totalAmount || totalAmount <= 0) {
                                                     return showAppToast("error", "Invalid fare amount");
                                                 }
 
-                                                // Create Razorpay order on server
                                                 const orderRes = await fetch("/api/public/create-razorpay-order", {
                                                     method: "POST",
                                                     headers: { "Content-Type": "application/json" },
                                                     body: JSON.stringify({ amount: totalAmount, currency: "INR" }),
                                                 });
+
                                                 const orderData = await orderRes.json();
+
                                                 if (!orderRes.ok) {
                                                     throw new Error(orderData.error || "Failed to create payment order");
                                                 }
+
                                                 const order = orderData.order;
 
-                                                // Load Razorpay script
                                                 const loaded = await new Promise((resolve) => {
                                                     if (typeof window === "undefined") return resolve(false);
                                                     if (window.Razorpay) return resolve(true);
+
                                                     const s = document.createElement("script");
                                                     s.src = "https://checkout.razorpay.com/v1/checkout.js";
                                                     s.onload = () => resolve(true);
@@ -1120,14 +1188,13 @@ export default function BookingPage() {
 
                                                 const options = {
                                                     key: publicKey,
-                                                    amount: order.amount, // in paise
+                                                    amount: order.amount,
                                                     currency: order.currency || "INR",
                                                     name: "SA Tours",
                                                     description: "Booking payment",
                                                     order_id: order.id,
                                                     handler: async function (resp) {
                                                         try {
-                                                            // verify payment on server
                                                             const vRes = await fetch("/api/public/verify-payment", {
                                                                 method: "POST",
                                                                 headers: { "Content-Type": "application/json" },
@@ -1143,7 +1210,9 @@ export default function BookingPage() {
                                                                     },
                                                                 }),
                                                             });
+
                                                             const vData = await vRes.json();
+
                                                             if (!vRes.ok) {
                                                                 throw new Error(vData.error || "Payment verification failed");
                                                             }
@@ -1154,19 +1223,21 @@ export default function BookingPage() {
                                                                 paymentRecord.paymentId ||
                                                                 resp.razorpay_payment_id;
 
-                                                            // create bookings and attach payment id
                                                             const results = [];
+
                                                             for (const payload of bookingsPayload) {
                                                                 const withPayment = {
                                                                     ...payload,
                                                                     payment: paymentId,
                                                                     paymentMethod: "razorpay",
                                                                 };
+
                                                                 const bRes = await fetch("/api/booking", {
                                                                     method: "POST",
                                                                     headers: { "Content-Type": "application/json" },
                                                                     body: JSON.stringify(withPayment),
                                                                 });
+
                                                                 const bData = await bRes.json();
                                                                 results.push({ ok: bRes.ok, data: bData });
                                                             }
@@ -1195,6 +1266,14 @@ export default function BookingPage() {
                                                             showAppToast("info", "Payment cancelled");
                                                         },
                                                     },
+                                                    prefill: {
+                                                        name: selectedSeats.length ? bookingForms[selectedSeats[0]]?.name || "" : "",
+                                                        email: selectedSeats.length ? bookingForms[selectedSeats[0]]?.email || "" : "",
+                                                        contact: selectedSeats.length ? bookingForms[selectedSeats[0]]?.phone || "" : "",
+                                                    },
+                                                    theme: {
+                                                        color: "#f97316",
+                                                    },
                                                 };
 
                                                 const rzp = new window.Razorpay(options);
@@ -1212,15 +1291,41 @@ export default function BookingPage() {
                                 </div>
                             </div>
 
+                            {/* View Booking Modal */}
                             {viewBooking && (
-                                <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 px-4">
+                                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
                                     <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-                                        <h3 className="text-lg font-bold text-slate-900">Booking details — Seat {viewBooking.seat}</h3>
-                                        <p className="mt-3 text-sm text-slate-700">Name: <span className="font-semibold">{viewBooking.booking?.name || "—"}</span></p>
-                                        <p className="mt-1 text-sm text-slate-700">Phone: <span className="font-semibold">{viewBooking.booking?.phone || viewBooking.booking?.phoneNumber || "—"}</span></p>
-                                        <p className="mt-1 text-sm text-slate-700">Email: <span className="font-semibold">{viewBooking.booking?.email || "—"}</span></p>
-                                        <p className="mt-2 text-sm text-slate-700">Pickup: <span className="font-semibold">{viewBooking.booking?.pickup || "—"}</span>{viewBooking.booking?.pickupTime ? <span className="ml-2 text-slate-500">({viewBooking.booking?.pickupTime})</span> : null}</p>
-                                        <p className="mt-1 text-sm text-slate-700">Drop: <span className="font-semibold">{viewBooking.booking?.drop || "—"}</span>{viewBooking.booking?.dropTime ? <span className="ml-2 text-slate-500">({viewBooking.booking?.dropTime})</span> : null}</p>
+                                        <h3 className="text-lg font-bold text-slate-900">
+                                            Booking details — Seat {viewBooking.seat}
+                                        </h3>
+
+                                        <p className="mt-3 text-sm text-slate-700">
+                                            Name: <span className="font-semibold">{viewBooking.booking?.name || "—"}</span>
+                                        </p>
+                                        <p className="mt-1 text-sm text-slate-700">
+                                            Phone:{" "}
+                                            <span className="font-semibold">
+                                                {viewBooking.booking?.phone || viewBooking.booking?.phoneNumber || "—"}
+                                            </span>
+                                        </p>
+                                        <p className="mt-1 text-sm text-slate-700">
+                                            Email: <span className="font-semibold">{viewBooking.booking?.email || "—"}</span>
+                                        </p>
+                                        <p className="mt-2 text-sm text-slate-700">
+                                            Ticket: <span className="font-semibold">{viewBooking.booking?.ticket || "—"}</span>
+                                        </p>
+                                        <p className="mt-2 text-sm text-slate-700">
+                                            Pickup: <span className="font-semibold">{viewBooking.booking?.pickup || "—"}</span>
+                                            {viewBooking.booking?.pickupTime ? (
+                                                <span className="ml-2 text-slate-500">({viewBooking.booking?.pickupTime})</span>
+                                            ) : null}
+                                        </p>
+                                        <p className="mt-1 text-sm text-slate-700">
+                                            Drop: <span className="font-semibold">{viewBooking.booking?.drop || "—"}</span>
+                                            {viewBooking.booking?.dropTime ? (
+                                                <span className="ml-2 text-slate-500">({viewBooking.booking?.dropTime})</span>
+                                            ) : null}
+                                        </p>
 
                                         <div className="mt-6 flex justify-end gap-3">
                                             <button
@@ -1230,34 +1335,93 @@ export default function BookingPage() {
                                                 Close
                                             </button>
 
-                                            {canCancelBookingForUser(viewBooking.booking, user) && (() => {
-                                                // determine if booking fare matches the regular fare
-                                                try {
-                                                    const bookingObj = viewBooking.booking || {};
-                                                    const busForPricing = { ...(selectedBus || {}) };
-                                                    const sched = (schedules && selectedBus && schedules[selectedBus.busId] && schedules[selectedBus.busId][date]) || null;
-                                                    if (sched && sched.pricingOverride) {
-                                                        busForPricing.pricingRules = {
-                                                            ...(selectedBus.pricingRules || {}),
-                                                            ...(sched.pricingOverride || {}),
-                                                        };
-                                                    }
-                                                    const season = !!(sched && sched.season);
-                                                    const fareRes = calculateFare({
-                                                        bus: busForPricing,
-                                                        fromStop: bookingObj.pickup,
-                                                        toStop: bookingObj.drop,
-                                                        busType: selectedBus?.busType || "AC",
-                                                        season,
-                                                        dateStr: date,
-                                                    }) || { fare: 0, ruleApplied: false };
+                                            {canCancelBookingForUser(viewBooking.booking, user) &&
+                                                (() => {
+                                                    try {
+                                                        const bookingObj = viewBooking.booking || {};
+                                                        const busForPricing = { ...(selectedBus || {}) };
+                                                        const sched =
+                                                            (schedules &&
+                                                                selectedBus &&
+                                                                schedules[selectedBus.busId] &&
+                                                                schedules[selectedBus.busId][date]) ||
+                                                            null;
 
-                                                    const expectedFare = Number(fareRes.fare || 0);
-                                                    const ruleApplied = Boolean(fareRes.ruleApplied);
-                                                    const actualFare = Number(bookingObj.fare || 0);
+                                                        if (sched && sched.pricingOverride) {
+                                                            busForPricing.pricingRules = {
+                                                                ...(selectedBus.pricingRules || {}),
+                                                                ...(sched.pricingOverride || {}),
+                                                            };
+                                                        }
 
-                                                    // If a fare rule/override applies, block cancel and show contact
-                                                    if (ruleApplied) {
+                                                        const season = !!(sched && sched.season);
+
+                                                        const fareRes =
+                                                            calculateFare({
+                                                                bus: busForPricing,
+                                                                fromStop: bookingObj.pickup,
+                                                                toStop: bookingObj.drop,
+                                                                busType: selectedBus?.busType || "AC",
+                                                                season,
+                                                                dateStr: date,
+                                                            }) || { fare: 0, ruleApplied: false };
+
+                                                        const expectedFare = Number(fareRes.fare || 0);
+                                                        const ruleApplied = Boolean(fareRes.ruleApplied);
+                                                        const actualFare = Number(bookingObj.fare || 0);
+
+                                                        if (ruleApplied) {
+                                                            return (
+                                                                <button
+                                                                    onClick={() => setContactOpen(true)}
+                                                                    className="rounded-2xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700"
+                                                                >
+                                                                    Contact Support
+                                                                </button>
+                                                            );
+                                                        }
+
+                                                        const faresMatch =
+                                                            Number.isFinite(expectedFare) &&
+                                                            Number.isFinite(actualFare) &&
+                                                            Math.abs(expectedFare - actualFare) < 0.01;
+
+                                                        if (faresMatch) {
+                                                            return (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const seat = String(viewBooking.seat);
+                                                                        setConfirmMessage(
+                                                                            `Cancel booking for seat ${seat}? This will delete the booking record.`
+                                                                        );
+                                                                        setConfirmAction(() => async () => {
+                                                                            try {
+                                                                                const s = String(viewBooking.seat);
+                                                                                const res = await fetch(
+                                                                                    `/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`,
+                                                                                    { method: "DELETE" }
+                                                                                );
+                                                                                const data = await res.json();
+                                                                                if (!res.ok) throw new Error(data.error || "Cancel failed");
+
+                                                                                showAppToast("success", data.message || "Booking cancelled");
+                                                                                setViewBooking(null);
+                                                                                await fetchBookings();
+                                                                            } catch (err) {
+                                                                                console.error(err);
+                                                                                showAppToast("error", err.message || "Cancel failed");
+                                                                                throw err;
+                                                                            }
+                                                                        });
+                                                                        setConfirmOpen(true);
+                                                                    }}
+                                                                    className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600"
+                                                                >
+                                                                    Cancel Booking
+                                                                </button>
+                                                            );
+                                                        }
+
                                                         return (
                                                             <button
                                                                 onClick={() => setContactOpen(true)}
@@ -1266,20 +1430,21 @@ export default function BookingPage() {
                                                                 Contact Support
                                                             </button>
                                                         );
-                                                    }
-
-                                                    const faresMatch = Number.isFinite(expectedFare) && Number.isFinite(actualFare) && Math.abs(expectedFare - actualFare) < 0.01;
-
-                                                    if (faresMatch) {
+                                                    } catch (e) {
                                                         return (
                                                             <button
                                                                 onClick={() => {
                                                                     const seat = String(viewBooking.seat);
-                                                                    setConfirmMessage(`Cancel booking for seat ${seat}? This will delete the booking record.`);
+                                                                    setConfirmMessage(
+                                                                        `Cancel booking for seat ${seat}? This will delete the booking record.`
+                                                                    );
                                                                     setConfirmAction(() => async () => {
                                                                         try {
                                                                             const s = String(viewBooking.seat);
-                                                                            const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`, { method: "DELETE" });
+                                                                            const res = await fetch(
+                                                                                `/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`,
+                                                                                { method: "DELETE" }
+                                                                            );
                                                                             const data = await res.json();
                                                                             if (!res.ok) throw new Error(data.error || "Cancel failed");
 
@@ -1300,54 +1465,21 @@ export default function BookingPage() {
                                                             </button>
                                                         );
                                                     }
-
-                                                    // fares differ (or mismatch) — show contact as fallback
-                                                    return (
-                                                        <button
-                                                            onClick={() => setContactOpen(true)}
-                                                            className="rounded-2xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700"
-                                                        >
-                                                            Contact Support
-                                                        </button>
-                                                    );
-                                                } catch (e) {
-                                                    // fallback: allow cancel if any error occurs
-                                                    return (
-                                                        <button
-                                                            onClick={() => {
-                                                                const seat = String(viewBooking.seat);
-                                                                setConfirmMessage(`Cancel booking for seat ${seat}? This will delete the booking record.`);
-                                                                setConfirmAction(() => async () => {
-                                                                    try {
-                                                                        const s = String(viewBooking.seat);
-                                                                        const res = await fetch(`/api/booking?busId=${selectedBus.busId}&date=${date}&seatNo=${s}`, { method: "DELETE" });
-                                                                        const data = await res.json();
-                                                                        if (!res.ok) throw new Error(data.error || "Cancel failed");
-
-                                                                        showAppToast("success", data.message || "Booking cancelled");
-                                                                        setViewBooking(null);
-                                                                        await fetchBookings();
-                                                                    } catch (err) {
-                                                                        console.error(err);
-                                                                        showAppToast("error", err.message || "Cancel failed");
-                                                                        throw err;
-                                                                    }
-                                                                });
-                                                                setConfirmOpen(true);
-                                                            }}
-                                                            className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600"
-                                                        >
-                                                            Cancel Booking
-                                                        </button>
-                                                    );
-                                                }
-                                            })()}
+                                                })()}
 
                                             <button
                                                 onClick={() => {
-                                                    // populate form with booking data for reference/edit
                                                     const b = viewBooking.booking || {};
-                                                    setBookingForm((p) => ({ ...p, name: b.name || "", phone: b.phone || b.phoneNumber || "", email: b.email || "", pickup: b.pickup || "", pickupTime: b.pickupTime || "", drop: b.drop || "", dropTime: b.dropTime || "" }));
+                                                    setBookingForm((p) => ({
+                                                        ...p,
+                                                        name: b.name || "",
+                                                        phone: b.phone || b.phoneNumber || "",
+                                                        email: b.email || "",
+                                                        pickup: b.pickup || "",
+                                                        pickupTime: b.pickupTime || "",
+                                                        drop: b.drop || "",
+                                                        dropTime: b.dropTime || "",
+                                                    }));
                                                     setSelectedSeats([String(viewBooking.seat)]);
                                                     setViewBooking(null);
                                                 }}
@@ -1374,7 +1506,6 @@ export default function BookingPage() {
                                         try {
                                             await confirmAction();
                                         } catch (e) {
-                                            // already handled inside action
                                         } finally {
                                             setConfirmLoading(false);
                                             setConfirmOpen(false);
@@ -1387,16 +1518,27 @@ export default function BookingPage() {
                                 <div className="fixed inset-0 z-[61] flex items-center justify-center bg-black/50 px-4">
                                     <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
                                         <h3 className="text-lg font-bold text-slate-900">Contact Support</h3>
-                                        <p className="mt-3 text-sm text-slate-700">This booking has a non-standard fare. To modify or cancel, please contact support:</p>
+                                        <p className="mt-3 text-sm text-slate-700">
+                                            This booking has a non-standard fare. To modify or cancel, please contact support:
+                                        </p>
                                         <p className="mt-4 text-xl font-semibold text-amber-700">{CONTACT_PHONE}</p>
                                         <div className="mt-6 flex justify-end gap-3">
-                                            <a href={`tel:${CONTACT_PHONE}`} className="rounded-2xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white">Call Now</a>
-                                            <button onClick={() => setContactOpen(false)} className="rounded-2xl border px-4 py-2 text-sm">Close</button>
+                                            <a
+                                                href={`tel:${CONTACT_PHONE}`}
+                                                className="rounded-2xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white"
+                                            >
+                                                Call Now
+                                            </a>
+                                            <button
+                                                onClick={() => setContactOpen(false)}
+                                                className="rounded-2xl border px-4 py-2 text-sm"
+                                            >
+                                                Close
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
                             )}
-
                         </div>
                     </div>
                 </div>
@@ -1417,9 +1559,7 @@ function SummaryCard({ title, value, icon }) {
                 </div>
                 <div>
                     <p className="text-sm text-slate-500">{title}</p>
-                    <h3 className="text-lg font-bold text-slate-900 break-words">
-                        {value}
-                    </h3>
+                    <h3 className="break-words text-lg font-bold text-slate-900">{value}</h3>
                 </div>
             </div>
         </div>
@@ -1431,9 +1571,7 @@ function InfoCard({ icon, label, value }) {
         <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
             <div className="mb-2 flex items-center gap-2">
                 {icon}
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {label}
-                </p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
             </div>
             <p className="text-sm font-medium text-slate-800">{value}</p>
         </div>
@@ -1443,7 +1581,6 @@ function InfoCard({ icon, label, value }) {
 function getPickupOptions(bus) {
     if (!bus) return [];
 
-    // Prefer explicit pickupPoints when available
     if (Array.isArray(bus.pickupPoints)) {
         const resolve = (p) => {
             if (!p) return "";
@@ -1479,8 +1616,12 @@ function getDropOptions(bus, pickup) {
         };
 
         const start = resolve(bus.startPoint);
-        const pickups = Array.isArray(bus.pickupPoints) ? bus.pickupPoints.map((p) => resolve(p)).filter(Boolean) : [];
-        const drops = Array.isArray(bus.dropPoints) ? bus.dropPoints.map((p) => resolve(p)).filter(Boolean) : [];
+        const pickups = Array.isArray(bus.pickupPoints)
+            ? bus.pickupPoints.map((p) => resolve(p)).filter(Boolean)
+            : [];
+        const drops = Array.isArray(bus.dropPoints)
+            ? bus.dropPoints.map((p) => resolve(p)).filter(Boolean)
+            : [];
         const end = resolve(bus.endPoint);
 
         const all = [];
@@ -1496,7 +1637,6 @@ function getDropOptions(bus, pickup) {
         const dropSet = new Set(drops.map((d) => normalizeKey(d)));
         const pickupSet = new Set(pickups.map((p) => normalizeKey(p)));
 
-        // exclude any stop that is also listed as a pickup
         return sliced.filter((s) => {
             const key = normalizeKey(s);
             if (pickupSet.has(key)) return false;
@@ -1512,13 +1652,19 @@ function getDropOptions(bus, pickup) {
 
 function canCancelBookingForUser(booking, user) {
     if (!booking || !user) return false;
+
     const bEmail = normalizeText(booking.email || "");
     const bPhone = normalizeText(booking.phone || booking.phoneNumber || "");
+    const bUserId = normalizeText(booking.userId || "");
+
     const uEmail = normalizeText(user.email || "");
     const uPhone = normalizeText(user.phone || "");
+    const uUid = normalizeText(user.uid || "");
 
+    if (uUid && bUserId && normalizeKey(uUid) === normalizeKey(bUserId)) return true;
     if (uEmail && bEmail && normalizeKey(uEmail) === normalizeKey(bEmail)) return true;
     if (uPhone && bPhone && normalizeKey(uPhone) === normalizeKey(bPhone)) return true;
+
     return false;
 }
 
@@ -1545,8 +1691,20 @@ function ConfirmModal({ message, onCancel, onConfirm, loading }) {
                     >
                         {loading ? (
                             <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                                <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                />
+                                <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                                />
                             </svg>
                         ) : null}
                         Confirm

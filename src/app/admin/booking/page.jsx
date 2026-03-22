@@ -1313,12 +1313,12 @@ export default function BookingPage() {
     // =========================
     // SEAT CARD
     // =========================
-    const renderSeatCard = (seatNo) => {
-      const data = seatMap[String(seatNo)] || {};
-      const isBlocked = data?.status === "blocked";
-      const title = `${seatNo}${isWindowSeat(seatNo) ? "W" : ""}`;
+      const renderSeatCard = (seatNo) => {
+        const data = seatMap[String(seatNo)] || {};
+        const isBlocked = data?.status === "blocked";
+        const title = `${seatNo}${isWindowSeat(seatNo) ? "W" : ""}`;
 
-      return `
+        return `
       <div class="seat-box ${isBlocked ? "blocked" : ""}">
         <div class="seat-title">
           ${safe(title)}
@@ -1349,7 +1349,7 @@ export default function BookingPage() {
         </div>
       </div>
     `;
-    };
+      };
 
     // =========================
     // LEFT COLUMN
@@ -2598,8 +2598,8 @@ export default function BookingPage() {
                           >
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2 text-lg font-bold text-slate-900">
-                                  <span>Seat {seat} {b.ticket ? `— ${b.ticket}` : ""}</span>
+                                  <div className="flex flex-wrap items-center gap-2 text-lg font-bold text-slate-900">
+                                    <span>Seat {seat} {b.ticket ? `— ${b.ticket}` : ""}</span>
                                   {b.status === "blocked" ? (
                                     <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
                                       BLOCKED
@@ -2807,7 +2807,7 @@ export default function BookingPage() {
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="text-lg font-bold text-slate-900">Seat {viewBooking.seat} {viewBooking.booking?.ticket ? `— ${viewBooking.booking.ticket}` : ""}</div>
+                    <div className="text-lg font-bold text-slate-900">Seat {viewBooking.seat} {viewBooking.booking?.ticket ? `— ${viewBooking.booking.ticket}` : ""}</div>
                   <div className="mt-2 text-sm font-semibold text-slate-700">
                     {viewBooking.booking?.name || "—"}
                   </div>
