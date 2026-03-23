@@ -1184,25 +1184,15 @@ export default function BookingPage() {
   };
 
   /* =========================================================
-     COMMON HTML SHELL
+     23 SEAT
   ========================================================= */
-  const buildTemplateShell = ({
+
+  const buildTemplateShell23 = ({
     selectedBus,
     date,
     leftColumnHtml,
     rightColumnHtml,
     backRowHtml,
-    seatHeight = "24mm",
-    mainHeight = "188mm",
-    sheetHeight = "289mm",
-    seatTitleFont = "14px",
-    labelFont = "12px",
-    valueFont = "12px",
-    topFont = "13px",
-    busFont = "13px",
-    companyFont = "18px",
-    routeFont = "13px",
-    showTicketTag = false,
   }) => {
     return `
 <!DOCTYPE html>
@@ -1270,11 +1260,10 @@ export default function BookingPage() {
 
     .sheet {
       width: 202mm;
-      min-height: ${sheetHeight};
-      max-height: ${sheetHeight};
+      height: 289mm;
       margin: 0 auto;
-      border: 1px solid #555;
-      padding: 4mm;
+      border: 1.2px solid #444;
+      padding: 3.5mm;
       background: #fff;
       overflow: hidden;
       page-break-inside: avoid;
@@ -1286,7 +1275,7 @@ export default function BookingPage() {
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
       margin-bottom: 3px;
-      font-size: ${topFont};
+      font-size: 14px;
       font-weight: 700;
       line-height: 1.1;
     }
@@ -1304,14 +1293,14 @@ export default function BookingPage() {
     }
 
     .bus-number {
-      font-size: ${busFont};
+      font-size: 14px;
       font-weight: 700;
       text-align: left;
       line-height: 1.1;
     }
 
     .company {
-      font-size: ${companyFont};
+      font-size: 18px;
       font-weight: 700;
       text-transform: uppercase;
       text-align: center;
@@ -1319,50 +1308,53 @@ export default function BookingPage() {
     }
 
     .route {
-      font-size: ${routeFont};
+      font-size: 14px;
       font-weight: 700;
       text-align: right;
       line-height: 1.1;
     }
 
     .divider {
-      border-top: 1px solid #777;
+      border-top: 1px solid #666;
       margin: 3px 0 5px;
     }
 
+    /* =========================
+       MAIN LAYOUT
+    ========================= */
     .main-layout {
       display: grid;
-      /* let center column expand to push the right column to the sheet edge */
       grid-template-columns: 55mm 1fr 110mm;
       align-items: start;
       gap: 0;
-      min-height: ${mainHeight};
-      max-height: ${mainHeight};
+      height: 210mm;
+      max-height: 210mm;
       overflow: hidden;
+      margin-bottom: 0;
+      padding-bottom: 0;
     }
 
     .left-column {
-      /* match right seat width so seat-box sizes are identical */
       width: 55mm;
       display: flex;
       flex-direction: column;
       gap: 0;
       overflow: hidden;
+      align-items: stretch;
     }
 
     .center-gap {
-      /* flexible center gap that expands to push right column to the edge */
       width: auto;
       min-height: 1px;
     }
 
     .right-column {
-      /* accommodates two side-by-side 55mm seat boxes */
       width: 110mm;
       display: flex;
       flex-direction: column;
       gap: 0;
       align-items: stretch;
+      justify-content: flex-start;
       overflow: hidden;
     }
 
@@ -1370,11 +1362,13 @@ export default function BookingPage() {
       width: 55mm;
       margin: 0;
       padding: 0;
+      display: flex;
+      align-items: stretch;
     }
 
     .left-seat-wrap.left-empty {
-      min-height: ${seatHeight};
-      height: ${seatHeight};
+      height: 30mm;
+      min-height: 30mm;
       border: none;
       background: transparent;
     }
@@ -1385,6 +1379,8 @@ export default function BookingPage() {
       gap: 0;
       margin: 0;
       padding: 0;
+      align-items: stretch;
+      justify-items: stretch;
     }
 
     .right-count-1 {
@@ -1398,39 +1394,61 @@ export default function BookingPage() {
 
     .right-seat-wrap {
       width: 55mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
     }
 
+    /* =========================
+       BACK ROW
+    ========================= */
     .back-row {
       width: 100%;
       display: grid;
+      grid-template-columns: repeat(5, 1fr);
       gap: 0;
-      margin-top: 0;
-      page-break-inside: avoid;
-      break-inside: avoid;
+      margin-top: -1px;
+      align-items: stretch;
+      justify-items: stretch;
+      border-top: none;
+      height: 50mm;
+      max-height: 50mm;
+      overflow: visible;
     }
-
-    .back-count-1 { grid-template-columns: 1fr; }
-    .back-count-2 { grid-template-columns: repeat(2, 1fr); }
-    .back-count-3 { grid-template-columns: repeat(3, 1fr); }
-    .back-count-4 { grid-template-columns: repeat(4, 1fr); }
-    .back-count-5 { grid-template-columns: repeat(5, 1fr); }
 
     .back-seat-wrap {
       width: 100%;
       min-width: 0;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
     }
 
+    /* =========================
+       SEAT BOX
+    ========================= */
     .seat-box {
       width: 100%;
-      min-height: ${seatHeight};
-      height: ${seatHeight};
+      height: 30mm;
+      min-height: 30mm;
       border: 1px solid #444;
-      /* slightly reduced padding to tighten vertical space */
-      padding: 0.9mm 1.0mm 0.6mm;
+      padding: 0.8mm 1mm 0.5mm;
       background: #fff;
       overflow: hidden;
-      page-break-inside: avoid;
-      break-inside: avoid;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .back-row .seat-box {
+      height: 34m;
+      min-height: 34mm;
+      border: 1px solid #444;
+      padding: 0.8mm 1mm 0.6mm;
+      margin: 0;
+      overflow: hidden;
     }
 
     .seat-box.blocked {
@@ -1438,21 +1456,41 @@ export default function BookingPage() {
       border-color: #ea580c;
     }
 
+    /* =========================
+       HEADER
+       seat no left / badge right
+    ========================= */
     .seat-title {
-      font-size: ${seatTitleFont};
+      font-size: 18px;
       font-weight: 700;
       line-height: 1;
-      margin-bottom: 0.3mm;
+      margin-bottom: 0.45mm;
       display: flex;
       align-items: center;
-      gap: 0.6mm;
-      flex-wrap: nowrap;
+      justify-content: space-between;
+      gap: 1mm;
+      white-space: nowrap;
       overflow: hidden;
+    }
+
+    .seat-no {
+      display: inline-block;
+      flex: 0 0 auto;
       white-space: nowrap;
     }
 
+    .seat-title-right {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.6mm;
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+    }
+
     .blocked-tag {
-      font-size: 7px;
+      font-size: 16px;
       border: 1px solid #ea580c;
       color: #ea580c;
       padding: 0 3px;
@@ -1462,54 +1500,66 @@ export default function BookingPage() {
     }
 
     .ticket-tag {
-      display: ${showTicketTag ? "inline-flex" : "none"};
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 8px;
+      font-size: 17px;
       font-weight: 700;
       border: 1px solid #64748b;
       color: #0f172a;
       background: #f1f5f9;
-      padding: 0.15mm 0.9mm;
+      padding: 0.2mm 0.8mm;
       border-radius: 5px;
       line-height: 1;
-      height: 3mm;
-      max-width: 38%;
+      height: 3.2mm;
+      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      flex-shrink: 0;
+      flex-shrink: 1;
     }
 
+    /* =========================
+       LABEL / VALUE
+       Name:-  Paras
+    ========================= */
     .line-row {
-      display: grid;
-      grid-template-columns: auto 1fr;
+      display: flex;
       align-items: center;
-      /* tightened column gap */
-      column-gap: 0.6mm;
-      margin: 0.2mm 0;
-      min-height: 2.6mm;
+      gap: 0.8mm;
+      margin: 0.14mm 0;
+      min-height: 2.4mm;
+      overflow: hidden;
     }
 
     .label {
-      font-size: ${labelFont};
+      flex: 0 0 auto;
+      font-size: 18px;
       font-weight: 700;
       line-height: 1;
       white-space: nowrap;
-      padding-right: 0.3mm;
     }
 
     .value {
-      display: block;
-      min-height: 2.4mm;
-      padding: 0 0 0.1mm 0.15mm;
-      font-size: ${valueFont};
+      flex: 1 1 auto;
+      min-width: 0;
+      display: inline-block;
+      min-height: 2.2mm;
+      padding: 0 0 0.06mm 0;
+      font-size: 18px;
       line-height: 1;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       border-bottom: 1px solid #555;
-      width: 100%;
+    }
+
+    .back-row .label {
+      font-size: 17px;
+    }
+
+    .back-row .value {
+      font-size: 17px;
     }
 
     @media print {
@@ -1552,18 +1602,14 @@ export default function BookingPage() {
     <div class="divider"></div>
 
     <div class="main-layout">
-      <div class="left-column">
-        ${leftColumnHtml}
-      </div>
-
+      <div class="left-column">${leftColumnHtml}</div>
       <div class="center-gap"></div>
-
-      <div class="right-column">
-        ${rightColumnHtml}
-      </div>
+      <div class="right-column">${rightColumnHtml}</div>
     </div>
 
-    ${backRowHtml}
+    <div class="back-row">
+      ${backRowHtml}
+    </div>
   </div>
 
   <script>
@@ -1585,9 +1631,7 @@ export default function BookingPage() {
   `;
   };
 
-  /* =========================================================
-     23 SEAT
-  ========================================================= */
+
   const renderSeatCardTemplate23 = ({
     seatNo,
     seatMap,
@@ -1644,7 +1688,7 @@ export default function BookingPage() {
       [13, 14],
       [16, 17],
     ];
-    const backRow =[19, 20, 21, 22, 23];
+    const backRow = [19, 20, 21, 22, 23];
     const topOffsetRows = 1;
 
     const windowSeatSet = new Set([
@@ -1699,48 +1743,476 @@ export default function BookingPage() {
       )
       .join("");
 
-    const backRowHtml = `
-    <div class="back-row back-count-${backRow.length}">
-      ${backRow
-        .map(
-          (seat) => `
-        <div class="back-seat-wrap">
-          ${renderSeatCardTemplate23({
-            seatNo: seat,
-            seatMap,
-            isWindowSeat: windowSeatSet.has(seat),
-          })}
-        </div>
-      `
-        )
-        .join("")}
-    </div>
-  `;
+    // ✅ IMPORTANT: NO outer .back-row here
+    const backRowHtml = backRow
+      .map(
+        (seat) => `
+      <div class="back-seat-wrap">
+        ${renderSeatCardTemplate23({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
 
-    return buildTemplateShell({
+    return buildTemplateShell23({
       selectedBus,
       date,
       leftColumnHtml,
       rightColumnHtml,
       backRowHtml,
-      seatHeight: "30mm",
-      mainHeight: "220mm",
-      sheetHeight: "289mm",
-      /* increased fonts by +6px for better readability */
-      seatTitleFont: "22px",
-      labelFont: "18px",
-      valueFont: "18px",
-      topFont: "14px",
-      busFont: "14px",
-      companyFont: "18px",
-      routeFont: "14px",
-      showTicketTag: false,
     });
   };
 
   /* =========================================================
      27 SEAT
   ========================================================= */
+
+  /* =========================================================
+   27 SEAT - FINAL FIXED
+========================================================= */
+
+  const buildTemplateShell27 = ({
+    selectedBus,
+    date,
+    leftColumnHtml,
+    rightColumnHtml,
+    backRowHtml,
+  }) => {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Seat Template - ${safeHtml(selectedBus?.busNumber || "Bus")}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 4mm;
+    }
+
+    html, body {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #111;
+      font-family: "Times New Roman", serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      overflow: hidden;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-size: 12px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 8px;
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 8px;
+    }
+
+    .toolbar button {
+      border: 1px solid #ddd;
+      background: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .toolbar .primary {
+      background: #f97316;
+      color: #fff;
+      border-color: #f97316;
+    }
+
+    .sheet {
+      width: 202mm;
+      height: 289mm;
+      margin: 0 auto;
+      border: 1.2px solid #444;
+      padding: 3.5mm;
+      background: #fff;
+      overflow: hidden;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .top-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      margin-bottom: 3px;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .top-line .left { text-align: left; }
+    .top-line .center { text-align: center; }
+    .top-line .right { text-align: right; }
+
+    .title-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .bus-number {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: left;
+      line-height: 1.1;
+    }
+
+    .company {
+      font-size: 18px;
+      font-weight: 700;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1;
+    }
+
+    .route {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: right;
+      line-height: 1.1;
+    }
+
+    .divider {
+      border-top: 1px solid #666;
+      margin: 3px 0 5px;
+    }
+
+    /* =========================
+       MAIN LAYOUT
+    ========================= */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 55mm 1fr 110mm;
+      align-items: start;
+      gap: 0;
+      height: 223.85mm;
+      max-height: 223.85mm;
+      overflow: hidden;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .left-column {
+      width: 55mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
+      align-items: stretch;
+    }
+
+    .center-gap {
+      width: auto;
+      min-height: 1px;
+    }
+
+    .right-column {
+      width: 110mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      align-items: stretch;
+      justify-content: flex-start;
+      overflow: hidden;
+    }
+
+    .left-seat-wrap {
+      width: 55mm;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: stretch;
+    }
+
+    .left-seat-wrap.left-empty {
+      height: 28mm;
+      min-height: 28mm;
+      border: none;
+      background: transparent;
+    }
+
+    .right-row {
+      width: 110mm;
+      display: grid;
+      gap: 0;
+      margin: 0;
+      padding: 0;
+      align-items: stretch;
+      justify-items: stretch;
+    }
+
+    .right-count-1 {
+      grid-template-columns: 55mm;
+      justify-content: end;
+    }
+
+    .right-count-2 {
+      grid-template-columns: repeat(2, 55mm);
+    }
+
+    .right-seat-wrap {
+      width: 55mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       BACK ROW
+    ========================= */
+    .back-row {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+      margin-top: 2mm;
+      align-items: stretch;
+      justify-items: stretch;
+      border-top: none;
+      height: 36mm;
+      max-height: 36mm;
+      overflow: visible;
+    }
+
+    .back-seat-wrap {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       SEAT BOX
+    ========================= */
+    .seat-box {
+      width: 100%;
+      height: 28mm;
+      min-height: 28mm;
+      border: 1px solid #444;
+      padding: 0.8mm 1mm 0.5mm;
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .back-row .seat-box {
+      height: 36mm;
+      min-height: 36mm;
+      border: 1px solid #444;
+      padding: 0.9mm 1mm 0.6mm;
+      margin: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .seat-box.blocked {
+      background: #fff7ed;
+      border-color: #ea580c;
+    }
+
+    /* =========================
+       HEADER
+    ========================= */
+    .seat-title {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 0.4mm;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1mm;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .seat-no {
+      display: inline-block;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .seat-title-right {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.6mm;
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .blocked-tag {
+      font-size: 7px;
+      border: 1px solid #ea580c;
+      color: #ea580c;
+      padding: 0 3px;
+      border-radius: 6px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .ticket-tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      border: 1px solid #64748b;
+      color: #0f172a;
+      background: #f1f5f9;
+      padding: 0.2mm 0.8mm;
+      border-radius: 5px;
+      line-height: 1;
+      height: 5mm;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex-shrink: 1;
+    }
+
+    /* =========================
+       LABEL / VALUE
+    ========================= */
+    .line-row {
+      display: flex;
+      align-items: center;
+      gap: 1.2mm;
+      margin: 0.14mm 0;
+      min-height: 2.4mm;
+      overflow: hidden;
+    }
+
+    .label {
+      flex: 0 0 14mm;
+      width: 14mm;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .value {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: inline-block;
+      min-height: 2.2mm;
+      padding: 0 0 0.06mm 0.35mm;
+      font-size: 18px;
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-bottom: 1px solid #555;
+    }
+
+    @media print {
+      html, body {
+        width: auto;
+        min-height: auto;
+        overflow: hidden;
+      }
+
+      .toolbar {
+        display: none !important;
+      }
+
+      .sheet {
+        border: none;
+        margin: 0 auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="primary" onclick="downloadHtmlFile()">Download HTML</button>
+  </div>
+
+  <div class="sheet">
+    <div class="top-line">
+      <div class="left">Date:- ${safeHtml(formatDisplayDate(date) || "")}</div>
+      <div class="center">||श्री||</div>
+      <div class="right">Time:- ${safeHtml(selectedBus?.startTime || "04:00")}</div>
+    </div>
+
+    <div class="title-line">
+      <div class="bus-number">${safeHtml(selectedBus?.busNumber || "MH06BW7405")}</div>
+      <div class="company">SA TRAVEL'S</div>
+      <div class="route">Route:- ${safeHtml(selectedBus?.routeName || "")}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="main-layout">
+      <div class="left-column">${leftColumnHtml}</div>
+      <div class="center-gap"></div>
+      <div class="right-column">${rightColumnHtml}</div>
+    </div>
+
+    <div class="back-row">
+      ${backRowHtml}
+    </div>
+  </div>
+
+  <script>
+    function downloadHtmlFile() {
+      const html = document.documentElement.outerHTML;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
+  `;
+  };
+
   const renderSeatCardTemplate27 = ({
     seatNo,
     seatMap,
@@ -1753,8 +2225,11 @@ export default function BookingPage() {
     return `
     <div class="seat-box ${isBlocked ? "blocked" : ""}">
       <div class="seat-title">
-        ${safeHtml(title)}
-        ${isBlocked ? `<span class="blocked-tag">BLOCKED</span>` : ""}
+        <span class="seat-no">${safeHtml(title)}</span>
+        <span class="seat-title-right">
+          ${isBlocked ? `<span class="blocked-tag">BLOCKED</span>` : ""}
+          ${data.ticket ? `<span class="ticket-tag">${safeHtml(String(data.ticket))}</span>` : ""}
+        </span>
       </div>
 
       <div class="line-row">
@@ -1854,48 +2329,505 @@ export default function BookingPage() {
       )
       .join("");
 
-    const backRowHtml = `
-    <div class="back-row back-count-${backRow.length}">
-      ${backRow
-        .map(
-          (seat) => `
-        <div class="back-seat-wrap">
-          ${renderSeatCardTemplate27({
-            seatNo: seat,
-            seatMap,
-            isWindowSeat: windowSeatSet.has(seat),
-          })}
-        </div>
-      `
-        )
-        .join("")}
-    </div>
-  `;
+    // IMPORTANT: NO nested .back-row here
+    const backRowHtml = backRow
+      .map(
+        (seat) => `
+      <div class="back-seat-wrap">
+        ${renderSeatCardTemplate27({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
 
-    return buildTemplateShell({
+    return buildTemplateShell27({
       selectedBus,
       date,
       leftColumnHtml,
       rightColumnHtml,
       backRowHtml,
-      seatHeight: "30mm",
-      mainHeight: "240mm",
-      sheetHeight: "289mm",
-      /* increased fonts by +6px for better readability */
-      seatTitleFont: "21px",
-      labelFont: "19px",
-      valueFont: "19px",
-      topFont: "13px",
-      busFont: "13px",
-      companyFont: "19px",
-      routeFont: "13px",
-      showTicketTag: false,
     });
   };
 
   /* =========================================================
-     31 SEAT
-  ========================================================= */
+       SPECIAL HTML SHELL FOR 31 SEAT (BIGGER FONT + STRETCH)
+    ========================================================= */
+  const buildTemplateShell31 = ({
+    selectedBus,
+    date,
+    leftColumnHtml,
+    rightColumnHtml,
+    backRowHtml,
+  }) => {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Seat Template - ${safeHtml(selectedBus?.busNumber || "Bus")}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 3mm;
+    }
+
+    html, body {
+      width: 210mm;
+      height: 297mm;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #111;
+      font-family: "Times New Roman", serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      overflow: hidden;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-size: 12px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 8px;
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 6px;
+    }
+
+    .toolbar button {
+      border: 1px solid #ddd;
+      background: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .toolbar .primary {
+      background: #f97316;
+      color: #fff;
+      border-color: #f97316;
+    }
+
+    .sheet {
+  width: 203mm;
+  height: 289mm;
+  margin: 0 auto;
+  border: 1.4px solid #222;
+  padding: 2.5mm 3mm 3.5mm;
+  background: #fff;
+  overflow: hidden;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+    .top-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      margin-bottom: 2px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.05;
+    }
+
+    .top-line .left { text-align: left; }
+    .top-line .center { text-align: center; }
+    .top-line .right { text-align: right; }
+
+    .title-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 3px;
+    }
+
+    .bus-number {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: left;
+      line-height: 1.05;
+    }
+
+    .company {
+      font-size: 19px;
+      font-weight: 700;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1;
+    }
+
+    .route {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: right;
+      line-height: 1.05;
+    }
+
+    .divider {
+      border-top: 1.2px solid #333;
+      margin: 2px 0 4px;
+    }
+
+    /* =========================
+       MAIN 31 LAYOUT
+    ========================= */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 48mm 1fr 104mm;
+      align-items: start;
+      gap: 0;
+      height: 238mm;
+      max-height: 238mm;
+      overflow: hidden;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .left-column {
+      width: 48mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
+      align-items: stretch;
+    }
+
+    .center-gap {
+      width: auto;
+      min-height: 1px;
+    }
+
+    .right-column {
+      width: 104mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      align-items: stretch;
+      justify-content: flex-start;
+      overflow: hidden;
+    }
+
+    .left-seat-wrap {
+      width: 48mm;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: stretch;
+    }
+
+    .left-seat-wrap.left-empty {
+      height: 25.5mm;
+      min-height: 25.5mm;
+      border: none;
+      background: transparent;
+    }
+
+    .right-row {
+      width: 104mm;
+      display: grid;
+      gap: 0;
+      margin: 0;
+      padding: 0;
+      align-items: stretch;
+      justify-items: stretch;
+    }
+
+    .right-count-1 {
+      grid-template-columns: 52mm;
+      justify-content: end;
+    }
+
+    .right-count-2 {
+      grid-template-columns: repeat(2, 52mm);
+    }
+
+    .right-seat-wrap {
+      width: 52mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       BACK ROW - CONNECTED
+    ========================= */
+    .back-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+  margin-top: -1.2px;
+  padding-top: 0;
+  height: 34mm;
+  max-height: 34mm;
+  overflow: visible;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  align-items: stretch;
+  justify-items: stretch;
+  border-top: none;
+}
+  .back-row .seat-box {
+  height: 34mm;
+  min-height: 34mm;
+  border: 1.2px solid #222;
+  padding: 0.8mm 1mm 0.55mm;
+  margin: 0;
+  overflow: visible;
+}
+
+    .back-seat-wrap {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       SEAT BOX
+    ========================= */
+    .seat-box {
+      width: 100%;
+      height: 26.5mm;
+      min-height: 26.5mm;
+      border: 1.2px solid #222;
+      padding: 0.8mm 1mm 0.55mm;
+      background: #fff;
+      overflow: hidden;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .back-row .seat-box {
+      height: 28mm;
+      min-height: 28mm;
+      padding: 0.8mm 1mm 0.55mm;
+      border: 1.2px solid #222;
+      margin: 0;
+    }
+
+    .seat-box.blocked {
+      background: #fff7ed;
+      border-color: #ea580c;
+    }
+
+    /* =========================
+       HEADER: LEFT seat no / RIGHT badge
+    ========================= */
+    .seat-title {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 0.45mm;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1mm;
+      white-space: nowrap;
+    }
+
+    .back-row .seat-title {
+      font-size: 16px;
+      margin-bottom: 0.5mm;
+    }
+
+    .seat-no {
+      display: inline-block;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .seat-title-right {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.6mm;
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .blocked-tag {
+      font-size: 7px;
+      border: 1px solid #ea580c;
+      color: #ea580c;
+      padding: 0 2px;
+      border-radius: 6px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .ticket-tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      border: 1px solid #64748b;
+      color: #0f172a;
+      background: #f1f5f9;
+      padding: 0.25mm 0.9mm;
+      border-radius: 6px;
+      line-height: 1;
+      height: 3.4mm;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex-shrink: 1;
+    }
+
+    /* =========================
+       LABEL / VALUE
+       Name:- Paras
+    ========================= */
+    .line-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8mm;
+      margin: 0.12mm 0;
+      min-height: 2.2mm;
+      overflow: hidden;
+    }
+
+    .back-row .line-row {
+      min-height: 2.35mm;
+      margin: 0.12mm 0;
+    }
+
+    .label {
+      flex: 0 0 auto;
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .value {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: inline-block;
+      min-height: 2.1mm;
+      padding: 0 0 0.06mm 0;
+      font-size: 17px;
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-bottom: 1px solid #333;
+    }
+
+    .back-row .label {
+      font-size: 17px;
+    }
+
+    .back-row .value {
+      font-size: 17px;
+      min-height: 2.15mm;
+      border-bottom: 1px solid #333;
+    }
+
+    @media print {
+      html, body {
+        width: auto;
+        height: auto;
+        overflow: hidden;
+      }
+
+      .toolbar {
+        display: none !important;
+      }
+
+      .sheet {
+        border: none;
+        margin: 0 auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="primary" onclick="downloadHtmlFile()">Download HTML</button>
+  </div>
+
+  <div class="sheet">
+    <div class="top-line">
+      <div class="left">Date:- ${safeHtml(formatDisplayDate(date) || "")}</div>
+      <div class="center">||श्री||</div>
+      <div class="right">Time:- ${safeHtml(selectedBus?.startTime || "04:00")}</div>
+    </div>
+
+    <div class="title-line">
+      <div class="bus-number">${safeHtml(selectedBus?.busNumber || "MH06BW9252")}</div>
+      <div class="company">SA TRAVEL'S</div>
+      <div class="route">Route:- ${safeHtml(selectedBus?.routeName || "")}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="main-layout">
+      <div class="left-column">
+        ${leftColumnHtml}
+      </div>
+
+      <div class="center-gap"></div>
+
+      <div class="right-column">
+        ${rightColumnHtml}
+      </div>
+    </div>
+
+    <div class="back-row">
+      ${backRowHtml}
+    </div>
+  </div>
+
+  <script>
+    function downloadHtmlFile() {
+      const html = document.documentElement.outerHTML;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
+  `;
+  };
+
   const renderSeatCardTemplate31 = ({
     seatNo,
     seatMap,
@@ -1908,9 +2840,14 @@ export default function BookingPage() {
     return `
     <div class="seat-box ${isBlocked ? "blocked" : ""}">
       <div class="seat-title">
-        ${safeHtml(title)}
-        ${isBlocked ? `<span class="blocked-tag">BLOCKED</span>` : ""}
-        ${data.ticket ? `<span class="ticket-tag">${safeHtml(data.ticket)}</span>` : ""}
+        <span class="seat-no">${safeHtml(title)}</span>
+        <span class="seat-title-right">
+          ${isBlocked ? `<span class="blocked-tag">BLOCKED</span>` : ""}
+          ${data.ticket
+        ? `<span class="ticket-tag">${safeHtml(String(data.ticket))}</span>`
+        : ""
+      }
+        </span>
       </div>
 
       <div class="line-row">
@@ -1922,16 +2859,6 @@ export default function BookingPage() {
         <span class="label">Phone:-</span>
         <span class="value">${safeHtml(data.phone || data.mobile || "")}</span>
       </div>
-
-      ${data.ticket
-        ? `
-      <div class="line-row">
-        <span class="label">Ticket:-</span>
-        <span class="value">${safeHtml(data.ticket)}</span>
-      </div>
-      `
-        : ""
-      }
 
       <div class="line-row">
         <span class="label">Pickup:-</span>
@@ -1967,6 +2894,7 @@ export default function BookingPage() {
       [25, 26],
     ];
     const backRow = [27, 28, 29, 30, 31];
+
     const topOffsetRows = 1;
 
     const windowSeatSet = new Set([
@@ -2021,44 +2949,29 @@ export default function BookingPage() {
       )
       .join("");
 
-    const backRowHtml = `
-    <div class="back-row back-count-${backRow.length}">
-      ${backRow
-        .map(
-          (seat) => `
-        <div class="back-seat-wrap">
-          ${renderSeatCardTemplate31({
-            seatNo: seat,
-            seatMap,
-            isWindowSeat: windowSeatSet.has(seat),
-          })}
-        </div>
-      `
-        )
-        .join("")}
-    </div>
-  `;
+    const backRowHtml = backRow
+      .map(
+        (seat) => `
+      <div class="back-seat-wrap">
+        ${renderSeatCardTemplate31({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
 
-    return buildTemplateShell({
+    return buildTemplateShell31({
       selectedBus,
       date,
       leftColumnHtml,
       rightColumnHtml,
       backRowHtml,
-      seatHeight: "30mm",
-      mainHeight: "270mm",
-      sheetHeight: "289mm",
-      /* increased fonts by +6px for better readability */
-      seatTitleFont: "19px",
-      labelFont: "17px",
-      valueFont: "17px",
-      topFont: "12px",
-      busFont: "12px",
-      companyFont: "18px",
-      routeFont: "12px",
-      showTicketTag: true,
     });
   };
+
 
   /* =========================================================
      FINAL TEMPLATE SELECTOR
@@ -2133,8 +3046,6 @@ export default function BookingPage() {
       }, 500);
     };
   };
-
-
 
 
   return (
