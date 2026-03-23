@@ -1332,7 +1332,8 @@ export default function BookingPage() {
 
     .main-layout {
       display: grid;
-      grid-template-columns: 48mm 1fr 78mm;
+      /* let center column expand to push the right column to the sheet edge */
+      grid-template-columns: 55mm 1fr 110mm;
       align-items: start;
       gap: 0;
       min-height: ${mainHeight};
@@ -1341,7 +1342,8 @@ export default function BookingPage() {
     }
 
     .left-column {
-      width: 48mm;
+      /* match right seat width so seat-box sizes are identical */
+      width: 55mm;
       display: flex;
       flex-direction: column;
       gap: 0;
@@ -1349,21 +1351,23 @@ export default function BookingPage() {
     }
 
     .center-gap {
-      width: 100%;
+      /* flexible center gap that expands to push right column to the edge */
+      width: auto;
       min-height: 1px;
     }
 
     .right-column {
-      width: 78mm;
+      /* accommodates two side-by-side 55mm seat boxes */
+      width: 110mm;
       display: flex;
       flex-direction: column;
       gap: 0;
-      align-items: flex-end;
+      align-items: stretch;
       overflow: hidden;
     }
 
     .left-seat-wrap {
-      width: 48mm;
+      width: 55mm;
       margin: 0;
       padding: 0;
     }
@@ -1376,7 +1380,7 @@ export default function BookingPage() {
     }
 
     .right-row {
-      width: 78mm;
+      width: 110mm;
       display: grid;
       gap: 0;
       margin: 0;
@@ -1384,16 +1388,16 @@ export default function BookingPage() {
     }
 
     .right-count-1 {
-      grid-template-columns: 39mm;
+      grid-template-columns: 55mm;
       justify-content: end;
     }
 
     .right-count-2 {
-      grid-template-columns: repeat(2, 39mm);
+      grid-template-columns: repeat(2, 55mm);
     }
 
     .right-seat-wrap {
-      width: 39mm;
+      width: 55mm;
     }
 
     .back-row {
@@ -1421,7 +1425,8 @@ export default function BookingPage() {
       min-height: ${seatHeight};
       height: ${seatHeight};
       border: 1px solid #444;
-      padding: 1.2mm 1.4mm 0.8mm;
+      /* slightly reduced padding to tighten vertical space */
+      padding: 0.9mm 1.0mm 0.6mm;
       background: #fff;
       overflow: hidden;
       page-break-inside: avoid;
@@ -1437,10 +1442,10 @@ export default function BookingPage() {
       font-size: ${seatTitleFont};
       font-weight: 700;
       line-height: 1;
-      margin-bottom: 0.45mm;
+      margin-bottom: 0.3mm;
       display: flex;
       align-items: center;
-      gap: 0.8mm;
+      gap: 0.6mm;
       flex-wrap: nowrap;
       overflow: hidden;
       white-space: nowrap;
@@ -1480,9 +1485,10 @@ export default function BookingPage() {
       display: grid;
       grid-template-columns: auto 1fr;
       align-items: center;
-      column-gap: 1mm;
-      margin: 0.28mm 0;
-      min-height: 2.9mm;
+      /* tightened column gap */
+      column-gap: 0.6mm;
+      margin: 0.2mm 0;
+      min-height: 2.6mm;
     }
 
     .label {
@@ -1638,7 +1644,7 @@ export default function BookingPage() {
       [13, 14],
       [16, 17],
     ];
-    const backRow = [19, 20, 21, 22, 23];
+    const backRow =[19, 20, 21, 22, 23];
     const topOffsetRows = 1;
 
     const windowSeatSet = new Set([
@@ -1717,15 +1723,16 @@ export default function BookingPage() {
       leftColumnHtml,
       rightColumnHtml,
       backRowHtml,
-      seatHeight: "24mm",
-      mainHeight: "168mm",
+      seatHeight: "30mm",
+      mainHeight: "220mm",
       sheetHeight: "289mm",
-      seatTitleFont: "16px",
-      labelFont: "14px",
-      valueFont: "14px",
+      /* increased fonts by +6px for better readability */
+      seatTitleFont: "22px",
+      labelFont: "18px",
+      valueFont: "18px",
       topFont: "14px",
       busFont: "14px",
-      companyFont: "20px",
+      companyFont: "18px",
       routeFont: "14px",
       showTicketTag: false,
     });
@@ -1871,12 +1878,13 @@ export default function BookingPage() {
       leftColumnHtml,
       rightColumnHtml,
       backRowHtml,
-      seatHeight: "24.2mm",
-      mainHeight: "194mm",
+      seatHeight: "30mm",
+      mainHeight: "240mm",
       sheetHeight: "289mm",
-      seatTitleFont: "15px",
-      labelFont: "13px",
-      valueFont: "13px",
+      /* increased fonts by +6px for better readability */
+      seatTitleFont: "21px",
+      labelFont: "19px",
+      valueFont: "19px",
       topFont: "13px",
       busFont: "13px",
       companyFont: "19px",
@@ -2037,12 +2045,13 @@ export default function BookingPage() {
       leftColumnHtml,
       rightColumnHtml,
       backRowHtml,
-      seatHeight: "23.3mm",   // IMPORTANT FIX
-      mainHeight: "208mm",    // IMPORTANT FIX
+      seatHeight: "30mm",
+      mainHeight: "270mm",
       sheetHeight: "289mm",
-      seatTitleFont: "13px",
-      labelFont: "11px",
-      valueFont: "11px",
+      /* increased fonts by +6px for better readability */
+      seatTitleFont: "19px",
+      labelFont: "17px",
+      valueFont: "17px",
       topFont: "12px",
       busFont: "12px",
       companyFont: "18px",
@@ -2123,11 +2132,11 @@ export default function BookingPage() {
         );
       }, 500);
     };
-  }; 
+  };
 
 
 
-  
+
   return (
     <div className="min-h-screen w-full bg-[#f8fafc] p-4 md:p-6 lg:p-8">
       {/* Header */}
@@ -2706,8 +2715,8 @@ export default function BookingPage() {
                           >
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2 text-lg font-bold text-slate-900">
-                                    <span>Seat {seat} {b.ticket ? `— ${b.ticket}` : ""}</span>
+                                <div className="flex flex-wrap items-center gap-2 text-lg font-bold text-slate-900">
+                                  <span>Seat {seat} {b.ticket ? `— ${b.ticket}` : ""}</span>
                                   {b.status === "blocked" ? (
                                     <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
                                       BLOCKED
@@ -2915,7 +2924,7 @@ export default function BookingPage() {
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                    <div className="text-lg font-bold text-slate-900">Seat {viewBooking.seat} {viewBooking.booking?.ticket ? `— ${viewBooking.booking.ticket}` : ""}</div>
+                  <div className="text-lg font-bold text-slate-900">Seat {viewBooking.seat} {viewBooking.booking?.ticket ? `— ${viewBooking.booking.ticket}` : ""}</div>
                   <div className="mt-2 text-sm font-semibold text-slate-700">
                     {viewBooking.booking?.name || "—"}
                   </div>
