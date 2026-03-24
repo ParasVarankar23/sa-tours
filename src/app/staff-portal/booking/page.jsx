@@ -1156,9 +1156,6 @@ export default function StaffBookingPage() {
     }
   };
 
-  /* =========================
-    Seat Template (Print / Download)
-  ========================= */
   const formatDisplayDate = (value) => {
     if (!value) return "__ / __ / ____";
     try {
@@ -1170,258 +1167,99 @@ export default function StaffBookingPage() {
     }
   };
 
-  const buildSeatTemplateHtml = () => {
-    if (!selectedBus) {
-      showAppToast("error", "Please open a bus first");
-      return "";
+  const formatTime = (value) => {
+    if (!value && value !== 0) return "";
+    try {
+      let s = String(value || "").trim();
+      if (!s) return "";
+      s = s.replace(/\s+/g, " ").toLowerCase();
+
+      // Keep placeholders like --:-- untouched
+      if (/^-{2,}:?-{2,}$/.test(s)) return s;
+
+      // detect am/pm
+      const ampmMatch = s.match(/\b(am|pm)\b/);
+      let isPM = false;
+      if (ampmMatch) {
+        isPM = ampmMatch[1] === "pm";
+        s = s.replace(/\b(am|pm)\b/, "").trim();
+      }
+
+      const parts = s.split(":").map((p) => Number(p));
+      if (!parts.length || !Number.isFinite(parts[0])) return value;
+
+      let hh = parts[0];
+      const mm = parts.length > 1 && Number.isFinite(parts[1]) ? parts[1] : 0;
+
+      if (ampmMatch) {
+        if (hh === 12) hh = isPM ? 12 : 0;
+        else if (isPM) hh = (hh % 12) + 12;
+      }
+
+      // normalize
+      hh = Number(hh) || 0;
+      const minutes = Number.isFinite(Number(mm)) ? Number(mm) : 0;
+
+      const outH = hh % 12 === 0 ? 12 : hh % 12;
+      const outM = String(minutes).padStart(2, "0");
+      const suffix = hh >= 12 ? "PM" : "AM";
+
+      return `${outH}:${outM} ${suffix}`;
+    } catch {
+      return value;
     }
+  };
 
-    const safe = (v) =>
-      String(v ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+  const safeHtml = (v) =>
+    String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
 
-    const totalSeats = Number(selectedBus?.seatLayout || selectedBus?.seatCount || 31) || 31;
-
+  const getSeatMapForTemplate = () => {
     const seatMap = {};
     Object.entries(bookings || {}).forEach(([seat, b]) => {
       if (!b) return;
       seatMap[String(seat)] = b;
     });
+    return seatMap;
+  };
 
-    // =========================
-    // EXACT PRINT LAYOUT MAPS
-    // =========================
-    const layoutMaps = {
-      23: {
-        topOffsetRows: 1,
-        leftSeats: [3, 6, 9, 12, 15, 18],
-        rightRows: [
-          [1, 2],
-          [4, 5],
-          [7, 8],
-          [10, 11],
-          [13, 14],
-          [16, 17],
-        ],
-        backRow: [19, 20, 21, 22, 23],
-      },
+  /* =========================================================
+     23 SEAT
+  ========================================================= */
 
-      27: {
-        topOffsetRows: 2,
-        leftSeats: [3, 6, 9, 12, 15, 18],
-        rightRows: [
-          [1, 2],
-          [4, 5],
-          [7, 8],
-          [10, 11],
-          [13, 14],
-          [16, 17],
-          [19, 20],
-          [21, 22],
-        ],
-        backRow: [23, 24, 25, 26, 27],
-      },
-
-      31: {
-        topOffsetRows: 1,
-        leftSeats: [3, 6, 9, 12, 15, 18, 21, 24],
-        rightRows: [
-          [1, 2],
-          [4, 5],
-          [7, 8],
-          [10, 11],
-          [13, 14],
-          [16, 17],
-          [19, 20],
-          [22, 23],
-          [25, 26],
-        ],
-        backRow: [27, 28, 29, 30, 31],
-      },
-    };
-
-    const buildFallbackLayout = (n) => {
-      const leftSeats = [];
-      const rightRows = [];
-      let seat = 1;
-
-      if (seat <= n) {
-        const first = [];
-        if (seat <= n) first.push(seat++);
-        if (seat <= n) first.push(seat++);
-        rightRows.push(first);
-      }
-
-      while (seat <= n) {
-        const remaining = n - seat + 1;
-
-        if (remaining <= 5) {
-          const backRow = [];
-          while (seat <= n) backRow.push(seat++);
-          return { topOffsetRows: 1, leftSeats, rightRows, backRow };
-        }
-
-        leftSeats.push(seat++);
-        const pair = [];
-        if (seat <= n) pair.push(seat++);
-        if (seat <= n) pair.push(seat++);
-        rightRows.push(pair);
-      }
-
-      return { topOffsetRows: 1, leftSeats, rightRows, backRow: [] };
-    };
-
-    const layout = layoutMaps[totalSeats] || buildFallbackLayout(totalSeats);
-
-    const topOffsetRows = Number(layout.topOffsetRows || 0);
-    const leftSeats = layout.leftSeats || [];
-    const rightRows = layout.rightRows || [];
-    const backRow = layout.backRow || [];
-
-    // =========================
-    // Dynamic main body height
-    // =========================
-    const bodyMinHeight =
-      totalSeats === 23 ? 500 :
-        totalSeats === 27 ? 560 :
-          totalSeats === 31 ? 620 :
-            560;
-
-    // =========================
-    // Window logic
-    // =========================
-    const windowSeatSet = new Set();
-
-    leftSeats.forEach((s) => windowSeatSet.add(Number(s)));
-
-    rightRows.forEach((row) => {
-      if (Array.isArray(row) && row.length > 0) {
-        windowSeatSet.add(Number(row[row.length - 1]));
-      }
-    });
-
-    if (backRow.length > 0) {
-      windowSeatSet.add(Number(backRow[0]));
-      windowSeatSet.add(Number(backRow[backRow.length - 1]));
-    }
-
-    const isWindowSeat = (seatNo) => windowSeatSet.has(Number(seatNo));
-
-    // =========================
-    // SEAT CARD
-    // =========================
-    const renderSeatCard = (seatNo) => {
-      const data = seatMap[String(seatNo)] || {};
-      const isBlocked = data?.status === "blocked";
-      const title = `${seatNo}${isWindowSeat(seatNo) ? "W" : ""}`;
-
-      return `
-      <div class="seat-box ${isBlocked ? "blocked" : ""}">
-        <div class="seat-title">
-          ${safe(title)}
-          ${isBlocked ? `<span class="blocked-tag">BLOCKED</span>` : ""}
-        </div>
-
-        <div class="line-row"><span class="label">Name:-</span><span class="value">${safe(data.name || "")}</span></div>
-        <div class="line-row"><span class="label">Email:-</span><span class="value value-email">${safe(data.email || "")}</span></div>
-        <div class="line-row"><span class="label">Phone:-</span><span class="value">${safe(data.phone || data.mobile || "")}</span></div>
-        <div class="line-row"><span class="label">Pickup:-</span><span class="value">${safe(data.pickup || "")}</span></div>
-        <div class="line-row"><span class="label">Drop:-</span><span class="value">${safe(data.drop || "")}</span></div>
-        <div class="line-row"><span class="label">Amount:-</span><span class="value">${safe(data.amount ?? data.fare ?? "")}</span></div>
-      </div>
-    `;
-    };
-
-    // =========================
-    // LEFT COLUMN (balanced with bottom invisible spacers)
-    // =========================
-    const leftVisibleCount = topOffsetRows + leftSeats.length;
-    const rightVisibleCount = rightRows.length;
-    const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
-
-    const leftColumnHtml = `
-    ${Array.from({ length: topOffsetRows })
-        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
-        .join("")}
-
-    ${leftSeats
-        .map(
-          (seat) => `
-          <div class="left-seat-wrap">
-            ${renderSeatCard(seat)}
-          </div>
-        `
-        )
-        .join("")}
-
-    ${Array.from({ length: leftBottomSpacerCount })
-        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
-        .join("")}
-  `;
-
-    // =========================
-    // RIGHT COLUMN
-    // =========================
-    const rightColumnHtml = rightRows
-      .map(
-        (row) => `
-      <div class="right-row right-count-${row.length}">
-        ${row.map((seat) => `<div class="right-seat-wrap">${renderSeatCard(seat)}</div>`).join("")}
-      </div>
-    `
-      )
-      .join("");
-
-    // =========================
-    // BACK ROW
-    // =========================
-    const backRowHtml = `
-    <div class="back-row back-count-${backRow.length}">
-      ${backRow.map((seat) => `<div class="back-seat-wrap">${renderSeatCard(seat)}</div>`).join("")}
-    </div>
-  `;
-
-    // =========================
-    // CABIN: 31 seats = 2 cabin seats, others = 6 cabin seats
-    // =========================
-    const cabinSeatNos =
-      totalSeats === 31
-        ? ["CB1", "CB2"]
-        : ["CB1", "CB2", "CB3", "CB4", "CB5", "CB6"];
-
-    const cabinRows = cabinSeatNos
-      .map((cabinSeat) => {
-        const data = seatMap[String(cabinSeat)] || {};
-        const isBlocked = data?.status === "blocked";
-        const amount = data?.amount ?? data?.fare ?? "";
-
-        return `
-      <tr class="${isBlocked ? "blocked-row" : ""}">
-        <td>${safe(cabinSeat)}</td>
-        <td>${safe(data.name || "")}</td>
-        <td>${safe(data.email || "")}</td>
-        <td>${safe(data.phone || data.mobile || "")}</td>
-        <td>${safe(data.pickup || "")}</td>
-        <td>${safe(data.drop || "")}</td>
-        <td>${safe(amount)}</td>
-      </tr>
-    `;
-      })
-      .join("");
-
+  const buildTemplateShell23 = ({
+    selectedBus,
+    date,
+    leftColumnHtml,
+    rightColumnHtml,
+    backRowHtml,
+  }) => {
     return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Seat Template - ${safe(selectedBus.busNumber || "Bus")}</title>
+  <title>Seat Template - ${safeHtml(selectedBus?.busNumber || "Bus")}</title>
   <style>
     @page {
       size: A4 portrait;
-      margin: 5mm;
+      margin: 4mm;
+    }
+
+    html, body {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #111;
+      font-family: "Times New Roman", serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      overflow: hidden;
     }
 
     * {
@@ -1431,30 +1269,58 @@ export default function StaffBookingPage() {
     }
 
     body {
-      margin: 0;
-      padding: 0;
+      font-size: 12px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 8px;
       background: #fff;
-      color: #111;
-      font-family: "Times New Roman", serif;
-      font-size: 9px;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 8px;
+    }
+
+    .toolbar button {
+      border: 1px solid #ddd;
+      background: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .toolbar .primary {
+      background: #f97316;
+      color: #fff;
+      border-color: #f97316;
     }
 
     .sheet {
-      width: 100%;
-      max-width: 200mm;
+      width: 202mm;
+      height: 289mm;
       margin: 0 auto;
-      border: 1px solid #666;
-      padding: 6px;
+      border: 1.2px solid #444;
+      padding: 3.5mm;
       background: #fff;
+      overflow: hidden;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
 
     .top-line {
       display: grid;
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      margin-bottom: 2px;
-      font-size: 11px;
+      margin-bottom: 3px;
+      font-size: 14px;
       font-weight: 700;
+      line-height: 1.1;
     }
 
     .top-line .left { text-align: left; }
@@ -1465,14 +1331,15 @@ export default function StaffBookingPage() {
       display: grid;
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       margin-bottom: 4px;
     }
 
     .bus-number {
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 700;
       text-align: left;
+      line-height: 1.1;
     }
 
     .company {
@@ -1484,100 +1351,146 @@ export default function StaffBookingPage() {
     }
 
     .route {
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 700;
       text-align: right;
+      line-height: 1.1;
     }
 
     .divider {
-      border-top: 1px solid #777;
-      margin: 4px 0 6px;
+      border-top: 1px solid #666;
+      margin: 3px 0 5px;
     }
 
+    /* =========================
+       MAIN LAYOUT
+    ========================= */
     .main-layout {
       display: grid;
-      grid-template-columns: 135px 1fr 270px;
+      grid-template-columns: 55mm 1fr 110mm;
       align-items: start;
       gap: 0;
-      min-height: ${bodyMinHeight}px;
+      height: 210mm;
+      max-height: 210mm;
+      overflow: hidden;
+      margin-bottom: 0;
+      padding-bottom: 0;
     }
 
     .left-column {
-      width: 135px;
+      width: 55mm;
       display: flex;
       flex-direction: column;
       gap: 0;
-      padding-top: 0;
+      overflow: hidden;
+      align-items: stretch;
     }
 
     .center-gap {
-      width: 100%;
+      width: auto;
       min-height: 1px;
     }
 
     .right-column {
-      width: 270px;
+      width: 110mm;
       display: flex;
       flex-direction: column;
       gap: 0;
-      align-items: flex-end;
+      align-items: stretch;
+      justify-content: flex-start;
+      overflow: hidden;
     }
 
     .left-seat-wrap {
-      width: 135px;
-      margin-bottom: 0;
+      width: 55mm;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: stretch;
     }
 
     .left-seat-wrap.left-empty {
-      min-height: 96px;
+      height: 30mm;
+      min-height: 30mm;
       border: none;
       background: transparent;
     }
 
     .right-row {
-      width: 270px;
+      width: 110mm;
       display: grid;
       gap: 0;
-      margin-bottom: 0;
+      margin: 0;
+      padding: 0;
+      align-items: stretch;
+      justify-items: stretch;
     }
 
     .right-count-1 {
-      grid-template-columns: 135px;
+      grid-template-columns: 55mm;
       justify-content: end;
     }
 
     .right-count-2 {
-      grid-template-columns: repeat(2, 135px);
+      grid-template-columns: repeat(2, 55mm);
     }
 
     .right-seat-wrap {
-      width: 135px;
+      width: 55mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
     }
 
+    /* =========================
+       BACK ROW
+    ========================= */
     .back-row {
       width: 100%;
       display: grid;
+      grid-template-columns: repeat(5, 1fr);
       gap: 0;
-      margin-top: 0;
+      margin-top: -1px;
+      align-items: stretch;
+      justify-items: stretch;
+      border-top: none;
+      height: 50mm;
+      max-height: 50mm;
+      overflow: visible;
     }
-
-    .back-count-1 { grid-template-columns: 1fr; }
-    .back-count-2 { grid-template-columns: repeat(2, 1fr); }
-    .back-count-3 { grid-template-columns: repeat(3, 1fr); }
-    .back-count-4 { grid-template-columns: repeat(4, 1fr); }
-    .back-count-5 { grid-template-columns: repeat(5, 1fr); }
 
     .back-seat-wrap {
       width: 100%;
       min-width: 0;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
     }
 
+    /* =========================
+       SEAT BOX
+    ========================= */
     .seat-box {
       width: 100%;
-      min-height: 96px;
+      height: 30mm;
+      min-height: 30mm;
       border: 1px solid #444;
-      padding: 5px 7px;
+      padding: 0.8mm 1mm 0.5mm;
       background: #fff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .back-row .seat-box {
+      height: 34m;
+      min-height: 34mm;
+      border: 1px solid #444;
+      padding: 0.8mm 1mm 0.6mm;
+      margin: 0;
       overflow: hidden;
     }
 
@@ -1586,133 +1499,1336 @@ export default function StaffBookingPage() {
       border-color: #ea580c;
     }
 
+    /* =========================
+       HEADER
+       seat no left / badge right
+    ========================= */
     .seat-title {
-      font-size: 9px;
+      font-size: 18px;
       font-weight: 700;
-      line-height: 1.2;
-      margin-bottom: 3px;
+      line-height: 1;
+      margin-bottom: 0.45mm;
       display: flex;
       align-items: center;
-      gap: 4px;
-      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 1mm;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .seat-no {
+      display: inline-block;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .seat-title-right {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.6mm;
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .blocked-tag {
-      font-size: 6px;
+      font-size: 16px;
       border: 1px solid #ea580c;
       color: #ea580c;
       padding: 0 3px;
-      border-radius: 8px;
-      line-height: 1.2;
+      border-radius: 6px;
+      line-height: 1;
+      flex-shrink: 0;
     }
 
+    .ticket-tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      font-weight: 700;
+      border: 1px solid #64748b;
+      color: #0f172a;
+      background: #f1f5f9;
+      padding: 0.2mm 0.8mm;
+      border-radius: 5px;
+      line-height: 1;
+      height: 3.2mm;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex-shrink: 1;
+    }
+
+    /* =========================
+       LABEL / VALUE
+       Name:-  Paras
+    ========================= */
     .line-row {
-      display: grid;
-      grid-template-columns: 38px 1fr;
-      align-items: end;
-      column-gap: 4px;
-      margin: 1px 0;
-      min-height: 11px;
+      display: flex;
+      align-items: center;
+      gap: 3mm;
+      margin: 0.14mm 0;
+      min-height: 2.4mm;
+      overflow: hidden;
     }
 
     .label {
-      font-size: 7px;
+      flex: 0 0 auto;
+      font-size: 18px;
       font-weight: 700;
-      line-height: 1.1;
+      line-height: 1;
       white-space: nowrap;
     }
 
     .value {
-      display: flex;
-      align-items: flex-end;
-      min-height: 10px;
-      padding: 0 1px 1px 1px;
-      font-size: 7px;
-      line-height: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border-bottom: 1px solid #555;
-    }
-
-    
-      
-    .value-email {
-      display: flex;
-      align-items: flex-end;
-      min-height: 10px;
-      padding: 0 1px 1px 1px;
-      font-size: 5px;
-      line-height: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border-bottom: 1px solid #555;
-    }
-
-    .cabin-title {
-      text-align: center;
+      flex: 1 1 auto;
+      min-width: 0;
+      display: inline-block;
+      min-height: 2.2mm;
+      padding: 0 0 0.06mm 0;
       font-size: 18px;
-      font-weight: 700;
-      margin: 2px 0 0;
-      line-height: 1.1;
-      text-transform: uppercase;
-      border-top: 1px solid #444;
-      border-left: 1px solid #444;
-      border-right: 1px solid #444;
-      padding: 2px 0;
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-bottom: 1px solid #555;
     }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      margin-top: 0;
+    .back-row .label {
+      font-size: 17px;
     }
 
-    th, td {
-      border: 1px solid #444;
-      padding: 5px 6px;
-      font-size: 9px;
-      text-align: left;
-      line-height: 1.2;
-      word-wrap: break-word;
-      vertical-align: top;
-    }
-
-    th {
-      background: #f5f5f5;
-      font-weight: 700;
-    }
-
-    .blocked-row td {
-      background: #fff7ed;
+    .back-row .value {
+      font-size: 17px;
     }
 
     @media print {
-      body {
-        padding: 0;
+      html, body {
+        width: auto;
+        min-height: auto;
+        overflow: hidden;
+      }
+
+      .toolbar {
+        display: none !important;
       }
 
       .sheet {
         border: none;
-        max-width: 100%;
+        margin: 0 auto;
       }
     }
   </style>
 </head>
 <body>
+  <div class="toolbar">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="primary" onclick="downloadHtmlFile()">Download HTML</button>
+  </div>
+
   <div class="sheet">
     <div class="top-line">
-      <div class="left">Date:- ${safe(formatDisplayDate(date) || "")}</div>
+      <div class="left">Date:- ${safeHtml(formatDisplayDate(date) || "")}</div>
       <div class="center">||श्री||</div>
-      <div class="right">Time:- ${safe(selectedBus.startTime || "04:00")}</div>
+      <div class="right">Time:- ${safeHtml(formatTime(selectedBus?.startTime || "04:00"))}</div>
     </div>
 
     <div class="title-line">
-      <div class="bus-number">${safe(selectedBus.busNumber || "MH06BW7405")}</div>
+      <div class="bus-number">${safeHtml(selectedBus?.busNumber || "MH06BW7405")}</div>
       <div class="company">SA TRAVEL'S</div>
-      <div class="route">Route:- ${safe(selectedBus.routeName || "")}</div>
+      <div class="route">Route:- ${safeHtml(selectedBus?.routeName || "")}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="main-layout">
+      <div class="left-column">${leftColumnHtml}</div>
+      <div class="center-gap"></div>
+      <div class="right-column">${rightColumnHtml}</div>
+    </div>
+
+    <div class="back-row">
+      ${backRowHtml}
+    </div>
+  </div>
+
+  <script>
+    function downloadHtmlFile() {
+      const html = document.documentElement.outerHTML;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
+  `;
+  };
+
+
+  const renderSeatCardTemplate23 = ({
+    seatNo,
+    seatMap,
+    isWindowSeat = false,
+  }) => {
+    const data = seatMap[String(seatNo)] || {};
+    const isBlocked = data?.status === "blocked";
+    const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
+
+    return `
+    <div class="seat-box ${isBlocked ? "blocked" : ""}">
+      <div class="seat-title">
+        ${safeHtml(title)}
+        ${isBlocked ? `<span class="blocked-tag">BLOCKED</span>` : ""}
+      </div>
+
+      <div class="line-row">
+        <span class="label">Name :</span>
+        <span class="value">${safeHtml(data.name || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Phone :</span>
+        <span class="value">${safeHtml(data.phone || data.mobile || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Pickup :</span>
+        <span class="value">${safeHtml(data.pickup || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Drop :</span>
+        <span class="value">${safeHtml(data.drop || "")}</span>
+      </div>
+    </div>
+  `;
+  };
+
+  const buildSeatTemplateHtml23 = () => {
+    if (!selectedBus) {
+      showAppToast("error", "Please open a bus first");
+      return "";
+    }
+
+    const seatMap = getSeatMapForTemplate();
+
+    const leftSeats = [3, 6, 9, 12, 15, 18];
+    const rightRows = [
+      [1, 2],
+      [4, 5],
+      [7, 8],
+      [10, 11],
+      [13, 14],
+      [16, 17],
+    ];
+    const backRow = [19, 20, 21, 22, 23];
+    const topOffsetRows = 1;
+
+    const windowSeatSet = new Set([
+      2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18, 19, 23,
+    ]);
+
+    const leftVisibleCount = topOffsetRows + leftSeats.length;
+    const rightVisibleCount = rightRows.length;
+    const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
+
+    const leftColumnHtml = `
+    ${Array.from({ length: topOffsetRows })
+        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
+        .join("")}
+    ${leftSeats
+        .map(
+          (seat) => `
+        <div class="left-seat-wrap">
+          ${renderSeatCardTemplate23({
+            seatNo: seat,
+            seatMap,
+            isWindowSeat: windowSeatSet.has(seat),
+          })}
+        </div>
+      `
+        )
+        .join("")}
+    ${Array.from({ length: leftBottomSpacerCount })
+        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
+        .join("")}
+  `;
+
+    const rightColumnHtml = rightRows
+      .map(
+        (row) => `
+      <div class="right-row right-count-${row.length}">
+        ${row
+            .map(
+              (seat) => `
+          <div class="right-seat-wrap">
+            ${renderSeatCardTemplate23({
+                seatNo: seat,
+                seatMap,
+                isWindowSeat: windowSeatSet.has(seat),
+              })}
+          </div>
+        `
+            )
+            .join("")}
+      </div>
+    `
+      )
+      .join("");
+
+    // ✅ IMPORTANT: NO outer .back-row here
+    const backRowHtml = backRow
+      .map(
+        (seat) => `
+      <div class="back-seat-wrap">
+        ${renderSeatCardTemplate23({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
+
+    return buildTemplateShell23({
+      selectedBus,
+      date,
+      leftColumnHtml,
+      rightColumnHtml,
+      backRowHtml,
+    });
+  };
+
+
+  /* =========================================================
+   27 SEAT - FINAL FIXED
+========================================================= */
+
+  const buildTemplateShell27 = ({
+    selectedBus,
+    date,
+    leftColumnHtml,
+    rightColumnHtml,
+    backRowHtml,
+  }) => {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Seat Template - ${safeHtml(selectedBus?.busNumber || "Bus")}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 4mm;
+    }
+
+    html, body {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #111;
+      font-family: "Times New Roman", serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      overflow: hidden;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-size: 12px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 8px;
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 8px;
+    }
+
+    .toolbar button {
+      border: 1px solid #ddd;
+      background: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .toolbar .primary {
+      background: #f97316;
+      color: #fff;
+      border-color: #f97316;
+    }
+
+    .sheet {
+      width: 202mm;
+      height: 289mm;
+      margin: 0 auto;
+      border: 1.2px solid #444;
+      padding: 3.5mm;
+      background: #fff;
+      overflow: hidden;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .top-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      margin-bottom: 3px;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .top-line .left { text-align: left; }
+    .top-line .center { text-align: center; }
+    .top-line .right { text-align: right; }
+
+    .title-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .bus-number {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: left;
+      line-height: 1.1;
+    }
+
+    .company {
+      font-size: 18px;
+      font-weight: 700;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1;
+    }
+
+    .route {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: right;
+      line-height: 1.1;
+    }
+
+    .divider {
+      border-top: 1px solid #666;
+      margin: 3px 0 5px;
+    }
+
+    /* =========================
+       MAIN LAYOUT
+    ========================= */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 55mm 1fr 110mm;
+      align-items: start;
+      gap: 0;
+      height: 223.85mm;
+      max-height: 223.85mm;
+      overflow: hidden;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .left-column {
+      width: 55mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
+      align-items: stretch;
+    }
+
+    .center-gap {
+      width: auto;
+      min-height: 1px;
+    }
+
+    .right-column {
+      width: 110mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      align-items: stretch;
+      justify-content: flex-start;
+      overflow: hidden;
+    }
+
+    .left-seat-wrap {
+      width: 55mm;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: stretch;
+    }
+
+    .left-seat-wrap.left-empty {
+      height: 28mm;
+      min-height: 28mm;
+      border: none;
+      background: transparent;
+    }
+
+    .right-row {
+      width: 110mm;
+      display: grid;
+      gap: 0;
+      margin: 0;
+      padding: 0;
+      align-items: stretch;
+      justify-items: stretch;
+    }
+
+    .right-count-1 {
+      grid-template-columns: 55mm;
+      justify-content: end;
+    }
+
+    .right-count-2 {
+      grid-template-columns: repeat(2, 55mm);
+    }
+
+    .right-seat-wrap {
+      width: 55mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       BACK ROW
+    ========================= */
+    .back-row {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+      margin-top: 2mm;
+      align-items: stretch;
+      justify-items: stretch;
+      border-top: none;
+      height: 36mm;
+      max-height: 36mm;
+      overflow: visible;
+    }
+
+    .back-seat-wrap {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       SEAT BOX
+    ========================= */
+    .seat-box {
+      width: 100%;
+      height: 28mm;
+      min-height: 28mm;
+      border: 1px solid #444;
+      padding: 0.8mm 1mm 0.5mm;
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .back-row .seat-box {
+      height: 36mm;
+      min-height: 36mm;
+      border: 1px solid #444;
+      padding: 0.9mm 1mm 0.6mm;
+      margin: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .seat-box.blocked {
+      background: #fff7ed;
+      border-color: #ea580c;
+    }
+
+    /* =========================
+       HEADER
+    ========================= */
+    .seat-title {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 0.4mm;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1mm;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .seat-no {
+      display: inline-block;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .seat-title-right {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.6mm;
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .blocked-tag {
+      font-size: 7px;
+      border: 1px solid #ea580c;
+      color: #ea580c;
+      padding: 0 3px;
+      border-radius: 6px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .ticket-tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      border: 1px solid #64748b;
+      color: #0f172a;
+      background: #f1f5f9;
+      padding: 0.2mm 0.8mm;
+      border-radius: 5px;
+      line-height: 1;
+      height: 5mm;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex-shrink: 1;
+    }
+
+    /* =========================
+       LABEL / VALUE
+    ========================= */
+    .line-row {
+      display: flex;
+      align-items: center;
+      gap: 1.2mm;
+      margin: 0.14mm 0;
+      min-height: 2.4mm;
+      overflow: hidden;
+    }
+
+    .label {
+      flex: 0 0 14mm;
+      width: 14mm;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .value {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: inline-block;
+      min-height: 2.2mm;
+      padding: 0 0 0.06mm 0.35mm;
+      font-size: 18px;
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-bottom: 1px solid #555;
+    }
+
+    @media print {
+      html, body {
+        width: auto;
+        min-height: auto;
+        overflow: hidden;
+      }
+
+      .toolbar {
+        display: none !important;
+      }
+
+      .sheet {
+        border: none;
+        margin: 0 auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="primary" onclick="downloadHtmlFile()">Download HTML</button>
+  </div>
+
+  <div class="sheet">
+    <div class="top-line">
+      <div class="left">Date:- ${safeHtml(formatDisplayDate(date) || "")}</div>
+      <div class="center">||श्री||</div>
+      <div class="right">Time:- ${safeHtml(formatTime(selectedBus?.startTime || "04:00"))}</div>
+    </div>
+
+    <div class="title-line">
+      <div class="bus-number">${safeHtml(selectedBus?.busNumber || "MH06BW7405")}</div>
+      <div class="company">SA TRAVEL'S</div>
+      <div class="route">Route:- ${safeHtml(selectedBus?.routeName || "")}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="main-layout">
+      <div class="left-column">${leftColumnHtml}</div>
+      <div class="center-gap"></div>
+      <div class="right-column">${rightColumnHtml}</div>
+    </div>
+
+    <div class="back-row">
+      ${backRowHtml}
+    </div>
+  </div>
+
+  <script>
+    function downloadHtmlFile() {
+      const html = document.documentElement.outerHTML;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
+  `;
+  };
+
+  const renderSeatCardTemplate27 = ({
+    seatNo,
+    seatMap,
+    isWindowSeat = false,
+  }) => {
+    const data = seatMap[String(seatNo)] || {};
+    const isBlocked = data?.status === "blocked";
+    const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
+
+    return `
+    <div class="seat-box ${isBlocked ? "blocked" : ""}">
+      <div class="seat-title">
+        <span class="seat-no">${safeHtml(title)}</span>
+        <span class="seat-title-right">
+          ${isBlocked ? `<span class="blocked-tag">BLOCKED</span>` : ""}
+          ${data.ticket ? `<span class="ticket-tag">${safeHtml(String(data.ticket))}</span>` : ""}
+        </span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Name :</span>
+        <span class="value">${safeHtml(data.name || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Phone :</span>
+        <span class="value">${safeHtml(data.phone || data.mobile || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Pickup</span>
+        <span class="colon">:</span>
+        <span class="value">${safeHtml(data.pickup || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Drop :</span>
+        <span class="value">${safeHtml(data.drop || "")}</span>
+      </div>
+    </div>
+  `;
+  };
+
+  const buildSeatTemplateHtml27 = () => {
+    if (!selectedBus) {
+      showAppToast("error", "Please open a bus first");
+      return "";
+    }
+
+    const seatMap = getSeatMapForTemplate();
+
+    const leftSeats = [3, 6, 9, 12, 15, 18];
+    const rightRows = [
+      [1, 2],
+      [4, 5],
+      [7, 8],
+      [10, 11],
+      [13, 14],
+      [16, 17],
+      [19, 20],
+      [21, 22],
+    ];
+    const backRow = [23, 24, 25, 26, 27];
+    const topOffsetRows = 2;
+
+    const windowSeatSet = new Set([
+      2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18, 20, 22, 23, 27,
+    ]);
+
+    const leftVisibleCount = topOffsetRows + leftSeats.length;
+    const rightVisibleCount = rightRows.length;
+    const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
+
+    const leftColumnHtml = `
+    ${Array.from({ length: topOffsetRows })
+        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
+        .join("")}
+    ${leftSeats
+        .map(
+          (seat) => `
+        <div class="left-seat-wrap">
+          ${renderSeatCardTemplate27({
+            seatNo: seat,
+            seatMap,
+            isWindowSeat: windowSeatSet.has(seat),
+          })}
+        </div>
+      `
+        )
+        .join("")}
+    ${Array.from({ length: leftBottomSpacerCount })
+        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
+        .join("")}
+  `;
+
+    const rightColumnHtml = rightRows
+      .map(
+        (row) => `
+      <div class="right-row right-count-${row.length}">
+        ${row
+            .map(
+              (seat) => `
+          <div class="right-seat-wrap">
+            ${renderSeatCardTemplate27({
+                seatNo: seat,
+                seatMap,
+                isWindowSeat: windowSeatSet.has(seat),
+              })}
+          </div>
+        `
+            )
+            .join("")}
+      </div>
+    `
+      )
+      .join("");
+
+    // IMPORTANT: NO nested .back-row here
+    const backRowHtml = backRow
+      .map(
+        (seat) => `
+      <div class="back-seat-wrap">
+        ${renderSeatCardTemplate27({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
+
+    return buildTemplateShell27({
+      selectedBus,
+      date,
+      leftColumnHtml,
+      rightColumnHtml,
+      backRowHtml,
+    });
+  };
+
+  /* =========================================================
+       SPECIAL HTML SHELL FOR 31 SEAT (BIGGER FONT + STRETCH)
+    ========================================================= */
+  const buildTemplateShell31 = ({
+    selectedBus,
+    date,
+    leftColumnHtml,
+    rightColumnHtml,
+    backRowHtml,
+  }) => {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Seat Template - ${safeHtml(selectedBus?.busNumber || "Bus")}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 3mm;
+    }
+
+    html, body {
+      width: 210mm;
+      height: 297mm;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #111;
+      font-family: "Times New Roman", serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      overflow: hidden;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-size: 12px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 8px;
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 6px;
+    }
+
+    .toolbar button {
+      border: 1px solid #ddd;
+      background: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .toolbar .primary {
+      background: #f97316;
+      color: #fff;
+      border-color: #f97316;
+    }
+
+    .sheet {
+  width: 203mm;
+  height: 289mm;
+  margin: 0 auto;
+  border: 1.4px solid #222;
+  padding: 2.5mm 3mm 3.5mm;
+  background: #fff;
+  overflow: hidden;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+    .top-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      margin-bottom: 2px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.05;
+    }
+
+    .top-line .left { text-align: left; }
+    .top-line .center { text-align: center; }
+    .top-line .right { text-align: right; }
+
+    .title-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 3px;
+    }
+
+    .bus-number {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: left;
+      line-height: 1.05;
+    }
+
+    .company {
+      font-size: 19px;
+      font-weight: 700;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1;
+    }
+
+    .route {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: right;
+      line-height: 1.05;
+    }
+
+    .divider {
+      border-top: 1.2px solid #333;
+      margin: 2px 0 4px;
+    }
+
+    /* =========================
+       MAIN 31 LAYOUT
+    ========================= */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 48mm 1fr 104mm;
+      align-items: start;
+      gap: 0;
+      height: 238mm;
+      max-height: 238mm;
+      overflow: hidden;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .left-column {
+      width: 48mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
+      align-items: stretch;
+    }
+
+    .center-gap {
+      width: auto;
+      min-height: 1px;
+    }
+
+    .right-column {
+      width: 104mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      align-items: stretch;
+      justify-content: flex-start;
+      overflow: hidden;
+    }
+
+    .left-seat-wrap {
+      width: 48mm;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: stretch;
+    }
+
+    .left-seat-wrap.left-empty {
+      height: 25.5mm;
+      min-height: 25.5mm;
+      border: none;
+      background: transparent;
+    }
+
+    .right-row {
+      width: 104mm;
+      display: grid;
+      gap: 0;
+      margin: 0;
+      padding: 0;
+      align-items: stretch;
+      justify-items: stretch;
+    }
+
+    .right-count-1 {
+      grid-template-columns: 52mm;
+      justify-content: end;
+    }
+
+    .right-count-2 {
+      grid-template-columns: repeat(2, 52mm);
+    }
+
+    .right-seat-wrap {
+      width: 52mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       BACK ROW - CONNECTED
+    ========================= */
+    .back-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+  margin-top: -1.2px;
+  padding-top: 0;
+  height: 34mm;
+  max-height: 34mm;
+  overflow: visible;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  align-items: stretch;
+  justify-items: stretch;
+  border-top: none;
+}
+  .back-row .seat-box {
+  height: 34mm;
+  min-height: 34mm;
+  border: 1.2px solid #222;
+  padding: 0.8mm 1mm 0.55mm;
+  margin: 0;
+  overflow: visible;
+}
+
+    .back-seat-wrap {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       SEAT BOX
+    ========================= */
+    .seat-box {
+      width: 100%;
+      height: 26.5mm;
+      min-height: 26.5mm;
+      border: 1.2px solid #222;
+      padding: 0.8mm 1mm 0.55mm;
+      background: #fff;
+      overflow: hidden;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .back-row .seat-box {
+      height: 28mm;
+      min-height: 28mm;
+      padding: 0.8mm 1mm 0.55mm;
+      border: 1.2px solid #222;
+      margin: 0;
+    }
+
+    .seat-box.blocked {
+      background: #fff7ed;
+      border-color: #ea580c;
+    }
+
+    /* =========================
+       HEADER: LEFT seat no / RIGHT badge
+    ========================= */
+    .seat-title {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 0.45mm;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1mm;
+      white-space: nowrap;
+    }
+
+    .back-row .seat-title {
+      font-size: 16px;
+      margin-bottom: 0.5mm;
+    }
+
+    .seat-no {
+      display: inline-block;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .seat-title-right {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.6mm;
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .blocked-tag {
+      font-size: 7px;
+      border: 1px solid #ea580c;
+      color: #ea580c;
+      padding: 0 2px;
+      border-radius: 6px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .ticket-tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      border: 1px solid #64748b;
+      color: #0f172a;
+      background: #f1f5f9;
+      padding: 0.25mm 0.9mm;
+      border-radius: 6px;
+      line-height: 1;
+      height: 3.4mm;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex-shrink: 1;
+    }
+
+    /* =========================
+       LABEL / VALUE
+       Name:- Paras
+    ========================= */
+    .line-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8mm;
+      margin: 0.12mm 0;
+      min-height: 2.2mm;
+      overflow: hidden;
+    }
+
+    .back-row .line-row {
+      min-height: 2.35mm;
+      margin: 0.12mm 0;
+    }
+
+    .label {
+      flex: 0 0 auto;
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .value {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: inline-block;
+      min-height: 2.1mm;
+      padding: 0 0 0.06mm 0;
+      font-size: 17px;
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-bottom: 1px solid #333;
+    }
+
+    .back-row .label {
+      font-size: 17px;
+    }
+
+    .back-row .value {
+      font-size: 17px;
+      min-height: 2.15mm;
+      border-bottom: 1px solid #333;
+    }
+
+    @media print {
+      html, body {
+        width: auto;
+        height: auto;
+        overflow: hidden;
+      }
+
+      .toolbar {
+        display: none !important;
+      }
+
+      .sheet {
+        border: none;
+        margin: 0 auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="primary" onclick="downloadHtmlFile()">Download HTML</button>
+  </div>
+
+  <div class="sheet">
+    <div class="top-line">
+      <div class="left">Date:- ${safeHtml(formatDisplayDate(date) || "")}</div>
+      <div class="center">||श्री||</div>
+      <div class="right">Time:- ${safeHtml(formatTime(selectedBus?.startTime || "04:00"))}</div>
+    </div>
+
+    <div class="title-line">
+      <div class="bus-number">${safeHtml(selectedBus?.busNumber || "MH06BW9252")}</div>
+      <div class="company">SA TRAVEL'S</div>
+      <div class="route">Route:- ${safeHtml(selectedBus?.routeName || "")}</div>
     </div>
 
     <div class="divider"></div>
@@ -1729,369 +2845,247 @@ export default function StaffBookingPage() {
       </div>
     </div>
 
-    ${backRowHtml}
-
-    <div class="cabin-title">CABIN</div>
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 10%;">Seat</th>
-          <th style="width: 18%;">Name</th>
-          <th style="width: 22%;">Email</th>
-          <th style="width: 15%;">Phone</th>
-          <th style="width: 12%;">Pickup</th>
-          <th style="width: 12%;">Drop</th>
-          <th style="width: 11%;">Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${cabinRows}
-      </tbody>
-    </table>
+    <div class="back-row">
+      ${backRowHtml}
+    </div>
   </div>
+
+  <script>
+    function downloadHtmlFile() {
+      const html = document.documentElement.outerHTML;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  </script>
 </body>
 </html>
   `;
   };
 
+  const renderSeatCardTemplate31 = ({
+    seatNo,
+    seatMap,
+    isWindowSeat = false,
+  }) => {
+    const data = seatMap[String(seatNo)] || {};
+    const isBlocked = data?.status === "blocked";
+    const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
+
+    return `
+    <div class="seat-box ${isBlocked ? "blocked" : ""}">
+      <div class="seat-title">
+        <span class="seat-no">${safeHtml(title)}</span>
+        <span class="seat-title-right">
+          ${isBlocked ? `<span class="blocked-tag">BLOCKED</span>` : ""}
+          ${data.ticket
+        ? `<span class="ticket-tag">${safeHtml(String(data.ticket))}</span>`
+        : ""
+      }
+        </span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Name :</span>
+        <span class="value">${safeHtml(data.name || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Phone :</span>
+        <span class="value">${safeHtml(data.phone || data.mobile || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Pickup :</span>
+        <span class="value">${safeHtml(data.pickup || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Drop :</span>
+        <span class="value">${safeHtml(data.drop || "")}</span>
+      </div>
+    </div>
+  `;
+  };
+
+  const buildSeatTemplateHtml31 = () => {
+    if (!selectedBus) {
+      showAppToast("error", "Please open a bus first");
+      return "";
+    }
+
+    const seatMap = getSeatMapForTemplate();
+
+    const leftSeats = [3, 6, 9, 12, 15, 18, 21, 24];
+    const rightRows = [
+      [1, 2],
+      [4, 5],
+      [7, 8],
+      [10, 11],
+      [13, 14],
+      [16, 17],
+      [19, 20],
+      [22, 23],
+      [25, 26],
+    ];
+    const backRow = [27, 28, 29, 30, 31];
+
+    const topOffsetRows = 1;
+
+    const windowSeatSet = new Set([
+      2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18, 20, 21, 23, 24, 26, 27, 31,
+    ]);
+
+    const leftVisibleCount = topOffsetRows + leftSeats.length;
+    const rightVisibleCount = rightRows.length;
+    const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
+
+    const leftColumnHtml = `
+    ${Array.from({ length: topOffsetRows })
+        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
+        .join("")}
+    ${leftSeats
+        .map(
+          (seat) => `
+        <div class="left-seat-wrap">
+          ${renderSeatCardTemplate31({
+            seatNo: seat,
+            seatMap,
+            isWindowSeat: windowSeatSet.has(seat),
+          })}
+        </div>
+      `
+        )
+        .join("")}
+    ${Array.from({ length: leftBottomSpacerCount })
+        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
+        .join("")}
+  `;
+
+    const rightColumnHtml = rightRows
+      .map(
+        (row) => `
+      <div class="right-row right-count-${row.length}">
+        ${row
+            .map(
+              (seat) => `
+          <div class="right-seat-wrap">
+            ${renderSeatCardTemplate31({
+                seatNo: seat,
+                seatMap,
+                isWindowSeat: windowSeatSet.has(seat),
+              })}
+          </div>
+        `
+            )
+            .join("")}
+      </div>
+    `
+      )
+      .join("");
+
+    const backRowHtml = backRow
+      .map(
+        (seat) => `
+      <div class="back-seat-wrap">
+        ${renderSeatCardTemplate31({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
+
+    return buildTemplateShell31({
+      selectedBus,
+      date,
+      leftColumnHtml,
+      rightColumnHtml,
+      backRowHtml,
+    });
+  };
+
+
+  /* =========================================================
+     FINAL TEMPLATE SELECTOR
+  ========================================================= */
+  const buildSeatTemplateHtml = () => {
+    if (!selectedBus) {
+      showAppToast("error", "Please open a bus first");
+      return "";
+    }
+
+    const totalSeats = Number(
+      selectedBus?.seatLayout || selectedBus?.seatCount || 0
+    );
+
+    if (totalSeats === 23) return buildSeatTemplateHtml23();
+    if (totalSeats === 27) return buildSeatTemplateHtml27();
+    if (totalSeats === 31) return buildSeatTemplateHtml31();
+
+    return buildSeatTemplateHtml27();
+  };
+
+  /* =========================================================
+     PREVIEW / PRINT
+  ========================================================= */
   const handlePrintSeatTemplate = () => {
     const html = buildSeatTemplateHtml();
     if (!html) return;
 
-    const printWindow = window.open("", "_blank", "width=1200,height=900");
-    if (!printWindow) {
+    const previewWindow = window.open("", "_blank", "width=1400,height=1000");
+    if (!previewWindow) {
       showAppToast("error", "Popup blocked. Please allow popups.");
       return;
     }
 
-    let printHtml = html.replace(
-      "</style>",
-      `
-      @page {
-        size: A4 portrait;
-        margin: 8mm;
-      }
-      body {
-        margin: 0;
-        background: #fff;
-      }
-      .sheet {
-        width: 100%;
-        max-width: 210mm;
-        min-height: 297mm;
-        margin: 0 auto;
-        box-sizing: border-box;
-      }
-      </style>`
-    );
+    previewWindow.document.open();
+    previewWindow.document.write(html);
+    previewWindow.document.close();
 
-
-    // Append a small script in the preview window that captures the .sheet element
-    // using html2canvas + jsPDF inside the preview's browser context.
-    const previewScript = `
-        (function () {
-          function loadScript(src) {
-            return new Promise(function (resolve, reject) {
-              var s = document.createElement('script');
-              s.src = src;
-              s.async = true;
-              s.onload = function () { resolve(); };
-              s.onerror = function () { reject(new Error('Failed to load ' + src)); };
-              document.head.appendChild(s);
-            });
-          }
-
-          async function generatePdf() {
-            try {
-              var sheet = document.querySelector('.sheet');
-              if (!sheet) return alert('Template not found');
-
-              if (document.fonts && document.fonts.ready) await document.fonts.ready;
-              await new Promise(function (r) { setTimeout(r, 120); });
-
-              // Load UMD builds into the preview window if not already present
-              if (!window.html2canvas) {
-                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
-              }
-              if (!window.jspdf && !window.jsPDF) {
-                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
-              }
-
-              var html2c = window.html2canvas;
-              var jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (window.jsPDF || null);
-              if (!html2c || !jsPDFCtor) throw new Error('Required libraries not available');
-
-              var scale = 2;
-              var canvas = await html2c(sheet, { scale: scale, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 });
-
-              var imgData = canvas.toDataURL('image/jpeg', 0.98);
-              var A4_WIDTH_MM = 210;
-              var A4_HEIGHT_MM = 297;
-              var margin = 8;
-
-              var pdf = new jsPDFCtor({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-
-              var pdfWidth = A4_WIDTH_MM - margin * 2;
-              var pdfHeight = A4_HEIGHT_MM - margin * 2;
-
-              var canvasWidth = canvas.width;
-              var canvasHeight = canvas.height;
-              var imgWidthMm = pdfWidth;
-              var imgHeightMm = (canvasHeight * imgWidthMm) / canvasWidth;
-
-              if (imgHeightMm <= pdfHeight) {
-                pdf.addImage(imgData, 'JPEG', margin, margin, imgWidthMm, imgHeightMm);
-              } else {
-                var pxPerMm = canvasWidth / imgWidthMm;
-                var pageHeightPx = Math.floor(pdfHeight * pxPerMm);
-                var remaining = canvasHeight;
-                var position = 0;
-                var tmpCanvas = document.createElement('canvas');
-                var tmpCtx = tmpCanvas.getContext('2d');
-
-                while (remaining > 0) {
-                  var slice = Math.min(pageHeightPx, remaining);
-                  tmpCanvas.width = canvasWidth;
-                  tmpCanvas.height = slice;
-                  tmpCtx.clearRect(0, 0, tmpCanvas.width, tmpCanvas.height);
-                  tmpCtx.drawImage(canvas, 0, position, canvasWidth, slice, 0, 0, canvasWidth, slice);
-
-                  var sliceData = tmpCanvas.toDataURL('image/jpeg', 0.98);
-                  var sliceHeightMm = (slice * imgWidthMm) / canvasWidth;
-
-                  if (position > 0) pdf.addPage();
-                  pdf.addImage(sliceData, 'JPEG', margin, margin, imgWidthMm, sliceHeightMm);
-
-                  position += slice;
-                  remaining -= slice;
-                }
-              }
-
-              var filename = 'seat-template-' + encodeURIComponent(document.title || 'bus') + '.pdf';
-              pdf.save(filename);
-            } catch (err) {
-              console.error(err);
-              alert('Failed to generate PDF: ' + (err && err.message ? err.message : String(err)));
-            }
-          }
-
-              // expose the generator so parent window can call it
-              window.generateSeatPdf = generatePdf;
-
-              document.addEventListener('DOMContentLoaded', function () {
-                var btn = document.getElementById('download-pdf');
-                if (btn) btn.addEventListener('click', generatePdf);
-              });
-        })();
-      `;
-
-    printHtml = printHtml.replace('</body>', `<script>${previewScript}</script></body>`);
-
-    printWindow.document.open();
-    printWindow.document.write(printHtml);
-    printWindow.document.close();
-    return printWindow;
+    return previewWindow;
   };
 
-  const handleDownloadSeatTemplate = async () => {
-    try {
-      // Prefer generating PDF from the preview window (ensures exact parity).
-      try {
-        const previewWin = handlePrintSeatTemplate();
-        if (previewWin) {
-          let attempts = 0;
-          const callGenerator = () => {
-            try {
-              if (previewWin.generateSeatPdf) {
-                previewWin.generateSeatPdf();
-                return;
-              }
-            } catch (e) {
-              // ignore
-            }
-            attempts++;
-            if (attempts < 30) setTimeout(callGenerator, 200);
-            else showAppToast('error', 'Preview PDF generator not available');
-          };
-          setTimeout(callGenerator, 300);
-          return;
-        }
-      } catch (e) {
-        // continue to fallback method below
-      }
+  /* =========================================================
+     DOWNLOAD TEMPLATE AS PDF (PRINT -> SAVE AS PDF)
+  ========================================================= */
+  const handleDownloadSeatTemplate = () => {
+    const html = buildSeatTemplateHtml();
+    if (!html) return;
 
-      const html = buildSeatTemplateHtml();
-      if (!html) return;
-
-      const wrapper = document.createElement("div");
-      wrapper.innerHTML = html;
-
-      // remove action buttons from PDF
-      const actions = wrapper.querySelector(".actions");
-      if (actions) actions.remove();
-
-      const sheet = wrapper.querySelector(".sheet");
-      if (!sheet) {
-        showAppToast("error", "Template content not found");
-        return;
-      }
-
-      // create a hidden-but-in-viewport container for clean PDF render
-      // (placing it offscreen or with negative z-index can cause html2canvas to capture a blank page)
-      const pdfContainer = document.createElement("div");
-      pdfContainer.style.position = "fixed";
-      pdfContainer.style.left = "0";
-      pdfContainer.style.top = "0";
-      pdfContainer.style.width = "794px"; // A4 width approx at 96dpi
-      pdfContainer.style.background = "#ffffff";
-      pdfContainer.style.padding = "0";
-      pdfContainer.style.zIndex = "99999";
-      // keep it visually hidden but renderable by html2canvas
-      pdfContainer.style.opacity = "0.01";
-      pdfContainer.style.pointerEvents = "none";
-
-      // prefer using the built HTML's own styles so preview and PDF match
-      const headStyle = wrapper.querySelector("head > style, style");
-      if (headStyle) {
-        pdfContainer.appendChild(headStyle.cloneNode(true));
-      } else {
-        const style = document.createElement("style");
-        style.innerHTML = `
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        font-family: "Times New Roman", serif;
-        background: #fff;
-        color: #111;
-      }
-      .sheet {
-        width: 210mm;
-        min-height: 297mm;
-        padding: 5mm;
-        background: #fff;
-        color: #111;
-        font-family: "Times New Roman", serif;
-      }
-      .line-row {
-        display: flex;
-        align-items: center;
-      }
-      .value {
-        line-height: 1.35;
-        padding-bottom: 1px;
-      }
-    `;
-        pdfContainer.appendChild(style);
-      }
-      pdfContainer.appendChild(sheet.cloneNode(true));
-      document.body.appendChild(pdfContainer);
-
-      // allow browser to paint so html2canvas captures layout
-      await new Promise((r) => setTimeout(r, 80));
-
-      // briefly make it fully visible for capture (still offscreen to user)
-      pdfContainer.style.opacity = "1";
-      pdfContainer.style.pointerEvents = "none";
-      await new Promise((r) => setTimeout(r, 80));
-
-      const element = pdfContainer;
-
-      const opt = {
-        margin: [5, 5, 5, 5],
-        filename: `seat-template-${selectedBus?.busNumber || "bus"}-${date || "date"}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-          scrollX: 0,
-          scrollY: 0,
-        },
-        jsPDF: {
-          unit: "mm",
-          format: "a4",
-          orientation: "portrait",
-        },
-        pagebreak: {
-          mode: ["avoid-all", "css", "legacy"],
-        },
-      };
-
-      // Use html2canvas + jsPDF directly to avoid blank PDFs from html2pdf
-      const [html2canvasModule, jsPdfModule] = await Promise.all([
-        import("html2canvas"),
-        import(/* webpackChunkName: 'jspdf' */ "jspdf"),
-      ]);
-      const html2canvas = html2canvasModule?.default || html2canvasModule;
-      const { jsPDF } = jsPdfModule;
-
-      const canvas = await html2canvas(element, {
-        scale: opt.html2canvas.scale || 2,
-        useCORS: true,
-        backgroundColor: opt.html2canvas.backgroundColor || "#ffffff",
-        scrollX: 0,
-        scrollY: 0,
-      });
-
-      const imgData = canvas.toDataURL("image/jpeg", 0.98);
-
-      // A4 sizes in mm
-      const A4_WIDTH_MM = 210;
-      const A4_HEIGHT_MM = 297;
-      const marginTop = (opt.margin && opt.margin[0]) || 5;
-      const marginRight = (opt.margin && opt.margin[1]) || 5;
-      const marginBottom = (opt.margin && opt.margin[2]) || 5;
-      const marginLeft = (opt.margin && opt.margin[3]) || 5;
-
-      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-
-      const pdfWidth = A4_WIDTH_MM - marginLeft - marginRight;
-      const pdfHeight = A4_HEIGHT_MM - marginTop - marginBottom;
-
-      // convert canvas px -> mm at ratio
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-      const imgWidthMm = pdfWidth;
-      const imgHeightMm = (canvasHeight * imgWidthMm) / canvasWidth;
-
-      // If image fits on one page
-      if (imgHeightMm <= pdfHeight) {
-        pdf.addImage(imgData, "JPEG", marginLeft, marginTop, imgWidthMm, imgHeightMm);
-      } else {
-        // split into pages
-        const pxPerMm = canvasWidth / imgWidthMm;
-        const pageHeightPx = Math.floor(pdfHeight * pxPerMm);
-        let remainingHeightPx = canvasHeight;
-        let positionY = 0;
-        const tmpCanvas = document.createElement("canvas");
-        const tmpCtx = tmpCanvas.getContext("2d");
-
-        while (remainingHeightPx > 0) {
-          const sliceHeightPx = Math.min(pageHeightPx, remainingHeightPx);
-          tmpCanvas.width = canvasWidth;
-          tmpCanvas.height = sliceHeightPx;
-          tmpCtx.clearRect(0, 0, tmpCanvas.width, tmpCanvas.height);
-          tmpCtx.drawImage(canvas, 0, positionY, canvasWidth, sliceHeightPx, 0, 0, canvasWidth, sliceHeightPx);
-
-          const sliceData = tmpCanvas.toDataURL("image/jpeg", 0.98);
-          const sliceHeightMm = (sliceHeightPx * imgWidthMm) / canvasWidth;
-
-          if (positionY > 0) pdf.addPage();
-          pdf.addImage(sliceData, "JPEG", marginLeft, marginTop, imgWidthMm, sliceHeightMm);
-
-          positionY += sliceHeightPx;
-          remainingHeightPx -= sliceHeightPx;
-        }
-      }
-
-      pdf.save(opt.filename);
-
-      document.body.removeChild(pdfContainer);
-      showAppToast("success", "Seat template PDF downloaded");
-    } catch (error) {
-      console.error(error);
-      showAppToast("error", "Failed to download PDF");
+    const previewWindow = window.open("", "_blank", "width=1400,height=1000");
+    if (!previewWindow) {
+      showAppToast("error", "Popup blocked. Please allow popups.");
+      return;
     }
+
+    previewWindow.document.open();
+    previewWindow.document.write(html);
+    previewWindow.document.close();
+
+    previewWindow.onload = () => {
+      setTimeout(() => {
+        previewWindow.focus();
+        previewWindow.print();
+
+        const totalSeats = Number(
+          selectedBus?.seatLayout || selectedBus?.seatCount || 0
+        );
+
+        showAppToast(
+          "success",
+          `${totalSeats || "Seat"} template opened. Choose "Save as PDF" in print dialog.`
+        );
+      }, 500);
+    };
   };
 
   return (
