@@ -587,7 +587,26 @@ export default function BookingPage() {
   };
 
   const openBusModal = (bus) => {
-    setSelectedBus(bus);
+    // Merge any schedule-specific overrides (startTime/endTime/pricing)
+    const busForDisplay = { ...(bus || {}) };
+    try {
+      const busSched = (schedules && bus && schedules[bus.busId]) || {};
+      const schedForDate = date && busSched ? busSched[date] : null;
+      if (schedForDate) {
+        if (schedForDate.startTime) busForDisplay.startTime = schedForDate.startTime;
+        if (schedForDate.endTime) busForDisplay.endTime = schedForDate.endTime;
+        if (schedForDate.pricingOverride) {
+          busForDisplay.pricingRules = {
+            ...(busForDisplay.pricingRules || {}),
+            ...(schedForDate.pricingOverride || {}),
+          };
+        }
+      }
+    } catch (e) {
+      // fallback to original bus if anything goes wrong
+    }
+
+    setSelectedBus(busForDisplay);
     resetBookingForm();
   };
 
@@ -1167,6 +1186,49 @@ export default function BookingPage() {
     }
   };
 
+  const formatTime = (value) => {
+    if (!value && value !== 0) return "";
+    try {
+      let s = String(value || "").trim();
+      if (!s) return "";
+      s = s.replace(/\s+/g, " ").toLowerCase();
+
+      // Keep placeholders like --:-- untouched
+      if (/^-{2,}:?-{2,}$/.test(s)) return s;
+
+      // detect am/pm
+      const ampmMatch = s.match(/\b(am|pm)\b/);
+      let isPM = false;
+      if (ampmMatch) {
+        isPM = ampmMatch[1] === "pm";
+        s = s.replace(/\b(am|pm)\b/, "").trim();
+      }
+
+      const parts = s.split(":").map((p) => Number(p));
+      if (!parts.length || !Number.isFinite(parts[0])) return value;
+
+      let hh = parts[0];
+      const mm = parts.length > 1 && Number.isFinite(parts[1]) ? parts[1] : 0;
+
+      if (ampmMatch) {
+        if (hh === 12) hh = isPM ? 12 : 0;
+        else if (isPM) hh = (hh % 12) + 12;
+      }
+
+      // normalize
+      hh = Number(hh) || 0;
+      const minutes = Number.isFinite(Number(mm)) ? Number(mm) : 0;
+
+      const outH = hh % 12 === 0 ? 12 : hh % 12;
+      const outM = String(minutes).padStart(2, "0");
+      const suffix = hh >= 12 ? "PM" : "AM";
+
+      return `${outH}:${outM} ${suffix}`;
+    } catch {
+      return value;
+    }
+  };
+
   const safeHtml = (v) =>
     String(v ?? "")
       .replace(/&/g, "&amp;")
@@ -1526,7 +1588,7 @@ export default function BookingPage() {
     .line-row {
       display: flex;
       align-items: center;
-      gap: 0.8mm;
+      gap: 3mm;
       margin: 0.14mm 0;
       min-height: 2.4mm;
       overflow: hidden;
@@ -1590,7 +1652,7 @@ export default function BookingPage() {
     <div class="top-line">
       <div class="left">Date:- ${safeHtml(formatDisplayDate(date) || "")}</div>
       <div class="center">||श्री||</div>
-      <div class="right">Time:- ${safeHtml(selectedBus?.startTime || "04:00")}</div>
+      <div class="right">Time:- ${safeHtml(formatTime(selectedBus?.startTime || "04:00"))}</div>
     </div>
 
     <div class="title-line">
@@ -1649,22 +1711,22 @@ export default function BookingPage() {
       </div>
 
       <div class="line-row">
-        <span class="label">Name:-</span>
+        <span class="label">Name :</span>
         <span class="value">${safeHtml(data.name || "")}</span>
       </div>
 
       <div class="line-row">
-        <span class="label">Phone:-</span>
+        <span class="label">Phone :</span>
         <span class="value">${safeHtml(data.phone || data.mobile || "")}</span>
       </div>
 
       <div class="line-row">
-        <span class="label">Pickup:-</span>
+        <span class="label">Pickup :</span>
         <span class="value">${safeHtml(data.pickup || "")}</span>
       </div>
 
       <div class="line-row">
-        <span class="label">Drop:-</span>
+        <span class="label">Drop :</span>
         <span class="value">${safeHtml(data.drop || "")}</span>
       </div>
     </div>
@@ -1767,9 +1829,6 @@ export default function BookingPage() {
     });
   };
 
-  /* =========================================================
-     27 SEAT
-  ========================================================= */
 
   /* =========================================================
    27 SEAT - FINAL FIXED
@@ -2172,7 +2231,7 @@ export default function BookingPage() {
     <div class="top-line">
       <div class="left">Date:- ${safeHtml(formatDisplayDate(date) || "")}</div>
       <div class="center">||श्री||</div>
-      <div class="right">Time:- ${safeHtml(selectedBus?.startTime || "04:00")}</div>
+      <div class="right">Time:- ${safeHtml(formatTime(selectedBus?.startTime || "04:00"))}</div>
     </div>
 
     <div class="title-line">
@@ -2233,22 +2292,23 @@ export default function BookingPage() {
       </div>
 
       <div class="line-row">
-        <span class="label">Name:-</span>
+        <span class="label">Name :</span>
         <span class="value">${safeHtml(data.name || "")}</span>
       </div>
 
       <div class="line-row">
-        <span class="label">Phone:-</span>
+        <span class="label">Phone :</span>
         <span class="value">${safeHtml(data.phone || data.mobile || "")}</span>
       </div>
 
       <div class="line-row">
-        <span class="label">Pickup:-</span>
+        <span class="label">Pickup</span>
+        <span class="colon">:</span>
         <span class="value">${safeHtml(data.pickup || "")}</span>
       </div>
 
       <div class="line-row">
-        <span class="label">Drop:-</span>
+        <span class="label">Drop :</span>
         <span class="value">${safeHtml(data.drop || "")}</span>
       </div>
     </div>
@@ -2781,7 +2841,7 @@ export default function BookingPage() {
     <div class="top-line">
       <div class="left">Date:- ${safeHtml(formatDisplayDate(date) || "")}</div>
       <div class="center">||श्री||</div>
-      <div class="right">Time:- ${safeHtml(selectedBus?.startTime || "04:00")}</div>
+      <div class="right">Time:- ${safeHtml(formatTime(selectedBus?.startTime || "04:00"))}</div>
     </div>
 
     <div class="title-line">
@@ -2851,22 +2911,22 @@ export default function BookingPage() {
       </div>
 
       <div class="line-row">
-        <span class="label">Name:-</span>
+        <span class="label">Name :</span>
         <span class="value">${safeHtml(data.name || "")}</span>
       </div>
 
       <div class="line-row">
-        <span class="label">Phone:-</span>
+        <span class="label">Phone :</span>
         <span class="value">${safeHtml(data.phone || data.mobile || "")}</span>
       </div>
 
       <div class="line-row">
-        <span class="label">Pickup:-</span>
+        <span class="label">Pickup :</span>
         <span class="value">${safeHtml(data.pickup || "")}</span>
       </div>
 
       <div class="line-row">
-        <span class="label">Drop:-</span>
+        <span class="label">Drop :</span>
         <span class="value">${safeHtml(data.drop || "")}</span>
       </div>
     </div>
@@ -3220,7 +3280,7 @@ export default function BookingPage() {
                       <CompactInfoCard
                         icon={<Clock3 className="h-4 w-4 text-[#f97316]" />}
                         label="Timing"
-                        value={`${bus.startTime || "--:--"} → ${bus.endTime || "--:--"}`}
+                        value={`${formatTime(bus.startTime || "--:--")} → ${formatTime(bus.endTime || "--:--")}`}
                       />
                     </div>
                   </div>
@@ -3261,7 +3321,9 @@ export default function BookingPage() {
                   {`${resolvePointValue(selectedBus.startPoint, "--")} → ${resolvePointValue(
                     selectedBus.endPoint,
                     "--"
-                  )} • ${selectedBus.startTime || "--:--"} → ${selectedBus.endTime || "--:--"}`}
+                  )} • ${formatTime(selectedBus.startTime || "--:--")} → ${formatTime(
+                    selectedBus.endTime || "--:--"
+                  )}`}
                 </p>
               </div>
 
@@ -3302,7 +3364,9 @@ export default function BookingPage() {
                 />
                 <SummaryCard
                   title="Time"
-                  value={`${selectedBus.startTime || "--:--"} → ${selectedBus.endTime || "--:--"}`}
+                  value={`${formatTime(selectedBus.startTime || "--:--")} → ${formatTime(
+                    selectedBus.endTime || "--:--"
+                  )}`}
                   icon={<Clock3 className="h-6 w-6 text-[#f97316]" />}
                 />
               </div>
