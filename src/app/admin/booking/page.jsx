@@ -677,6 +677,10 @@ export default function BookingPage() {
           dropTime: bookingForm.dropTime || "",
           fare: Number(finalFare),
         };
+        // For manual create (not editing), default payment method to offline
+        if (!editingSeat) {
+          payload.paymentMethod = "offline";
+        }
 
         const method = editingSeat ? "PUT" : "POST";
 
@@ -942,6 +946,7 @@ export default function BookingPage() {
           drop: bookingForm.drop,
           dropTime: bookingForm.dropTime || "",
           fare: Number(finalFare),
+          paymentMethod: "offline",
         };
 
         const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;

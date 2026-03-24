@@ -658,6 +658,10 @@ export default function StaffBookingPage() {
           dropTime: bookingForm.dropTime || "",
           fare: Number(finalFare),
         };
+        // If creating a booking from staff portal (not editing), mark as offline by default
+        if (!editingSeat) {
+          payload.paymentMethod = "offline";
+        }
 
         const method = editingSeat ? "PUT" : "POST";
 
@@ -923,6 +927,7 @@ export default function StaffBookingPage() {
           drop: bookingForm.drop,
           dropTime: bookingForm.dropTime || "",
           fare: Number(finalFare),
+          paymentMethod: "offline",
         };
 
         const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
