@@ -832,19 +832,29 @@ export default function BookingPage() {
                                                 return [...prev, id];
                                             });
                                         }}
-                                        onViewBooking={(seat, booking) => {
-                                            // only own seats details visible
-                                            if (!booking || booking.private) {
+                                        onViewBooking={(seat, bookingSafe) => {
+                                            const id = String(seat);
+                                            const realBooking = (bookings && bookings[id]) || bookingSafe || null;
+
+                                            if (!realBooking) {
                                                 showAppToast("info", "This seat is already booked");
                                                 return;
                                             }
 
-                                            if (!canCancelBookingForUser(booking, user)) {
-                                                showAppToast("info", "You can only view your own booking details");
-                                                return;
-                                            }
+                                            // build a masked booking for non-owners to preserve privacy
+                                            const isOwner = canCancelBookingForUser(realBooking, user);
 
-                                            setViewBooking({ seat, booking });
+                                            const bookingForView = isOwner
+                                                ? realBooking
+                                                : {
+                                                    ...(realBooking || {}),
+                                                    name: maskName(realBooking?.name || realBooking?.passengerName),
+                                                    phone: maskPhone(realBooking?.phone || realBooking?.phoneNumber),
+                                                    email: maskEmail(realBooking?.email),
+                                                    _masked: true,
+                                                };
+
+                                            setViewBooking({ seat: id, booking: bookingForView, rawBooking: realBooking });
                                         }}
                                     />
                                 </div>
@@ -1299,6 +1309,10 @@ export default function BookingPage() {
                                             Booking details — Seat {viewBooking.seat}
                                         </h3>
 
+                                        {viewBooking.booking?._masked && (
+                                            <p className="mt-2 text-sm text-slate-500">This booking belongs to another user — sensitive details are hidden.</p>
+                                        )}
+
                                         <p className="mt-3 text-sm text-slate-700">
                                             Name: <span className="font-semibold">{viewBooking.booking?.name || "—"}</span>
                                         </p>
@@ -1335,10 +1349,10 @@ export default function BookingPage() {
                                                 Close
                                             </button>
 
-                                            {canCancelBookingForUser(viewBooking.booking, user) &&
+                                            {canCancelBookingForUser(viewBooking.rawBooking, user) &&
                                                 (() => {
                                                     try {
-                                                        const bookingObj = viewBooking.booking || {};
+                                                        const bookingObj = viewBooking.rawBooking || viewBooking.booking || {};
                                                         const busForPricing = { ...(selectedBus || {}) };
                                                         const sched =
                                                             (schedules &&
@@ -1469,10 +1483,10 @@ export default function BookingPage() {
 
                                             <button
                                                 onClick={() => {
-                                                    const b = viewBooking.booking || {};
+                                                    const b = viewBooking.rawBooking || viewBooking.booking || {};
                                                     setBookingForm((p) => ({
                                                         ...p,
-                                                        name: b.name || "",
+                                                        name: b.name || b.passengerName || "",
                                                         phone: b.phone || b.phoneNumber || "",
                                                         email: b.email || "",
                                                         pickup: b.pickup || "",
@@ -1713,4 +1727,34 @@ function ConfirmModal({ message, onCancel, onConfirm, loading }) {
             </div>
         </div>
     );
+}
+
+function maskEmail(email) {
+    if (!email) return "—";
+    try {
+        const parts = String(email).split("@");
+        if (parts.length !== 2) return String(email).replace(/.(?=.{2})/g, "*");
+        const name = parts[0];
+        const domain = parts[1];
+        const visible = name.slice(0, 1);
+        return `${visible}***@${domain}`;
+    } catch (e) {
+        return "—";
+    }
+}
+
+function maskPhone(phone) {
+    if (!phone) return "—";
+    const s = String(phone || "");
+    if (s.length <= 4) return s.replace(/.(?=.{1})/g, "*");
+    return s.replace(/.(?=.{2})/g, "*");
+}
+
+function maskName(name) {
+    if (!name) return "—";
+    const s = String(name || "").trim();
+    const parts = s.split(/\s+/);
+    if (parts.length === 0) return "—";
+    const first = parts[0];
+    return `${first.charAt(0)}***`;
 }
