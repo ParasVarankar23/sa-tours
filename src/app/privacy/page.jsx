@@ -78,7 +78,7 @@ export default function PrivacyPage() {
                         </div>
 
                         <p className="mt-5 text-sm leading-7 text-slate-600">
-                            For privacy requests, contact us at +91  92094 71309 or satourandtravels06@gmail.com.
+                            For privacy requests, contact us at +91  92094 71309 or satoursandtravels06@gmail.com.
                         </p>
                     </div>
                 </div>
