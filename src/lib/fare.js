@@ -10,7 +10,7 @@ export const BUS_TYPES = {
     AC: "AC",
 };
 
-export const AC_SURCHARGE = 50;
+export const AC_SURCHARGE = 0;
 
 /* -------------------------------------------------------
    CITY SIDE STOPS (PANVEL ONWARDS)
@@ -36,6 +36,7 @@ export const CITY_STOPS = [
    VILLAGE SIDE STOPS (PICKUP SIDE)
 ------------------------------------------------------- */
 export const BORLI_VILLAGE_STOPS = [
+    "Shekhadi",
     "Borli",
     "Kapoli",
     "Shiste",
@@ -76,36 +77,51 @@ export const DIGHI_VILLAGE_STOPS = [
 export const BORLI_FARE_GROUPS = [
     {
         zone: "BORLI_GROUP_1",
+        fare: 550,
+        stops: ["Shekhadi"],
+    },
+    {
+        zone: "BORLI_GROUP_2",
         fare: 450,
         stops: ["Borli", "Kapoli", "Shiste", "Vadvali Phata", "Gondghar", "Mendadi"],
     },
     {
-        zone: "BORLI_GROUP_2",
+        zone: "BORLI_GROUP_3",
         fare: 400,
-        stops: ["Kharasai", "Banoti", "Mhasla", "Sai"],
+        stops: ["Kharasai", "Banoti", "Mhasla", "Sai", "Morba"],
     },
     {
-        zone: "BORLI_GROUP_3",
+        zone: "BORLI_GROUP_4",
         fare: 350,
-        stops: ["Morba", "Mangaon", "Indapur", "Kolad"],
+        stops: ["Mangaon", "Indapur", "Kolad"],
     },
 ];
 
 export const DIGHI_FARE_GROUPS = [
     {
         zone: "DIGHI_GROUP_1",
-        fare: 450,
-        stops: ["Dighi", "Kudgaon", "Adgaon", "Velas", "Wadvali", "Gondghar", "Mendadi"],
+        fare: 500,
+        stops: ["Dighi", "Velas"],
     },
     {
         zone: "DIGHI_GROUP_2",
-        fare: 400,
-        stops: ["Kharasai", "Banoti", "Mhasla", "Sai"],
+        fare: 550,
+        stops: ["Adgaon"],
     },
     {
         zone: "DIGHI_GROUP_3",
+        fare: 450,
+        stops: ["Kudgaon", "Wadvali", "Gondghar", "Mendadi"],
+    },
+    {
+        zone: "DIGHI_GROUP_4",
+        fare: 400,
+        stops: ["Kharasai", "Banoti", "Mhasla", "Sai", "Morba"],
+    },
+    {
+        zone: "DIGHI_GROUP_5",
         fare: 350,
-        stops: ["Morba", "Mangaon", "Indapur", "Kolad"],
+        stops: ["Mangaon", "Indapur", "Kolad"],
     },
 ];
 
@@ -135,6 +151,7 @@ const STOP_ALIASES = {
     dongri: "Dongri",
 
     // Borli side
+    shekhadi: "Shekhadi",
     borli: "Borli",
     kapoli: "Kapoli",
     shiste: "Shiste",

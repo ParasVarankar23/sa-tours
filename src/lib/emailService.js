@@ -38,8 +38,6 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://sa-tours.vercel.app"
 ========================================================= */
 const FIXED_HELPLINE = "8805718986";
 const FIXED_BUS_BOOKING = "9209471601";
-const BORLI_BUS_CONTACT = "9209471309";
-const DIGHI_BUS_CONTACT = "9273635316";
 
 /* =========================================================
    SHARED HELPERS
@@ -94,44 +92,6 @@ function normalizeStopName(name) {
     return aliasMap[key] || n;
 }
 
-function normalizeForCompare(value = "") {
-    return String(value || "")
-        .trim()
-        .toLowerCase()
-        .replace(/[-–—]/g, " ")
-        .replace(/\s+/g, " ");
-}
-
-function getBusContactNumber(routeName = "", pickup = "", drop = "") {
-    const route = normalizeForCompare(routeName);
-    const pickupName = normalizeForCompare(pickup);
-    const dropName = normalizeForCompare(drop);
-
-    const combined = `${route} ${pickupName} ${dropName}`.trim();
-
-    const hasBorli = combined.includes("borli");
-    const hasDighi = combined.includes("dighi");
-    const hasDongri = combined.includes("dongri");
-
-    if (
-        (hasBorli && hasDongri) ||
-        route.includes("borli dongri") ||
-        route.includes("dongri borli")
-    ) {
-        return BORLI_BUS_CONTACT;
-    }
-
-    if (
-        (hasDighi && hasDongri) ||
-        route.includes("dighi dongri") ||
-        route.includes("dongri dighi")
-    ) {
-        return DIGHI_BUS_CONTACT;
-    }
-
-    return FIXED_HELPLINE;
-}
-
 function getPaymentMethod(booking = {}) {
     const raw =
         booking.paymentMethod ||
@@ -151,7 +111,15 @@ function getPaymentMethod(booking = {}) {
     if (value.includes("card")) return "Card";
     if (value.includes("netbank")) return "Net Banking";
     if (value.includes("wallet")) return "Wallet";
-    if (value.includes("cash") || value.includes("offline") || value.includes("cod") || value.includes("cashcollected") || value.includes("cash_collected")) return "Cash";
+    if (
+        value.includes("cash") ||
+        value.includes("offline") ||
+        value.includes("cod") ||
+        value.includes("cashcollected") ||
+        value.includes("cash_collected")
+    ) {
+        return "Cash";
+    }
     if (value.includes("razorpay")) return "Online Payment";
 
     return raw;
@@ -160,6 +128,80 @@ function getPaymentMethod(booking = {}) {
 function formatCurrency(value) {
     const num = Number(value || 0);
     return `₹${num.toFixed(2)}`;
+}
+
+/* =========================================================
+   TIME FORMAT HELPERS
+   Converts:
+   14:00 -> 2:00 PM
+   04:00 -> 4:00 AM
+   9:30 AM -> 9:30 AM
+========================================================= */
+function normalizeTimeValue(time = "") {
+    return String(time || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\./g, ":")
+        .replace(/\s+/g, " ");
+}
+
+function formatTime12Hour(time = "") {
+    const raw = String(time || "").trim();
+    if (!raw) return "--:--";
+
+    const normalized = normalizeTimeValue(raw);
+
+    // Already AM/PM format
+    const ampmMatch = normalized.match(/^(\d{1,2}):(\d{2})\s?(am|pm)$/i);
+    if (ampmMatch) {
+        let hours = parseInt(ampmMatch[1], 10);
+        const minutes = ampmMatch[2];
+        const meridian = ampmMatch[3].toUpperCase();
+
+        if (hours === 0) hours = 12;
+        return `${hours}:${minutes} ${meridian}`;
+    }
+
+    // 24-hour format
+    const match24 = normalized.match(/^(\d{1,2}):(\d{2})$/);
+    if (match24) {
+        let hours = parseInt(match24[1], 10);
+        const minutes = match24[2];
+
+        if (Number.isNaN(hours) || hours < 0 || hours > 23) {
+            return raw;
+        }
+
+        const meridian = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12;
+        if (hours === 0) hours = 12;
+
+        return `${hours}:${minutes} ${meridian}`;
+    }
+
+    return raw;
+}
+
+/* =========================================================
+   BUS CONTACT BY START TIME ONLY
+   2:00 PM + 4:00 AM => 9209471309
+   4:00 PM + 3:00 AM => 9273635316
+========================================================= */
+function getBusContactNumber(startTime = "") {
+    const time12 = formatTime12Hour(startTime).toLowerCase();
+
+    // 2:00 PM and 4:00 AM => 9209471309
+    if (["2:00 pm", "4:00 am"].includes(time12)) {
+        return "9209471309";
+    }
+
+    // 4:00 PM and 3:00 AM => 9273635316
+    if (["4:00 pm", "3:00 am"].includes(time12)) {
+        return "9273635316";
+    }
+
+    // Default fallback
+    return FIXED_HELPLINE;
 }
 
 function infoRow(label, value, highlight = false) {
@@ -587,6 +629,11 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
     const pickupName = normalizeStopName(booking.pickup || "");
     const dropName = normalizeStopName(booking.drop || "");
 
+    const formattedStartTime = formatTime12Hour(booking.startTime || "");
+    const formattedEndTime = formatTime12Hour(booking.endTime || "");
+    const formattedPickupTime = booking.pickupTime ? formatTime12Hour(booking.pickupTime) : "";
+    const formattedDropTime = booking.dropTime ? formatTime12Hour(booking.dropTime) : "";
+
     try {
         const db = getAdminDb();
         const busId = booking.busId || null;
@@ -599,10 +646,7 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
 
     const helpline = FIXED_HELPLINE;
     const bookingContact = FIXED_BUS_BOOKING;
-    const routeKey = String(
-        booking.routeName || booking.route || booking.routeId || ""
-    );
-    const busContact = getBusContactNumber(routeKey, pickupName, dropName);
+    const busContact = getBusContactNumber(booking.startTime || "");
     const paymentMethod = getPaymentMethod(booking);
 
     const bookingCard = createInfoCard(
@@ -611,13 +655,11 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
             ${infoRow("Passenger Name", name || "Passenger")}
             ${infoRow(
             "Bus",
-            `${booking.busNumber || "--"}${booking.routeName ? ` — ${booking.routeName}` : ""
-            }`
+            `${booking.busNumber || "--"}${booking.routeName ? ` — ${booking.routeName}` : ""}`
         )}
             ${infoRow(
             "Travel Date & Time",
-            `${booking.date || "--"} • ${booking.startTime || "--:--"} → ${booking.endTime || "--:--"
-            }`
+            `${booking.date || "--"} • ${formattedStartTime} → ${formattedEndTime}`
         )}
             ${infoRow("Seat Number", booking.seatNo || "--")}
             ${infoRow("Ticket No", booking.ticket || "--")}
@@ -626,13 +668,11 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
             ${infoRow("Bus Contact", busContact)}
             ${infoRow(
             "Pickup Point",
-            `${pickupName || "--"}${booking.pickupTime ? ` (${booking.pickupTime})` : ""
-            }`
+            `${pickupName || "--"}${formattedPickupTime ? ` (${formattedPickupTime})` : ""}`
         )}
             ${infoRow(
             "Drop Point",
-            `${dropName || "--"}${booking.dropTime ? ` (${booking.dropTime})` : ""
-            }`
+            `${dropName || "--"}${formattedDropTime ? ` (${formattedDropTime})` : ""}`
         )}
         `
     );
@@ -761,9 +801,9 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
 
         const journeyRows = [
             ["Travel Date", booking.date || "--"],
-            ["Travel Time", `${booking.startTime || "--:--"} → ${booking.endTime || "--:--"}`],
-            ["Pickup Point", `${pickupName || "--"}${booking.pickupTime ? ` (${booking.pickupTime})` : ""}`],
-            ["Drop Point", `${dropName || "--"}${booking.dropTime ? ` (${booking.dropTime})` : ""}`],
+            ["Travel Time", `${formattedStartTime} → ${formattedEndTime}`],
+            ["Pickup Point", `${pickupName || "--"}${formattedPickupTime ? ` (${formattedPickupTime})` : ""}`],
+            ["Drop Point", `${dropName || "--"}${formattedDropTime ? ` (${formattedDropTime})` : ""}`],
             ["Bus Contact", busContact],
         ];
 
@@ -868,6 +908,11 @@ export async function sendBookingCancellation(email, name, booking = {}) {
     const pickupName = normalizeStopName(booking.pickup || "");
     const dropName = normalizeStopName(booking.drop || "");
 
+    const formattedStartTime = formatTime12Hour(booking.startTime || "");
+    const formattedEndTime = formatTime12Hour(booking.endTime || "");
+    const formattedPickupTime = booking.pickupTime ? formatTime12Hour(booking.pickupTime) : "";
+    const formattedDropTime = booking.dropTime ? formatTime12Hour(booking.dropTime) : "";
+
     try {
         const db = getAdminDb();
         const busId = booking.busId || null;
@@ -880,10 +925,7 @@ export async function sendBookingCancellation(email, name, booking = {}) {
 
     const helpline = FIXED_HELPLINE;
     const bookingContact = FIXED_BUS_BOOKING;
-    const routeKey = String(
-        booking.routeName || booking.route || booking.routeId || ""
-    );
-    const busContact = getBusContactNumber(routeKey, pickupName, dropName);
+    const busContact = getBusContactNumber(booking.startTime || "");
     const paymentMethod = getPaymentMethod(booking);
 
     let paymentRows = "";
@@ -905,13 +947,11 @@ export async function sendBookingCancellation(email, name, booking = {}) {
             ${infoRow("Passenger Name", name || "Passenger")}
             ${infoRow(
             "Bus",
-            `${booking.busNumber || "--"}${booking.routeName ? ` — ${booking.routeName}` : ""
-            }`
+            `${booking.busNumber || "--"}${booking.routeName ? ` — ${booking.routeName}` : ""}`
         )}
             ${infoRow(
             "Travel Date & Time",
-            `${booking.date || "--"} • ${booking.startTime || "--:--"} → ${booking.endTime || "--:--"
-            }`
+            `${booking.date || "--"} • ${formattedStartTime} → ${formattedEndTime}`
         )}
             ${infoRow("Seat Number", booking.seatNo || "--")}
             ${infoRow("Helpline", helpline)}
@@ -919,13 +959,11 @@ export async function sendBookingCancellation(email, name, booking = {}) {
             ${infoRow("Bus Contact", busContact)}
             ${infoRow(
             "Pickup Point",
-            `${pickupName || "--"}${booking.pickupTime ? ` (${booking.pickupTime})` : ""
-            }`
+            `${pickupName || "--"}${formattedPickupTime ? ` (${formattedPickupTime})` : ""}`
         )}
             ${infoRow(
             "Drop Point",
-            `${dropName || "--"}${booking.dropTime ? ` (${booking.dropTime})` : ""
-            }`
+            `${dropName || "--"}${formattedDropTime ? ` (${formattedDropTime})` : ""}`
         )}
         `
     );
