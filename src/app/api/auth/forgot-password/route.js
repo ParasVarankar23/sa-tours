@@ -1,7 +1,7 @@
 import { sendForgotPasswordEmail } from "@/lib/emailService";
 import { getAdminAuth, getAdminDb } from "@/lib/firebaseAdmin";
 
-const ALLOWED_ROLES = new Set(["admin", "teacher", "student"]);
+const ALLOWED_ROLES = new Set(["admin", "staff", "user"]);
 
 function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -81,7 +81,7 @@ async function handleSendOtp(body) {
 
     if (!role) {
         return Response.json(
-            { error: "Only admin, teacher, or student accounts can reset password" },
+            { error: "Only admin, staff, or user accounts can reset password" },
             { status: 403 }
         );
     }
@@ -184,7 +184,7 @@ async function handleResetPassword(body) {
 
     if (!role) {
         return Response.json(
-            { error: "Only admin, teacher, or student accounts can reset password" },
+            { error: "Only admin, staff, or user accounts can reset password" },
             { status: 403 }
         );
     }
