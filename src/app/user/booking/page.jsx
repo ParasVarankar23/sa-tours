@@ -1418,7 +1418,24 @@ export default function BookingPage() {
                                                                                 const data = await res.json();
                                                                                 if (!res.ok) throw new Error(data.error || "Cancel failed");
 
+                                                                                // show cancellation message
                                                                                 showAppToast("success", data.message || "Booking cancelled");
+
+                                                                                // show refund info if provided by API
+                                                                                try {
+                                                                                    const refund = data && data.refund ? data.refund : null;
+                                                                                    if (refund && refund.amount && Number(refund.amount) > 0) {
+                                                                                        const amt = Number(refund.amount || 0).toFixed(2);
+                                                                                        if (refund.success) {
+                                                                                            showAppToast("success", `Refund processed: ₹${amt}`);
+                                                                                        } else if (refund.attempted) {
+                                                                                            showAppToast("info", `Refund attempted: ₹${amt} — ${refund.error || "failed"}`);
+                                                                                        }
+                                                                                    }
+                                                                                } catch (e) {
+                                                                                    // ignore UI errors
+                                                                                }
+
                                                                                 setViewBooking(null);
                                                                                 await fetchBookings();
                                                                             } catch (err) {
@@ -1462,7 +1479,24 @@ export default function BookingPage() {
                                                                             const data = await res.json();
                                                                             if (!res.ok) throw new Error(data.error || "Cancel failed");
 
+                                                                            // show cancellation message
                                                                             showAppToast("success", data.message || "Booking cancelled");
+
+                                                                            // show refund info if provided by API
+                                                                            try {
+                                                                                const refund = data && data.refund ? data.refund : null;
+                                                                                if (refund && refund.amount && Number(refund.amount) > 0) {
+                                                                                    const amt = Number(refund.amount || 0).toFixed(2);
+                                                                                    if (refund.success) {
+                                                                                        showAppToast("success", `Refund processed: ₹${amt}`);
+                                                                                    } else if (refund.attempted) {
+                                                                                        showAppToast("info", `Refund attempted: ₹${amt} — ${refund.error || "failed"}`);
+                                                                                    }
+                                                                                }
+                                                                            } catch (e) {
+                                                                                // ignore UI errors
+                                                                            }
+
                                                                             setViewBooking(null);
                                                                             await fetchBookings();
                                                                         } catch (err) {

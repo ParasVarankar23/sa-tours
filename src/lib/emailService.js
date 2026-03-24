@@ -688,6 +688,15 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
         if (booking.payment) {
             paymentRows += infoRow("Payment ID", booking.payment);
         }
+        // show refund information if present
+        if (booking.refund && (booking.refund.amount || booking.refund.success !== undefined)) {
+            const r = booking.refund || {};
+            paymentRows += infoRow("Refund Amount", r.amount !== undefined ? formatCurrency(r.amount) : "--");
+            paymentRows += infoRow("Refund Status", r.success ? "Processed" : r.attempted ? `Failed (${r.error || 'error'})` : "Not attempted");
+            if (r.raw && r.raw.id) {
+                paymentRows += infoRow("Refund ID", r.raw.id);
+            }
+        }
     }
 
     const htmlContent = createEmailTemplate({
@@ -939,6 +948,28 @@ export async function sendBookingCancellation(email, name, booking = {}) {
         if (booking.payment) {
             paymentRows += infoRow("Payment ID", booking.payment);
         }
+        // If refund info provided (from server), show refund and retained amounts clearly
+        try {
+            const r = booking.refund || null;
+            const fare = booking.fare !== undefined ? Number(booking.fare) : null;
+            if (r && (r.amount !== undefined || r.success !== undefined)) {
+                const refundAmt = Number(r.amount || 0);
+                const retained = fare !== null && Number.isFinite(fare) ? Math.round((fare - refundAmt + Number.EPSILON) * 100) / 100 : null;
+                paymentRows += infoRow("Refund Amount", refundAmt ? formatCurrency(refundAmt) : "₹0.00");
+                if (retained !== null) {
+                    paymentRows += infoRow("Amount retained", formatCurrency(retained));
+                }
+                paymentRows += infoRow(
+                    "Refund Status",
+                    r.success ? "Processed" : r.attempted ? `Attempted — ${r.error || "failed"}` : "Not attempted"
+                );
+                if (r.raw && r.raw.id) {
+                    paymentRows += infoRow("Refund ID", r.raw.id);
+                }
+            }
+        } catch (e) {
+            // ignore email composition errors
+        }
     }
 
     const bookingCard = createInfoCard(
@@ -968,14 +999,34 @@ export async function sendBookingCancellation(email, name, booking = {}) {
         `
     );
 
+    // Build dynamic intro text including refund summary when available
+    let introText = "Your booking has been cancelled successfully. Please review the cancelled booking details below.";
+    try {
+        const r = booking.refund || null;
+        const fare = booking.fare !== undefined ? Number(booking.fare) : null;
+        if (r && (r.amount || r.success !== undefined)) {
+            const refundAmt = Number(r.amount || 0);
+            const retained = fare !== null && Number.isFinite(fare) ? Math.round((fare - refundAmt + Number.EPSILON) * 100) / 100 : null;
+            if (refundAmt > 0 && r.success) {
+                introText += ` We have processed a refund of ${formatCurrency(refundAmt)} to your original payment method.`;
+                if (retained !== null) introText += ` The remaining amount of ${formatCurrency(retained)} will be retained.`;
+            } else if (refundAmt > 0 && r.attempted && !r.success) {
+                introText += ` We attempted to process a refund of ${formatCurrency(refundAmt)} but it failed (${r.error || "error"}). Please contact support if you do not receive the refund.`;
+            } else if (refundAmt > 0 && !r.attempted) {
+                introText += ` A refund of ${formatCurrency(refundAmt)} is due. Our team will process it shortly.`;
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
+
     const htmlContent = createEmailTemplate({
         preheader: "Your SA Tours booking has been cancelled",
         title: "Booking Cancelled",
         subtitle: "Your reservation has been cancelled",
         badgeText: "CANCELLED",
         introTitle: `Hello ${name || "Passenger"},`,
-        introText:
-            "Your booking has been cancelled successfully. Please review the cancelled booking details below.",
+        introText: introText,
         bodyHtml: `
             ${bookingCard}
             ${paymentRows ? createInfoCard("Payment Details", paymentRows) : ""}

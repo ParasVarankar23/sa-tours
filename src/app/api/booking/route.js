@@ -1059,6 +1059,56 @@ export async function DELETE(req) {
         } catch (e) {
             console.warn("Failed to return ticket to pool:", e?.message || e);
         }
+        // Calculate refund (20% to user) if fare/payment present
+        let refundResult = { attempted: false, success: false, amount: 0, error: null, raw: null };
+        try {
+            const fare = existingVal && existingVal.fare ? Number(existingVal.fare) : 0;
+            const refundPct = 0.1;
+            const refundAmount = fare && Number.isFinite(fare) ? Math.round((fare * refundPct + Number.EPSILON) * 100) / 100 : 0;
+            refundResult.amount = refundAmount;
+
+            const paymentId = existingVal && existingVal.payment ? String(existingVal.payment) : "";
+            const paymentMethod = existingVal && existingVal.paymentMethod ? String(existingVal.paymentMethod).toLowerCase() : "";
+
+            if (paymentId && paymentMethod && /razor/.test(paymentMethod)) {
+                const keyId = process.env.RAZORPAY_KEY_ID;
+                const keySecret = process.env.RAZORPAY_KEY_SECRET;
+                if (keyId && keySecret && refundAmount > 0) {
+                    refundResult.attempted = true;
+                    const paise = Math.round(refundAmount * 100);
+                    try {
+                        const basic = Buffer.from(keyId + ":" + keySecret).toString("base64");
+                        const resp = await fetch(
+                            `https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`,
+                            {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    Authorization: "Basic " + basic,
+                                },
+                                body: JSON.stringify({ amount: paise }),
+                            }
+                        );
+
+                        const data = await resp.json();
+                        if (!resp.ok) {
+                            refundResult.success = false;
+                            refundResult.error = data.error || data.description || "Refund failed";
+                            refundResult.raw = data;
+                        } else {
+                            refundResult.success = true;
+                            refundResult.raw = data;
+                        }
+                    } catch (e) {
+                        refundResult.success = false;
+                        refundResult.error = e?.message || String(e);
+                        refundResult.raw = null;
+                    }
+                }
+            }
+        } catch (e) {
+            refundResult.error = e?.message || String(e);
+        }
 
         let emailResult = { attempted: false, sent: false, error: null };
 
@@ -1068,11 +1118,9 @@ export async function DELETE(req) {
 
             emailResult.attempted = true;
             try {
-                await sendBookingCancellation(emailTo, nameTo, {
-                    seatNo,
-                    date,
-                    ...existingVal,
-                });
+                // include refund info into booking passed to email generator
+                const bookingForEmail = { seatNo, date, ...existingVal, refund: refundResult };
+                await sendBookingCancellation(emailTo, nameTo, bookingForEmail);
                 emailResult.sent = true;
             } catch (e) {
                 emailResult.error = e?.message || String(e);
@@ -1105,6 +1153,7 @@ export async function DELETE(req) {
                 success: true,
                 message: "Booking cancelled",
                 email: emailResult,
+                refund: refundResult,
             },
             { status: 200 }
         );
