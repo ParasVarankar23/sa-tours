@@ -9,6 +9,7 @@ import {
     Phone,
     ShieldCheck,
     UserCircle2,
+    UserRound,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -152,17 +153,30 @@ export default function OwnerPage() {
                                 variants={fadeUp}
                                 className="mt-3 text-3xl font-bold leading-tight text-slate-900 sm:text-4xl lg:text-[42px] lg:leading-[1.08]"
                             >
-                                SA Tours & Travels Management
+                                Shubham Patil
                             </motion.h2>
+
+                            {/* OWNER NAME BOX */}
+                            <motion.div
+                                variants={fadeUp}
+                                className="mt-4 flex items-center gap-3 rounded-2xl bg-orange-50 border border-orange-200 p-4"
+                            >
+                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-orange-500 shadow-sm">
+                                    <UserRound size={18} />
+                                </div>
+                                <span className="text-sm font-semibold text-slate-800">
+                                    Owner Name: Shubham Patil
+                                </span>
+                            </motion.div>
 
                             <motion.p
                                 variants={fadeUp}
                                 className="mt-4 text-[15px] leading-8 text-slate-600 sm:text-base"
                             >
-                                The leadership behind SA Tours & Travels is dedicated to providing
-                                dependable daily bus service, safe travel, professional customer
-                                support and well-managed transportation solutions for passengers,
-                                families and private group bookings.
+                                Shubham Patil is the owner of SA Tours & Travels and is dedicated
+                                to providing dependable daily bus service, safe travel,
+                                professional customer support and well-managed transportation
+                                solutions for passengers, families and private group bookings.
                             </motion.p>
 
                             {/* INFO LIST */}
@@ -175,7 +189,7 @@ export default function OwnerPage() {
                                         <BriefcaseBusiness size={18} />
                                     </div>
                                     <span className="text-sm font-medium text-slate-700">
-                                        Founder & Managing Operations
+                                        Founder & Managing Director
                                     </span>
                                 </motion.div>
 
@@ -187,7 +201,7 @@ export default function OwnerPage() {
                                         <Phone size={18} />
                                     </div>
                                     <span className="text-sm font-medium text-slate-700">
-                                        +91 9209471309
+                                        +91 9209471601
                                     </span>
                                 </motion.div>
 
@@ -248,7 +262,7 @@ export default function OwnerPage() {
                                 className="mt-6 flex flex-wrap gap-3"
                             >
                                 <a
-                                    href="tel:+919209471309"
+                                    href="tel:+9209471601"
                                     className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-500"
                                 >
                                     <Phone size={15} />
@@ -256,7 +270,7 @@ export default function OwnerPage() {
                                 </a>
 
                                 <a
-                                    href="https://wa.me/919209471309"
+                                    href="https://wa.me/919209471601"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center justify-center gap-2 rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600"

@@ -13,24 +13,24 @@ import {
 
 const staffMembers = [
     {
-        name: "Staff Member 1",
-        role: "Operations Coordinator",
-        desc: "Handles route coordination, bookings and daily schedule support for smooth passenger travel.",
-    },
-    {
-        name: "Staff Member 2",
-        role: "Customer Support Executive",
-        desc: "Assists passengers with seat booking, timing details and general travel information.",
-    },
-    {
-        name: "Staff Member 3",
-        role: "Field Supervisor",
-        desc: "Supports boarding, route management and passenger assistance during daily operations.",
-    },
-    {
-        name: "Staff Member 4",
-        role: "Driver / Travel Staff",
+        name: "Sachin More",
+        role: "Driver",
         desc: "Ensures safe, smooth and timely daily transport operations with passenger comfort in mind.",
+    },
+    {
+        name: "Shankar Ghole",
+        role: "Driver",
+        desc: "Responsible for safe driving, route timing and comfortable passenger travel during daily operations.",
+    },
+    {
+        name: "Ganesh Bhosale",
+        role: "Cleaner",
+        desc: "Maintains vehicle cleanliness, hygiene and overall passenger comfort before and after daily trips.",
+    },
+    {
+        name: "Amit Bhosale",
+        role: "Cleaner",
+        desc: "Supports vehicle cleaning, seat maintenance and cleanliness for a safe and pleasant travel experience.",
     },
 ];
 
@@ -143,7 +143,7 @@ export default function StaffPage() {
 
                             <div className="flex flex-wrap gap-3">
                                 <a
-                                    href="tel:+919209471309"
+                                    href="tel:+9209471601"
                                     className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-500"
                                 >
                                     <Phone size={15} />
@@ -151,7 +151,7 @@ export default function StaffPage() {
                                 </a>
 
                                 <a
-                                    href="https://wa.me/919209471309"
+                                    href="https://wa.me/919209471601"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center justify-center gap-2 rounded-full bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"

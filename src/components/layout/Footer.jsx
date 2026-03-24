@@ -68,16 +68,16 @@ export default function Footer() {
                             </p>
                             <p className="flex items-center gap-2">
                                 <Phone size={16} className="text-orange-500" />
-                                +91  92094 71309
+                                +91  92094 71601
                             </p>
                             <p className="flex items-center gap-2">
                                 <Mail size={16} className="text-orange-500" />
-                                satoursandtravels@gmail.com
+                                satourandtravels06@gmail.com
                             </p>
                         </div>
 
                         <a
-                            href="https://wa.me/+91 9209471309"
+                            href="https://wa.me/919209471601"
                             target="_blank"
                             className="mt-5 inline-flex items-center gap-2 rounded-full bg-green-500 px-5 py-3 text-sm font-semibold text-white"
                         >

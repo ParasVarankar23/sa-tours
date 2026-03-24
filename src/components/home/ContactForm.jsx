@@ -108,7 +108,7 @@ Service Required: ${formData.service}
 Travel Requirement:
 ${formData.message}`;
 
-        const whatsappUrl = `https://wa.me/919209471309?text=${encodeURIComponent(text)}`;
+        const whatsappUrl = `https://wa.me/919209471601?text=${encodeURIComponent(text)}`;
         window.open(whatsappUrl, "_blank");
     };
 
@@ -172,7 +172,7 @@ ${formData.message}`;
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-slate-900">Call / WhatsApp</p>
-                                        <p className="text-sm text-slate-600">+91  92094 71309</p>
+                                        <p className="text-sm text-slate-600">+91  9209471601</p>
                                     </div>
                                 </div>
                             </motion.div>
@@ -360,7 +360,7 @@ ${formData.message}`;
                                 </button>
 
                                 <a
-                                    href="https://wa.me/919209471309"
+                                    href="https://wa.me/919209471601"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-500"

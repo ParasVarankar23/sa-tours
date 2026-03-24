@@ -116,7 +116,7 @@ export default function OfficesPreview() {
                             {/* ACTION BUTTONS */}
                             <div className="mt-5 flex flex-wrap gap-3">
                                 <a
-                                    href="tel:+91  92094 71309"
+                                    href="tel:+91  9209471601"
                                     className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-500"
                                 >
                                     <Phone size={15} />
@@ -124,7 +124,7 @@ export default function OfficesPreview() {
                                 </a>
 
                                 <a
-                                    href="https://wa.me/919209471309"
+                                    href="https://wa.me/919209471601"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center justify-center gap-2 rounded-full bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
