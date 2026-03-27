@@ -62,7 +62,9 @@ export function useAuth() {
                     email: profile?.email || null,
                     phone: profile?.phone || null,
                     address: profile?.address || null,
-                    role: normalizeRole(profile?.role || roleFromToken),
+                    // Prefer the role asserted in the auth token (source of truth for permissions)
+                    // to avoid DB/profile out-of-sync showing an incorrect role.
+                    role: normalizeRole(roleFromToken || profile?.role),
                 });
             } catch {
                 // Keep auth state from token even if profile fetch fails
