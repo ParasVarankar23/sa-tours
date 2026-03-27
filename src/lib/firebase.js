@@ -1,49 +1,47 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
-    // Client-side Firebase MUST use NEXT_PUBLIC_* env vars in Next.js
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
     databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
     projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 };
 
+let appInstance;
+
 function validateFirebaseConfig() {
     if (!firebaseConfig.apiKey) {
-        throw new Error(
-            "Missing NEXT_PUBLIC_FIREBASE_API_KEY in environment variables."
-        );
+        throw new Error("Missing NEXT_PUBLIC_FIREBASE_API_KEY");
     }
 
     if (!firebaseConfig.authDomain) {
-        throw new Error(
-            "Missing NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN in environment variables."
-        );
+        throw new Error("Missing NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN");
     }
 
     if (!firebaseConfig.databaseURL) {
-        throw new Error(
-            "Missing NEXT_PUBLIC_FIREBASE_DATABASE_URL in environment variables."
-        );
+        throw new Error("Missing NEXT_PUBLIC_FIREBASE_DATABASE_URL");
     }
 
     if (!firebaseConfig.projectId) {
-        throw new Error(
-            "Missing NEXT_PUBLIC_FIREBASE_PROJECT_ID in environment variables."
-        );
+        throw new Error("Missing NEXT_PUBLIC_FIREBASE_PROJECT_ID");
     }
 }
 
-// Validate once before app initialization
-validateFirebaseConfig();
+export function getFirebaseApp() {
+    if (!appInstance) {
+        validateFirebaseConfig();
+        appInstance = initializeApp(firebaseConfig);
+    }
 
-// Prevent duplicate Firebase app initialization
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    return appInstance;
+}
 
-// Export Firebase services
-export const auth = getAuth(app);
-export const db = getDatabase(app);
+export function getFirebaseAuth() {
+    return getAuth(getFirebaseApp());
+}
 
-export default app;
+export function getFirebaseDb() {
+    return getDatabase(getFirebaseApp());
+}
