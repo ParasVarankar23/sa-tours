@@ -591,10 +591,11 @@ export async function GET() {
         );
     } catch (error) {
         console.error("GET /api/bus error:", error);
+        const devMessage = process.env.NODE_ENV === "production" ? "Failed to fetch buses" : (error?.message || String(error));
         return NextResponse.json(
             {
                 success: false,
-                error: "Failed to fetch buses",
+                error: devMessage,
             },
             { status: 500 }
         );

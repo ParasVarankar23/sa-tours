@@ -23,10 +23,18 @@ function getAdminApp() {
         );
     }
 
-    adminApp = admin.initializeApp({
-        credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
-        databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
-    });
+    try {
+        adminApp = admin.initializeApp({
+            credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
+            // allow server-side DATABASE_URL env var fallback
+            databaseURL: process.env.FIREBASE_DATABASE_URL || process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
+        });
+    } catch (initErr) {
+        // throw a more descriptive error to help debugging server-side failures
+        throw new Error(
+            `Failed to initialize Firebase Admin SDK: ${initErr?.message || String(initErr)}`
+        );
+    }
 
     return adminApp;
 }
