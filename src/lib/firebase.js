@@ -3,29 +3,29 @@ import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    databaseURL: process.env.FIREBASE_DATABASE_URL,
+    projectId: process.env.FIREBASE_PROJECT_ID,
 };
 
 let appInstance;
 
 function validateFirebaseConfig() {
     if (!firebaseConfig.apiKey) {
-        throw new Error("Missing NEXT_PUBLIC_FIREBASE_API_KEY");
+        throw new Error("Missing FIREBASE_API_KEY");
     }
 
     if (!firebaseConfig.authDomain) {
-        throw new Error("Missing NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN");
+        throw new Error("Missing FIREBASE_AUTH_DOMAIN");
     }
 
     if (!firebaseConfig.databaseURL) {
-        throw new Error("Missing NEXT_PUBLIC_FIREBASE_DATABASE_URL");
+        throw new Error("Missing FIREBASE_DATABASE_URL");
     }
 
     if (!firebaseConfig.projectId) {
-        throw new Error("Missing NEXT_PUBLIC_FIREBASE_PROJECT_ID");
+        throw new Error("Missing FIREBASE_PROJECT_ID");
     }
 }
 
