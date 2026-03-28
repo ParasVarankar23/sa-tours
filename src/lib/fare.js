@@ -37,8 +37,8 @@ export const CITY_STOPS = [
 /* -------------------------------------------------------
    VILLAGE SIDE STOPS
    NOTE:
-   - Standard stored value is "Wadvali"
-   - Both "Vadvali" and "Wadvali" are accepted via aliases
+   - Standard stored value is "Vadvali"
+   - Both "Vadvali" and "Vadvali" are accepted via aliases
 ------------------------------------------------------- */
 export const BORLI_VILLAGE_STOPS = [
     "Shekhadi",
@@ -47,10 +47,11 @@ export const BORLI_VILLAGE_STOPS = [
     "Shiste",
     "Vadvali Phata",
     "Velas",
-    "Wadvali",
+    "Vadvali",
     "Gondghar",
     "Mendadi",
     "Kharasai",
+    "Varvatna",
     "Banoti",
     "Mhasla",
     "Sai",
@@ -65,10 +66,11 @@ export const DIGHI_VILLAGE_STOPS = [
     "Kudgaon",
     "Adgaon",
     "Velas",
-    "Wadvali",
+    "Vadvali",
     "Gondghar",
     "Mendadi",
     "Kharasai",
+    "Varvatna",
     "Banoti",
     "Mhasla",
     "Sai",
@@ -96,7 +98,7 @@ export const BORLI_FARE_GROUPS = [
             "Shiste",
             "Vadvali Phata",
             "Velas",
-            "Wadvali",
+            "Vadvali",
             "Gondghar",
             "Mendadi",
         ],
@@ -104,7 +106,7 @@ export const BORLI_FARE_GROUPS = [
     {
         zone: "BORLI_GROUP_3",
         fare: 400,
-        stops: ["Kharasai", "Banoti", "Mhasla", "Sai", "Morba"],
+        stops: ["Kharasai", "Varvatna", "Banoti", "Mhasla", "Sai", "Morba"],
     },
     {
         zone: "BORLI_GROUP_4",
@@ -127,12 +129,12 @@ export const DIGHI_FARE_GROUPS = [
     {
         zone: "DIGHI_GROUP_3",
         fare: 450,
-        stops: ["Kudgaon", "Wadvali", "Gondghar", "Mendadi"],
+        stops: ["Kudgaon", "Vadvali", "Gondghar", "Mendadi"],
     },
     {
         zone: "DIGHI_GROUP_4",
         fare: 400,
-        stops: ["Kharasai", "Banoti", "Mhasla", "Sai", "Morba"],
+        stops: ["Kharasai", "Varvatna", "Banoti", "Mhasla", "Sai", "Morba"],
     },
     {
         zone: "DIGHI_GROUP_5",
@@ -184,12 +186,17 @@ const STOP_ALIASES = {
     velas: "Velas",
 
     // BOTH SPELLINGS SUPPORTED -> normalized to one standard value
-    vadvali: "Wadvali",
-    wadvali: "Wadvali",
+    vadvali: "Vadvali",
+    Vadvali: "Vadvali",
 
     gondghar: "Gondghar",
     mendadi: "Mendadi",
     kharasai: "Kharasai",
+
+    // NEW STOP
+    varvatna: "Varvatna",
+    varvatane: "Varvatna",
+
     banoti: "Banoti",
     mhasla: "Mhasla",
     sai: "Sai",
@@ -581,7 +588,7 @@ export function getFarePreviewByRoute(route, busType = BUS_TYPES.NON_AC) {
 // Example 1: Borli -> Dongri
 // getFare({
 //   route: ROUTES.BORLI_TO_DONGRI,
-//   pickup: "Vadvali", // or "Wadvali" both work
+//   pickup: "Varvatna",
 //   drop: "Belapur",
 //   busType: BUS_TYPES.NON_AC,
 // });
@@ -590,14 +597,14 @@ export function getFarePreviewByRoute(route, busType = BUS_TYPES.NON_AC) {
 // getFare({
 //   route: ROUTES.DONGRI_TO_BORLI,
 //   pickup: "Seawoods",
-//   drop: "Wadvali", // or "Vadvali" both work
+//   drop: "Varvatna",
 //   busType: BUS_TYPES.AC,
 // });
 
 // Example 3: Dighi -> Dongri
 // getFare({
 //   route: ROUTES.DIGHI_TO_DONGRI,
-//   pickup: "Wadvali",
+//   pickup: "Varvatna",
 //   drop: "Dongri",
 //   busType: BUS_TYPES.NON_AC,
 // });
@@ -606,6 +613,6 @@ export function getFarePreviewByRoute(route, busType = BUS_TYPES.NON_AC) {
 // getFare({
 //   route: ROUTES.DONGRI_TO_DIGHI,
 //   pickup: "Masjid Bandar",
-//   drop: "Dighi",
+//   drop: "Varvatna",
 //   busType: BUS_TYPES.AC,
 // });
