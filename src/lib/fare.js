@@ -41,6 +41,8 @@ export const BORLI_VILLAGE_STOPS = [
     "Kapoli",
     "Shiste",
     "Vadvali Phata",
+    "Velas",
+    "Vadvali",
     "Gondghar",
     "Mendadi",
     "Kharasai",
@@ -83,7 +85,16 @@ export const BORLI_FARE_GROUPS = [
     {
         zone: "BORLI_GROUP_2",
         fare: 450,
-        stops: ["Borli", "Kapoli", "Shiste", "Vadvali Phata", "Gondghar", "Mendadi"],
+        stops: [
+            "Borli",
+            "Kapoli",
+            "Shiste",
+            "Vadvali Phata",
+            "Velas",
+            "Vadvali",
+            "Gondghar",
+            "Mendadi",
+        ],
     },
     {
         zone: "BORLI_GROUP_3",
@@ -159,7 +170,10 @@ const STOP_ALIASES = {
     vadvaliphata: "Vadvali Phata",
     "vadvali phata": "Vadvali Phata",
 
-    // Shared villages
+    // Shared villages / both routes
+    velas: "Velas",
+    vadvali: "Vadvali",
+    wadvali: "Wadvali", // Dighi route spelling
     gondghar: "Gondghar",
     mendadi: "Mendadi",
     kharasai: "Kharasai",
@@ -176,8 +190,6 @@ const STOP_ALIASES = {
     dighi: "Dighi",
     kudgaon: "Kudgaon",
     adgaon: "Adgaon",
-    velas: "Velas",
-    wadvali: "Wadvali",
 };
 
 /* -------------------------------------------------------
@@ -253,13 +265,15 @@ export function getFareGroupsByRoute(route) {
 
 export function isForwardRoute(route) {
     return (
-        route === ROUTES.BORLI_TO_DONGRI || route === ROUTES.DIGHI_TO_DONGRI
+        route === ROUTES.BORLI_TO_DONGRI ||
+        route === ROUTES.DIGHI_TO_DONGRI
     );
 }
 
 export function isReturnRoute(route) {
     return (
-        route === ROUTES.DONGRI_TO_BORLI || route === ROUTES.DONGRI_TO_DIGHI
+        route === ROUTES.DONGRI_TO_BORLI ||
+        route === ROUTES.DONGRI_TO_DIGHI
     );
 }
 
@@ -477,18 +491,28 @@ export function getFarePreviewByRoute(route, busType = BUS_TYPES.NON_AC) {
 
 /* -------------------------------------------------------
    EXAMPLE USAGE
-
-   getFare({
-     route: ROUTES.BORLI_TO_DONGRI,
-     pickup: "Borli",
-     drop: "Dongri",
-     busType: BUS_TYPES.NON_AC,
-   });
-
-   getFare({
-     route: ROUTES.DONGRI_TO_DIGHI,
-     pickup: "Panvel",
-     drop: "Dighi",
-     busType: BUS_TYPES.AC,
-   });
 ------------------------------------------------------- */
+
+// Example 1: Borli route forward
+// getFare({
+//   route: ROUTES.BORLI_TO_DONGRI,
+//   pickup: "Velas",
+//   drop: "Dongri",
+//   busType: BUS_TYPES.NON_AC,
+// });
+
+// Example 2: Borli route return
+// getFare({
+//   route: ROUTES.DONGRI_TO_BORLI,
+//   pickup: "Panvel",
+//   drop: "Vadvali",
+//   busType: BUS_TYPES.AC,
+// });
+
+// Example 3: Dighi route return
+// getFare({
+//   route: ROUTES.DONGRI_TO_DIGHI,
+//   pickup: "Panvel",
+//   drop: "Dighi",
+//   busType: BUS_TYPES.AC,
+// });
