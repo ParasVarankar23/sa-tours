@@ -35,19 +35,9 @@ export const CITY_STOPS = [
 ];
 
 /* -------------------------------------------------------
-   VILLAGE SIDE STOPS
-   NOTE:
-   - Standard stored value is "Vadvali"
-   - Both "Vadvali" and "Vadvali" are accepted via aliases
+   COMMON VILLAGE STOPS
 ------------------------------------------------------- */
-export const BORLI_VILLAGE_STOPS = [
-    "Shekhadi",
-    "Borli",
-    "Kapoli",
-    "Shiste",
-    "Vadvali Phata",
-    "Velas",
-    "Vadvali",
+export const COMMON_VILLAGE_STOPS = [
     "Gondghar",
     "Mendadi",
     "Kharasai",
@@ -61,23 +51,37 @@ export const BORLI_VILLAGE_STOPS = [
     "Kolad",
 ];
 
+/* -------------------------------------------------------
+   BORLI UNIQUE + CONNECTOR + DIGHI UNIQUE + COMMON
+------------------------------------------------------- */
+export const BORLI_VILLAGE_STOPS = [
+    "Shekhadi",
+    "Borli",
+    "Kapoli",
+    "Shiste",
+    "Vadvali Phata",
+    "Vadvali",
+    "Velas",
+    "Adgaon",
+    "Kudgaon",
+    "Dighi",
+    ...COMMON_VILLAGE_STOPS,
+];
+
+/* -------------------------------------------------------
+   DIGHI UNIQUE + CONNECTOR + BORLI SIDE + COMMON
+------------------------------------------------------- */
 export const DIGHI_VILLAGE_STOPS = [
     "Dighi",
     "Kudgaon",
     "Adgaon",
     "Velas",
     "Vadvali",
-    "Gondghar",
-    "Mendadi",
-    "Kharasai",
-    "Varvatna",
-    "Banoti",
-    "Mhasla",
-    "Sai",
-    "Morba",
-    "Mangaon",
-    "Indapur",
-    "Kolad",
+    "Vadvali Phata",
+    "Shiste",
+    "Kapoli",
+    "Borli",
+    ...COMMON_VILLAGE_STOPS,
 ];
 
 /* -------------------------------------------------------
@@ -97,8 +101,11 @@ export const BORLI_FARE_GROUPS = [
             "Kapoli",
             "Shiste",
             "Vadvali Phata",
-            "Velas",
             "Vadvali",
+            "Velas",
+            "Adgaon",
+            "Kudgaon",
+            "Dighi",
             "Gondghar",
             "Mendadi",
         ],
@@ -119,7 +126,7 @@ export const DIGHI_FARE_GROUPS = [
     {
         zone: "DIGHI_GROUP_1",
         fare: 500,
-        stops: ["Dighi", "Velas"],
+        stops: ["Dighi"],
     },
     {
         zone: "DIGHI_GROUP_2",
@@ -129,7 +136,17 @@ export const DIGHI_FARE_GROUPS = [
     {
         zone: "DIGHI_GROUP_3",
         fare: 450,
-        stops: ["Kudgaon", "Vadvali", "Gondghar", "Mendadi"],
+        stops: [
+            "Kudgaon",
+            "Velas",
+            "Vadvali",
+            "Vadvali Phata",
+            "Shiste",
+            "Kapoli",
+            "Borli",
+            "Gondghar",
+            "Mendadi",
+        ],
     },
     {
         zone: "DIGHI_GROUP_4",
@@ -147,7 +164,7 @@ export const DIGHI_FARE_GROUPS = [
    STOP ALIASES / NORMALIZATION MAP
 ------------------------------------------------------- */
 const STOP_ALIASES = {
-    // Common city aliases
+    // City side
     panvel: "Panvel",
     kamothe: "Kamothe",
     kharghar: "Kharghar",
@@ -168,7 +185,6 @@ const STOP_ALIASES = {
     byculla: "Byculla",
     masjidbandar: "Masjid Bandar",
     "masjid bandar": "Masjid Bandar",
-    // common misspellings
     majizdbandar: "Masjid Bandar",
     "majizd bandar": "Masjid Bandar",
     dongri: "Dongri",
@@ -182,21 +198,19 @@ const STOP_ALIASES = {
     vadvaliphata: "Vadvali Phata",
     "vadvali phata": "Vadvali Phata",
 
-    // Shared / common villages
+    // Dighi side
+    dighi: "Dighi",
+    kudgaon: "Kudgaon",
+    adgaon: "Adgaon",
+
+    // Connector + common
     velas: "Velas",
-
-    // BOTH SPELLINGS SUPPORTED -> normalized to one standard value
     vadvali: "Vadvali",
-    Vadvali: "Vadvali",
-
     gondghar: "Gondghar",
     mendadi: "Mendadi",
     kharasai: "Kharasai",
-
-    // NEW STOP
     varvatna: "Varvatna",
     varvatane: "Varvatna",
-
     banoti: "Banoti",
     mhasla: "Mhasla",
     sai: "Sai",
@@ -205,11 +219,6 @@ const STOP_ALIASES = {
     mangoan: "Mangaon",
     indapur: "Indapur",
     kolad: "Kolad",
-
-    // Dighi side
-    dighi: "Dighi",
-    kudgaon: "Kudgaon",
-    adgaon: "Adgaon",
 };
 
 /* -------------------------------------------------------
@@ -330,21 +339,47 @@ export function getRouteDirectionLabel(route) {
 }
 
 /* -------------------------------------------------------
-   ORDERED CITY STOPS (VERY IMPORTANT FOR UI)
+   ORDERED CITY STOPS
 ------------------------------------------------------- */
-
-// Forward order: Panvel -> Dongri
 export function getForwardCityStops() {
     return [...CITY_STOPS];
 }
 
-// Return order: Dongri -> Panvel
 export function getReturnCityStops() {
     return [...CITY_STOPS].reverse();
 }
 
 /* -------------------------------------------------------
-   PICKUP / DROP HELPERS (BEST FOR DROPDOWNS)
+   FULL ROUTE HELPERS
+------------------------------------------------------- */
+export function getFullForwardRouteStops(route) {
+    switch (route) {
+        case ROUTES.BORLI_TO_DONGRI:
+            return [...BORLI_VILLAGE_STOPS, ...CITY_STOPS];
+
+        case ROUTES.DIGHI_TO_DONGRI:
+            return [...DIGHI_VILLAGE_STOPS, ...CITY_STOPS];
+
+        default:
+            return [];
+    }
+}
+
+export function getFullReturnRouteStops(route) {
+    switch (route) {
+        case ROUTES.DONGRI_TO_BORLI:
+            return [...getReturnCityStops(), ...[...BORLI_VILLAGE_STOPS].reverse()];
+
+        case ROUTES.DONGRI_TO_DIGHI:
+            return [...getReturnCityStops(), ...[...DIGHI_VILLAGE_STOPS].reverse()];
+
+        default:
+            return [];
+    }
+}
+
+/* -------------------------------------------------------
+   PICKUP / DROP HELPERS
 ------------------------------------------------------- */
 export function getAvailablePickupStops(route) {
     switch (route) {
@@ -378,44 +413,6 @@ export function getAvailableDropStops(route) {
         default:
             return [];
     }
-}
-
-/* -------------------------------------------------------
-   ROUTE-SPECIFIC HELPERS (OPTIONAL, GOOD FOR UI)
-------------------------------------------------------- */
-
-// BORLI
-export function getBorliForwardPickupStops() {
-    return BORLI_VILLAGE_STOPS;
-}
-
-export function getBorliForwardDropStops() {
-    return getForwardCityStops();
-}
-
-export function getBorliReturnPickupStops() {
-    return getReturnCityStops();
-}
-
-export function getBorliReturnDropStops() {
-    return BORLI_VILLAGE_STOPS;
-}
-
-// DIGHI
-export function getDighiForwardPickupStops() {
-    return DIGHI_VILLAGE_STOPS;
-}
-
-export function getDighiForwardDropStops() {
-    return getForwardCityStops();
-}
-
-export function getDighiReturnPickupStops() {
-    return getReturnCityStops();
-}
-
-export function getDighiReturnDropStops() {
-    return DIGHI_VILLAGE_STOPS;
 }
 
 /* -------------------------------------------------------
@@ -472,7 +469,7 @@ export function getFare({
         };
     }
 
-    // FORWARD ROUTE VALIDATION
+    // FORWARD ROUTE
     if (isForwardRoute(route)) {
         const validVillageStops = getVillageStopsByRoute(route);
 
@@ -488,7 +485,7 @@ export function getFare({
             return {
                 ...responseBase,
                 error:
-                    "Invalid drop point for this route. Please select a valid city-side drop stop (Panvel to Dongri).",
+                    "Invalid drop point for this route. Please select a valid city-side drop stop.",
             };
         }
 
@@ -515,7 +512,7 @@ export function getFare({
         };
     }
 
-    // RETURN ROUTE VALIDATION
+    // RETURN ROUTE
     if (isReturnRoute(route)) {
         const validVillageStops = getVillageStopsByRoute(route);
 
@@ -523,7 +520,7 @@ export function getFare({
             return {
                 ...responseBase,
                 error:
-                    "Invalid pickup point for return route. Please select a valid city-side pickup stop (Dongri to Panvel side).",
+                    "Invalid pickup point for return route. Please select a valid city-side pickup stop.",
             };
         }
 
@@ -580,39 +577,3 @@ export function getFarePreviewByRoute(route, busType = BUS_TYPES.NON_AC) {
         busType,
     }));
 }
-
-/* -------------------------------------------------------
-   EXAMPLE USAGE
-------------------------------------------------------- */
-
-// Example 1: Borli -> Dongri
-// getFare({
-//   route: ROUTES.BORLI_TO_DONGRI,
-//   pickup: "Varvatna",
-//   drop: "Belapur",
-//   busType: BUS_TYPES.NON_AC,
-// });
-
-// Example 2: Dongri -> Borli
-// getFare({
-//   route: ROUTES.DONGRI_TO_BORLI,
-//   pickup: "Seawoods",
-//   drop: "Varvatna",
-//   busType: BUS_TYPES.AC,
-// });
-
-// Example 3: Dighi -> Dongri
-// getFare({
-//   route: ROUTES.DIGHI_TO_DONGRI,
-//   pickup: "Varvatna",
-//   drop: "Dongri",
-//   busType: BUS_TYPES.NON_AC,
-// });
-
-// Example 4: Dongri -> Dighi
-// getFare({
-//   route: ROUTES.DONGRI_TO_DIGHI,
-//   pickup: "Masjid Bandar",
-//   drop: "Varvatna",
-//   busType: BUS_TYPES.AC,
-// });
