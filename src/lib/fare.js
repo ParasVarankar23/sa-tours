@@ -13,12 +13,14 @@ export const BUS_TYPES = {
 export const AC_SURCHARGE = 0;
 
 /* -------------------------------------------------------
-   CITY SIDE STOPS (PANVEL ONWARDS)
+   CITY SIDE STOPS (FORWARD ORDER: PANVEL -> DONGRI)
 ------------------------------------------------------- */
 export const CITY_STOPS = [
     "Panvel",
     "Kamothe",
     "Kharghar",
+    "Belapur",
+    "Seawoods",
     "Nerul",
     "Juinagar",
     "Vashi",
@@ -33,7 +35,10 @@ export const CITY_STOPS = [
 ];
 
 /* -------------------------------------------------------
-   VILLAGE SIDE STOPS (PICKUP SIDE)
+   VILLAGE SIDE STOPS
+   NOTE:
+   - Standard stored value is "Wadvali"
+   - Both "Vadvali" and "Wadvali" are accepted via aliases
 ------------------------------------------------------- */
 export const BORLI_VILLAGE_STOPS = [
     "Shekhadi",
@@ -42,7 +47,7 @@ export const BORLI_VILLAGE_STOPS = [
     "Shiste",
     "Vadvali Phata",
     "Velas",
-    "Vadvali",
+    "Wadvali",
     "Gondghar",
     "Mendadi",
     "Kharasai",
@@ -91,7 +96,7 @@ export const BORLI_FARE_GROUPS = [
             "Shiste",
             "Vadvali Phata",
             "Velas",
-            "Vadvali",
+            "Wadvali",
             "Gondghar",
             "Mendadi",
         ],
@@ -144,6 +149,11 @@ const STOP_ALIASES = {
     panvel: "Panvel",
     kamothe: "Kamothe",
     kharghar: "Kharghar",
+    belapur: "Belapur",
+    cbdbelapur: "Belapur",
+    "cbd belapur": "Belapur",
+    seawoods: "Seawoods",
+    seawood: "Seawoods",
     nerul: "Nerul",
     juinagar: "Juinagar",
     vashi: "Vashi",
@@ -170,10 +180,13 @@ const STOP_ALIASES = {
     vadvaliphata: "Vadvali Phata",
     "vadvali phata": "Vadvali Phata",
 
-    // Shared villages / both routes
+    // Shared / common villages
     velas: "Velas",
-    vadvali: "Vadvali",
-    wadvali: "Wadvali", // Dighi route spelling
+
+    // BOTH SPELLINGS SUPPORTED -> normalized to one standard value
+    vadvali: "Wadvali",
+    wadvali: "Wadvali",
+
     gondghar: "Gondghar",
     mendadi: "Mendadi",
     kharasai: "Kharasai",
@@ -310,6 +323,95 @@ export function getRouteDirectionLabel(route) {
 }
 
 /* -------------------------------------------------------
+   ORDERED CITY STOPS (VERY IMPORTANT FOR UI)
+------------------------------------------------------- */
+
+// Forward order: Panvel -> Dongri
+export function getForwardCityStops() {
+    return [...CITY_STOPS];
+}
+
+// Return order: Dongri -> Panvel
+export function getReturnCityStops() {
+    return [...CITY_STOPS].reverse();
+}
+
+/* -------------------------------------------------------
+   PICKUP / DROP HELPERS (BEST FOR DROPDOWNS)
+------------------------------------------------------- */
+export function getAvailablePickupStops(route) {
+    switch (route) {
+        case ROUTES.BORLI_TO_DONGRI:
+            return BORLI_VILLAGE_STOPS;
+
+        case ROUTES.DIGHI_TO_DONGRI:
+            return DIGHI_VILLAGE_STOPS;
+
+        case ROUTES.DONGRI_TO_BORLI:
+        case ROUTES.DONGRI_TO_DIGHI:
+            return getReturnCityStops();
+
+        default:
+            return [];
+    }
+}
+
+export function getAvailableDropStops(route) {
+    switch (route) {
+        case ROUTES.BORLI_TO_DONGRI:
+        case ROUTES.DIGHI_TO_DONGRI:
+            return getForwardCityStops();
+
+        case ROUTES.DONGRI_TO_BORLI:
+            return BORLI_VILLAGE_STOPS;
+
+        case ROUTES.DONGRI_TO_DIGHI:
+            return DIGHI_VILLAGE_STOPS;
+
+        default:
+            return [];
+    }
+}
+
+/* -------------------------------------------------------
+   ROUTE-SPECIFIC HELPERS (OPTIONAL, GOOD FOR UI)
+------------------------------------------------------- */
+
+// BORLI
+export function getBorliForwardPickupStops() {
+    return BORLI_VILLAGE_STOPS;
+}
+
+export function getBorliForwardDropStops() {
+    return getForwardCityStops();
+}
+
+export function getBorliReturnPickupStops() {
+    return getReturnCityStops();
+}
+
+export function getBorliReturnDropStops() {
+    return BORLI_VILLAGE_STOPS;
+}
+
+// DIGHI
+export function getDighiForwardPickupStops() {
+    return DIGHI_VILLAGE_STOPS;
+}
+
+export function getDighiForwardDropStops() {
+    return getForwardCityStops();
+}
+
+export function getDighiReturnPickupStops() {
+    return getReturnCityStops();
+}
+
+export function getDighiReturnDropStops() {
+    return DIGHI_VILLAGE_STOPS;
+}
+
+/* -------------------------------------------------------
    MAIN FARE FUNCTION
 ------------------------------------------------------- */
 export function getFare({
@@ -353,6 +455,13 @@ export function getFare({
         return {
             ...responseBase,
             error: "Invalid bus type selected.",
+        };
+    }
+
+    if (normalizedPickup === normalizedDrop) {
+        return {
+            ...responseBase,
+            error: "Pickup and drop cannot be the same.",
         };
     }
 
@@ -407,7 +516,7 @@ export function getFare({
             return {
                 ...responseBase,
                 error:
-                    "Invalid pickup point for return route. Please select a valid city-side pickup stop (Panvel to Dongri).",
+                    "Invalid pickup point for return route. Please select a valid city-side pickup stop (Dongri to Panvel side).",
             };
         }
 
@@ -449,32 +558,8 @@ export function getFare({
 }
 
 /* -------------------------------------------------------
-   OPTIONAL EXTRA HELPERS
+   FARE PREVIEW HELPER
 ------------------------------------------------------- */
-export function getAvailablePickupStops(route) {
-    if (isForwardRoute(route)) {
-        return getVillageStopsByRoute(route);
-    }
-
-    if (isReturnRoute(route)) {
-        return CITY_STOPS;
-    }
-
-    return [];
-}
-
-export function getAvailableDropStops(route) {
-    if (isForwardRoute(route)) {
-        return CITY_STOPS;
-    }
-
-    if (isReturnRoute(route)) {
-        return getVillageStopsByRoute(route);
-    }
-
-    return [];
-}
-
 export function getFarePreviewByRoute(route, busType = BUS_TYPES.NON_AC) {
     const groups = getFareGroupsByRoute(route);
     const surcharge = busType === BUS_TYPES.AC ? AC_SURCHARGE : 0;
@@ -493,26 +578,34 @@ export function getFarePreviewByRoute(route, busType = BUS_TYPES.NON_AC) {
    EXAMPLE USAGE
 ------------------------------------------------------- */
 
-// Example 1: Borli route forward
+// Example 1: Borli -> Dongri
 // getFare({
 //   route: ROUTES.BORLI_TO_DONGRI,
-//   pickup: "Velas",
+//   pickup: "Vadvali", // or "Wadvali" both work
+//   drop: "Belapur",
+//   busType: BUS_TYPES.NON_AC,
+// });
+
+// Example 2: Dongri -> Borli
+// getFare({
+//   route: ROUTES.DONGRI_TO_BORLI,
+//   pickup: "Seawoods",
+//   drop: "Wadvali", // or "Vadvali" both work
+//   busType: BUS_TYPES.AC,
+// });
+
+// Example 3: Dighi -> Dongri
+// getFare({
+//   route: ROUTES.DIGHI_TO_DONGRI,
+//   pickup: "Wadvali",
 //   drop: "Dongri",
 //   busType: BUS_TYPES.NON_AC,
 // });
 
-// Example 2: Borli route return
-// getFare({
-//   route: ROUTES.DONGRI_TO_BORLI,
-//   pickup: "Panvel",
-//   drop: "Vadvali",
-//   busType: BUS_TYPES.AC,
-// });
-
-// Example 3: Dighi route return
+// Example 4: Dongri -> Dighi
 // getFare({
 //   route: ROUTES.DONGRI_TO_DIGHI,
-//   pickup: "Panvel",
+//   pickup: "Masjid Bandar",
 //   drop: "Dighi",
 //   busType: BUS_TYPES.AC,
 // });
