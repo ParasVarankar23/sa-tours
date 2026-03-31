@@ -38,16 +38,13 @@ export function AutoRefreshProvider({ children }) {
         }
         window.addEventListener("storage", onStorage)
 
-        // When user returns to tab, refresh to show fresh server data
-        const onVisibility = () => {
-            if (document.visibilityState === "visible") handle()
-        }
-        document.addEventListener("visibilitychange", onVisibility)
+        // Note: we intentionally do NOT refresh on visibility change
+        // (avoids unexpected reloads when switching tabs)
 
         return () => {
             if (bc) bc.close()
             window.removeEventListener("storage", onStorage)
-            document.removeEventListener("visibilitychange", onVisibility)
+            // nothing to remove for visibilitychange
         }
     }, [router])
 
@@ -91,15 +88,9 @@ export function AutoRefreshProvider({ children }) {
         }
         window.addEventListener("storage", onStorage)
 
-        const onVisibility = () => {
-            if (document.visibilityState === "visible") cb()
-        }
-        document.addEventListener("visibilitychange", onVisibility)
-
         return () => {
             if (bc) bc.close()
             window.removeEventListener("storage", onStorage)
-            document.removeEventListener("visibilitychange", onVisibility)
         }
     }, [])
 
