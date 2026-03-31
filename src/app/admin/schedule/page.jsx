@@ -93,6 +93,7 @@ export default function SchedulePage() {
             showAppToast("error", err.message || "Failed to load schedules");
         }
     };
+
     function resolvePointName(point, fallback = "--") {
         if (!point) return fallback;
         if (typeof point === "object") return point.name || fallback;
@@ -129,6 +130,11 @@ export default function SchedulePage() {
                     return {
                         ...b,
                         busId: b.busId || b.id || "",
+                        busNumber: b.busNumber || b.busNo || "--",
+                        routeName: b.routeName || "--",
+                        busName: b.busName || "--",
+                        busType: b.busType || "--",
+                        seatLayout: b.seatLayout || "--",
                         startTime: b.startTime || b.start_time || b.start || "",
                         endTime: b.endTime || b.end_time || b.end || "",
                         startPoint: resolvePoint(
@@ -303,15 +309,12 @@ export default function SchedulePage() {
         if (!date) return showAppToast("error", "Select a date");
 
         openConfirm(
-            `Are you sure you want to remove availability for ${selectedBus?.busNumber || busId
-            } on ${date}?`,
+            `Are you sure you want to remove availability for ${selectedBus?.busNumber || busId} on ${date}?`,
             async () => {
                 setSaving(true);
                 try {
                     const res = await fetch(
-                        `/api/schedule?busId=${encodeURIComponent(busId)}&date=${encodeURIComponent(
-                            date
-                        )}`,
+                        `/api/schedule?busId=${encodeURIComponent(busId)}&date=${encodeURIComponent(date)}`,
                         {
                             method: "DELETE",
                         }
@@ -343,14 +346,11 @@ export default function SchedulePage() {
         const bus = buses.find((b) => b.busId === targetBusId);
 
         openConfirm(
-            `Are you sure you want to remove availability for ${bus?.busNumber || targetBusId
-            } on ${targetDate}?`,
+            `Are you sure you want to remove availability for ${bus?.busNumber || targetBusId} on ${targetDate}?`,
             async () => {
                 try {
                     const res = await fetch(
-                        `/api/schedule?busId=${encodeURIComponent(
-                            targetBusId
-                        )}&date=${encodeURIComponent(targetDate)}`,
+                        `/api/schedule?busId=${encodeURIComponent(targetBusId)}&date=${encodeURIComponent(targetDate)}`,
                         {
                             method: "DELETE",
                         }
@@ -362,8 +362,12 @@ export default function SchedulePage() {
 
                     showAppToast("success", "Availability removed");
                     fetchSchedules();
-                    // clear preview if deleted
-                    if (previewSchedule && previewSchedule.busId === targetBusId && previewSchedule.date === targetDate) {
+
+                    if (
+                        previewSchedule &&
+                        previewSchedule.busId === targetBusId &&
+                        previewSchedule.date === targetDate
+                    ) {
                         setPreviewSchedule(null);
                     }
                 } catch (err) {
@@ -375,34 +379,39 @@ export default function SchedulePage() {
     };
 
     const handleEditFor = (targetBusId, targetDate) => {
-        // open inline edit modal with this schedule
         setPreviewSchedule({ busId: targetBusId, date: targetDate });
         setEditDateValue(targetDate);
         setEditModalOpen(true);
     };
 
     const handleEditRangeFor = (targetBusId, targetDate) => {
-        // open range modal; prefill start=end=targetDate
-        setPreviewSchedule({ busId: targetBusId, date: targetDate });
-        setEditRangeStart(targetDate);
-        setEditRangeEnd(targetDate);
+        setPreviewSchedule({ busId: targetBusId, date: targetDate || "" });
+        setEditRangeStart(targetDate || "");
+        setEditRangeEnd(targetDate || "");
         setEditRangeOpen(true);
     };
 
     const saveEditedRange = async () => {
         if (!previewSchedule) return showAppToast("error", "No schedule selected");
-        if (!editRangeStart || !editRangeEnd) return showAppToast("error", "Select start and end dates");
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(editRangeStart) || !/^\d{4}-\d{2}-\d{2}$/.test(editRangeEnd)) return showAppToast("error", "Invalid date format");
-        if (new Date(editRangeEnd) < new Date(editRangeStart)) return showAppToast("error", "End date cannot be before start date");
+        if (!editRangeStart || !editRangeEnd)
+            return showAppToast("error", "Select start and end dates");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(editRangeStart) || !/^\d{4}-\d{2}-\d{2}$/.test(editRangeEnd))
+            return showAppToast("error", "Invalid date format");
+        if (new Date(editRangeEnd) < new Date(editRangeStart))
+            return showAppToast("error", "End date cannot be before start date");
 
         setSaving(true);
         try {
-            // create range
             const res = await fetch("/api/schedule", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ busId: previewSchedule.busId, startDate: editRangeStart, endDate: editRangeEnd }),
+                body: JSON.stringify({
+                    busId: previewSchedule.busId,
+                    startDate: editRangeStart,
+                    endDate: editRangeEnd,
+                }),
             });
+
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Failed to save schedule range");
 
@@ -425,18 +434,23 @@ export default function SchedulePage() {
             async () => {
                 try {
                     const items = Object.keys(schedules[targetBusId] || {});
-                    // delete each date
-                    const calls = items.map((d) => fetch(`/api/schedule?busId=${encodeURIComponent(targetBusId)}&date=${encodeURIComponent(d)}`, { method: 'DELETE' }).then((r) => r.json().then((j) => ({ ok: r.ok, data: j }))));
+                    const calls = items.map((d) =>
+                        fetch(
+                            `/api/schedule?busId=${encodeURIComponent(targetBusId)}&date=${encodeURIComponent(d)}`,
+                            { method: "DELETE" }
+                        ).then((r) => r.json().then((j) => ({ ok: r.ok, data: j })))
+                    );
+
                     const results = await Promise.all(calls);
                     const failed = results.find((r) => !r.ok);
-                    if (failed) throw new Error(failed.data?.error || 'Failed to delete some schedules');
+                    if (failed) throw new Error(failed.data?.error || "Failed to delete some schedules");
 
-                    showAppToast('success', 'All schedule dates removed for bus');
+                    showAppToast("success", "All schedule dates removed for bus");
                     fetchSchedules();
                     if (previewSchedule && previewSchedule.busId === targetBusId) setPreviewSchedule(null);
                 } catch (err) {
                     console.error(err);
-                    showAppToast('error', err.message || 'Failed to delete all schedules');
+                    showAppToast("error", err.message || "Failed to delete all schedules");
                 }
             }
         );
@@ -447,9 +461,7 @@ export default function SchedulePage() {
         if (!date) return showAppToast("error", "Select a date");
 
         router.push(
-            `/admin/schedule/edit?busId=${encodeURIComponent(busId)}&date=${encodeURIComponent(
-                date
-            )}`
+            `/admin/schedule/edit?busId=${encodeURIComponent(busId)}&date=${encodeURIComponent(date)}`
         );
     };
 
@@ -457,27 +469,25 @@ export default function SchedulePage() {
         if (!previewSchedule) return showAppToast("error", "No schedule selected");
         if (!editDateValue) return showAppToast("error", "Select a new date");
 
-        // Basic YYYY-MM-DD check
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(editDateValue)) return showAppToast("error", "Invalid date format");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(editDateValue))
+            return showAppToast("error", "Invalid date format");
 
         setSaving(true);
         try {
-            // Create new availability for new date
             const resCreate = await fetch("/api/schedule", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ busId: previewSchedule.busId, date: editDateValue }),
             });
+
             const createData = await resCreate.json();
             if (!resCreate.ok) throw new Error(createData.error || "Failed to create new schedule date");
 
-            // Remove old date
             const resDel = await fetch(
-                `/api/schedule?busId=${encodeURIComponent(previewSchedule.busId)}&date=${encodeURIComponent(
-                    previewSchedule.date
-                )}`,
+                `/api/schedule?busId=${encodeURIComponent(previewSchedule.busId)}&date=${encodeURIComponent(previewSchedule.date)}`,
                 { method: "DELETE" }
             );
+
             const delData = await resDel.json();
             if (!resDel.ok) throw new Error(delData.error || "Failed to remove old schedule date");
 
@@ -529,12 +539,14 @@ export default function SchedulePage() {
                 </div>
             </div>
 
-            {/* Confirm Modal */}
+            {/* Edit Date Modal */}
             {editModalOpen && (
                 <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 px-4 py-4">
                     <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
                         <h3 className="text-lg font-bold">Edit Schedule Date</h3>
-                        <p className="mt-3 text-sm text-slate-700">Update the scheduled date for the selected bus.</p>
+                        <p className="mt-3 text-sm text-slate-700">
+                            Update the scheduled date for the selected bus.
+                        </p>
 
                         <div className="mt-4">
                             <label className="text-sm text-slate-600">New Date</label>
@@ -548,6 +560,7 @@ export default function SchedulePage() {
 
                         <div className="mt-6 flex items-center justify-end gap-3">
                             <button
+                                type="button"
                                 onClick={() => setEditModalOpen(false)}
                                 className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                             >
@@ -555,6 +568,7 @@ export default function SchedulePage() {
                             </button>
 
                             <button
+                                type="button"
                                 onClick={saveEditedSchedule}
                                 disabled={saving}
                                 className="rounded-2xl bg-[#059669] px-4 py-2 text-sm font-semibold text-white hover:bg-[#047857] disabled:opacity-50"
@@ -565,11 +579,15 @@ export default function SchedulePage() {
                     </div>
                 </div>
             )}
+
+            {/* Edit Range Modal */}
             {editRangeOpen && (
                 <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 px-4 py-4">
                     <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
                         <h3 className="text-lg font-bold">Edit Schedule Range</h3>
-                        <p className="mt-3 text-sm text-slate-700">Set a start and end date to add availability for this bus.</p>
+                        <p className="mt-3 text-sm text-slate-700">
+                            Set a start and end date to add availability for this bus.
+                        </p>
 
                         <div className="mt-4 grid grid-cols-2 gap-4">
                             <div>
@@ -595,6 +613,7 @@ export default function SchedulePage() {
 
                         <div className="mt-6 flex items-center justify-end gap-3">
                             <button
+                                type="button"
                                 onClick={() => setEditRangeOpen(false)}
                                 className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                             >
@@ -602,6 +621,7 @@ export default function SchedulePage() {
                             </button>
 
                             <button
+                                type="button"
                                 onClick={saveEditedRange}
                                 disabled={saving}
                                 className="rounded-2xl bg-[#059669] px-4 py-2 text-sm font-semibold text-white hover:bg-[#047857] disabled:opacity-50"
@@ -612,6 +632,8 @@ export default function SchedulePage() {
                     </div>
                 </div>
             )}
+
+            {/* Confirm Modal */}
             {confirmOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-4">
                     <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
@@ -620,6 +642,7 @@ export default function SchedulePage() {
 
                         <div className="mt-6 flex items-center justify-end gap-3">
                             <button
+                                type="button"
                                 onClick={closeConfirm}
                                 className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                             >
@@ -627,6 +650,7 @@ export default function SchedulePage() {
                             </button>
 
                             <button
+                                type="button"
                                 onClick={async () => {
                                     try {
                                         await confirmAction();
@@ -725,8 +749,8 @@ export default function SchedulePage() {
 
                                 <div
                                     className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${singleDateDisabled
-                                        ? "border-slate-100 bg-slate-100"
-                                        : "border-slate-200 bg-white"
+                                            ? "border-slate-100 bg-slate-100"
+                                            : "border-slate-200 bg-white"
                                         }`}
                                 >
                                     <CalendarDays className="h-5 w-5 text-[#f97316]" />
@@ -786,8 +810,8 @@ export default function SchedulePage() {
 
                                     <div
                                         className={`flex h-14 w-full items-center gap-3 rounded-2xl border px-4 transition-all duration-200 ${rangeDisabled
-                                            ? "border-slate-100 bg-slate-100"
-                                            : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
+                                                ? "border-slate-100 bg-slate-100"
+                                                : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
                                             }`}
                                     >
                                         <CalendarDays className="h-5 w-5 shrink-0 text-[#f97316]" />
@@ -812,8 +836,8 @@ export default function SchedulePage() {
 
                                     <div
                                         className={`flex h-14 w-full items-center gap-3 rounded-2xl border px-4 transition-all duration-200 ${rangeDisabled
-                                            ? "border-slate-100 bg-slate-100"
-                                            : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
+                                                ? "border-slate-100 bg-slate-100"
+                                                : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
                                             }`}
                                     >
                                         <CalendarDays className="h-5 w-5 shrink-0 text-[#f97316]" />
@@ -884,6 +908,7 @@ export default function SchedulePage() {
                         {/* Action Buttons */}
                         <div className="mt-6 flex flex-wrap items-center gap-3">
                             <button
+                                type="button"
                                 disabled={saving || loading}
                                 onClick={handleSetAvailable}
                                 className="inline-flex items-center gap-2 rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:bg-[#ea580c] disabled:cursor-not-allowed disabled:opacity-60"
@@ -967,7 +992,8 @@ export default function SchedulePage() {
                                     <InfoRow
                                         icon={<Clock3 className="h-4 w-4 text-[#f97316]" />}
                                         label="Timing"
-                                        value={`${selectedBus.startTime || "--:--"} → ${selectedBus.endTime || "--:--"}`}
+                                        value={`${selectedBus.startTime || "--:--"} → ${selectedBus.endTime || "--:--"
+                                            }`}
                                     />
 
                                     <InfoRow
@@ -1044,6 +1070,7 @@ export default function SchedulePage() {
                                     {/* Action Buttons */}
                                     <div className="flex flex-wrap gap-3 pt-2">
                                         <button
+                                            type="button"
                                             onClick={() => handleEditRangeFor(selectedBus.busId, date)}
                                             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                                         >
@@ -1051,6 +1078,7 @@ export default function SchedulePage() {
                                         </button>
 
                                         <button
+                                            type="button"
                                             onClick={() => handleDeleteAllFor(selectedBus.busId)}
                                             className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                                         >
@@ -1132,9 +1160,7 @@ export default function SchedulePage() {
                     <div className="flex gap-6">
                         <div className="flex-1">
                             <>
-                                {/* =========================
-          MOBILE VIEW ONLY
-          ========================= */}
+                                {/* MOBILE VIEW */}
                                 <div className="space-y-4 md:hidden">
                                     {filteredSchedules.length === 0 ? (
                                         <div className="rounded-3xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
@@ -1147,36 +1173,31 @@ export default function SchedulePage() {
                                                 className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md"
                                             >
                                                 {/* Top Info */}
-                                                <div
-                                                    className="cursor-pointer"
-                                                    onClick={() => handleEditFor(item.busId, item.date)}
-                                                >
-                                                    <div className="rounded-2xl bg-slate-50 p-4">
-                                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                                                            Bus
-                                                        </p>
-                                                        <p className="mt-1 text-lg font-bold text-slate-900 break-words">
-                                                            {item.busNumber}
-                                                        </p>
-                                                    </div>
+                                                <div className="rounded-2xl bg-slate-50 p-4">
+                                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                        Bus
+                                                    </p>
+                                                    <p className="mt-1 text-lg font-bold text-slate-900 break-words">
+                                                        {item.busNumber}
+                                                    </p>
+                                                </div>
 
-                                                    <div className="mt-3 rounded-2xl bg-slate-50 p-4">
-                                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                                                            Route
-                                                        </p>
-                                                        <p className="mt-1 text-sm font-medium text-slate-800 break-words">
-                                                            {item.routeName}
-                                                        </p>
-                                                    </div>
+                                                <div className="mt-3 rounded-2xl bg-slate-50 p-4">
+                                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                        Route
+                                                    </p>
+                                                    <p className="mt-1 text-sm font-medium text-slate-800 break-words">
+                                                        {item.routeName}
+                                                    </p>
+                                                </div>
 
-                                                    <div className="mt-3 rounded-2xl bg-slate-50 p-4">
-                                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                                                            Scheduled Date
-                                                        </p>
-                                                        <p className="mt-1 text-sm font-medium text-slate-800">
-                                                            {item.date}
-                                                        </p>
-                                                    </div>
+                                                <div className="mt-3 rounded-2xl bg-slate-50 p-4">
+                                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                        Scheduled Date
+                                                    </p>
+                                                    <p className="mt-1 text-sm font-medium text-slate-800">
+                                                        {item.date}
+                                                    </p>
                                                 </div>
 
                                                 {/* Actions */}
@@ -1184,6 +1205,7 @@ export default function SchedulePage() {
                                                     {user?.role === "admin" ? (
                                                         <div className="grid grid-cols-2 gap-3">
                                                             <button
+                                                                type="button"
                                                                 onClick={() => handleEditFor(item.busId, item.date)}
                                                                 className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                                                             >
@@ -1191,6 +1213,7 @@ export default function SchedulePage() {
                                                             </button>
 
                                                             <button
+                                                                type="button"
                                                                 onClick={() => handleDeleteFor(item.busId, item.date)}
                                                                 className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700"
                                                             >
@@ -1208,10 +1231,7 @@ export default function SchedulePage() {
                                     )}
                                 </div>
 
-                                {/* =========================
-          DESKTOP / TABLET VIEW
-          (UNCHANGED)
-          ========================= */}
+                                {/* DESKTOP / TABLET VIEW - FIXED */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="min-w-full table-auto">
                                         <thead>
@@ -1225,7 +1245,10 @@ export default function SchedulePage() {
                                         <tbody>
                                             {filteredSchedules.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-500">
+                                                    <td
+                                                        colSpan={4}
+                                                        className="px-3 py-8 text-center text-sm text-slate-500"
+                                                    >
                                                         No schedules found
                                                     </td>
                                                 </tr>
@@ -1233,24 +1256,37 @@ export default function SchedulePage() {
                                                 paginatedSchedules.map((item) => (
                                                     <tr
                                                         key={`${item.busId}-${item.date}`}
-                                                        className="border-b last:border-b-0 transition hover:bg-slate-50 cursor-pointer"
-                                                        onClick={() => handleEditFor(item.busId, item.date)}
+                                                        className="border-b last:border-b-0 transition hover:bg-slate-50"
                                                     >
-                                                        <td className="px-3 py-3 font-medium text-slate-800">{item.busNumber}</td>
-                                                        <td className="px-3 py-3 text-slate-700">{item.routeName}</td>
-                                                        <td className="px-3 py-3 text-slate-700">{item.date}</td>
+                                                        <td className="px-3 py-3 font-medium text-slate-800">
+                                                            {item.busNumber}
+                                                        </td>
+                                                        <td className="px-3 py-3 text-slate-700">
+                                                            {item.routeName}
+                                                        </td>
+                                                        <td className="px-3 py-3 text-slate-700">
+                                                            {item.date}
+                                                        </td>
                                                         <td className="px-3 py-3">
                                                             {user?.role === "admin" ? (
                                                                 <div className="flex items-center gap-2">
                                                                     <button
-                                                                        onClick={() => handleEditFor(item.busId, item.date)}
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleEditFor(item.busId, item.date);
+                                                                        }}
                                                                         className="rounded-2xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                                                                     >
                                                                         Edit
                                                                     </button>
 
                                                                     <button
-                                                                        onClick={() => handleDeleteFor(item.busId, item.date)}
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleDeleteFor(item.busId, item.date);
+                                                                        }}
                                                                         className="rounded-2xl bg-red-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-red-700"
                                                                     >
                                                                         Delete
@@ -1283,6 +1319,7 @@ export default function SchedulePage() {
 
                         <div className="flex items-center gap-2">
                             <button
+                                type="button"
                                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
                                 className="rounded-md border border-slate-200 px-3 py-1 text-sm text-slate-700 disabled:opacity-50"
@@ -1295,6 +1332,7 @@ export default function SchedulePage() {
                             </div>
 
                             <button
+                                type="button"
                                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                                 disabled={currentPage === totalPages}
                                 className="rounded-md border border-slate-200 px-3 py-1 text-sm text-slate-700 disabled:opacity-50"

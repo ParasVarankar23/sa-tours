@@ -121,10 +121,22 @@ export default function ProfilePage() {
 
     function handleChange(e) {
         const { name, value } = e.target;
-        setFormData((prev) => ({
-            ...prev,
-            [name]: value,
-        }));
+
+        // Phone: allow digits only and limit to 10 characters
+        if (name === "phone") {
+            const digits = String(value || "").replace(/\D/g, "").slice(0, 10);
+            setFormData((prev) => ({ ...prev, phone: digits }));
+            return;
+        }
+
+        // Name: strip numeric characters (allow letters, punctuation and spaces)
+        if (name === "name") {
+            const cleaned = String(value || "").replace(/[0-9]/g, "");
+            setFormData((prev) => ({ ...prev, name: cleaned }));
+            return;
+        }
+
+        setFormData((prev) => ({ ...prev, [name]: value }));
     }
 
     function handleEdit() {
@@ -160,8 +172,24 @@ export default function ProfilePage() {
     }
 
     async function handleSave() {
-        if (!formData.name.trim()) {
+        const nameTrim = String(formData.name || "").trim();
+        const phoneTrim = String(formData.phone || "").trim();
+
+        if (!nameTrim) {
             showAppToast("error", "Name is required.");
+            return;
+        }
+
+        // Name: allow letters, spaces and common punctuation only
+        const nameValid = /^[A-Za-z\s.'-]+$/.test(nameTrim);
+        if (!nameValid) {
+            showAppToast("error", "Name must contain only letters and spaces.");
+            return;
+        }
+
+        // Phone: if provided, must be exactly 10 digits
+        if (phoneTrim && !/^\d{10}$/.test(phoneTrim)) {
+            showAppToast("error", "Phone number must be exactly 10 digits.");
             return;
         }
 
@@ -171,9 +199,9 @@ export default function ProfilePage() {
             const authToken = localStorage.getItem("authToken");
             const payload = new FormData();
 
-            payload.append("name", formData.name.trim());
-            payload.append("phone", formData.phone.trim());
-            payload.append("address", formData.address.trim());
+            payload.append("name", nameTrim);
+            payload.append("phone", phoneTrim);
+            payload.append("address", String(formData.address || "").trim());
 
             if (selectedFile) {
                 payload.append("photo", selectedFile);
@@ -363,6 +391,7 @@ export default function ProfilePage() {
                                     onChange={handleChange}
                                     disabled={!editing}
                                     placeholder="Enter your full name"
+                                    inputMode="text"
                                     className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:bg-slate-50 disabled:text-slate-500"
                                 />
                             </div>
@@ -396,12 +425,15 @@ export default function ProfilePage() {
                                     <Phone size={18} />
                                 </span>
                                 <input
-                                    type="text"
+                                    type="tel"
                                     name="phone"
                                     value={formData.phone}
                                     onChange={handleChange}
                                     disabled={!editing}
                                     placeholder="Enter your phone number"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    maxLength={10}
                                     className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:bg-slate-50 disabled:text-slate-500"
                                 />
                             </div>
