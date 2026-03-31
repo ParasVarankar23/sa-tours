@@ -1,6 +1,8 @@
 "use client";
 
 import SeatLayout from "@/components/SeatLayout";
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
+import { useAuth } from "@/hooks/useAuth";
 import { showAppToast } from "@/lib/client/toast";
 import {
   BUS_TYPES,
@@ -21,8 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "../../../hooks/useAuth";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 /* =========================
   Helpers
@@ -352,13 +353,23 @@ export default function BookingPage() {
   // --- Input sanitizers / validators ---
   const sanitizeNameInput = (v) => {
     if (typeof v !== "string") return "";
-    // remove digits, allow letters, spaces, apostrophes, hyphens; cap length
-    return v.replace(/\d+/g, "").replace(/[^A-Za-z\s'\-]/g, "").slice(0, 100);
+    // Remove control characters and digits
+    let s = String(v).replace(/\p{C}/gu, "").replace(/\d+/g, "");
+
+    // Allow any Unicode letters (Latin, Devanagari, etc.), marks, spaces, apostrophes and hyphens
+    s = s.replace(/[^\p{L}\p{M}\s'\-\.]/gu, "");
+    return s.trim().slice(0, 100);
   };
 
   const sanitizePhoneInput = (v) => {
     if (typeof v !== "string") return "";
-    return v.replace(/\D+/g, "").slice(0, 10);
+
+    // Normalize Devanagari digits (०-९) to ASCII digits
+    const normalizeIndicDigits = (s) =>
+      String(s || "").replace(/[\u0966-\u096F]/g, (ch) => String(ch.charCodeAt(0) - 0x0966));
+
+    const normalized = normalizeIndicDigits(v);
+    return normalized.replace(/\D+/g, "").slice(0, 10);
   };
 
   const sanitizeEmailInput = (v) => {
@@ -366,8 +377,21 @@ export default function BookingPage() {
     return v.trim().slice(0, 254).toLowerCase();
   };
 
-  const isValidName = (v) => /^[A-Za-z\s'\-]{2,}$/.test(String(v || "").trim());
-  const isValidPhone = (v) => /^\d{10}$/.test(String(v || "").trim());
+  const sanitizePhoneticInput = (v) => {
+    if (typeof v !== "string") return "";
+    // allow basic Latin letters, spaces, dots, apostrophes and hyphens
+    return String(v).replace(/[^A-Za-z\s'\-\.]/g, "").slice(0, 100).trim();
+  };
+
+  // Accept names in Latin, Devanagari (Hindi/Marathi) and other scripts: require at least 2 letters
+  const isValidName = (v) => /^[\p{L}\p{M}\s'\-\.]{2,}$/u.test(String(v || "").trim());
+  const isValidPhone = (v) => {
+    const normalizeIndicDigits = (s) =>
+      String(s || "").replace(/[\u0966-\u096F]/g, (ch) => String(ch.charCodeAt(0) - 0x0966));
+
+    const num = normalizeIndicDigits(String(v || "")).replace(/\D+/g, "");
+    return /^\d{10}$/.test(num);
+  };
   const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
 
   const [date, setDate] = useState("");
@@ -381,6 +405,8 @@ export default function BookingPage() {
   const [viewBooking, setViewBooking] = useState(null);
   const [bookingForm, setBookingForm] = useState({
     name: "",
+    nameLocal: "",
+    namePhonetic: "",
     phone: "",
     email: "",
     pickup: "",
@@ -412,32 +438,105 @@ export default function BookingPage() {
     return Object.entries(bookings || {}).filter(([, b]) => !!b);
   }, [bookings]);
 
+  const [isPhoneComposing, setIsPhoneComposing] = useState(false);
+
   const { user } = useAuth();
   const router = useRouter();
+  const { triggerRefresh, subscribeRefresh } = useAutoRefresh();
+
+  // Refresh buses, schedules and booked counts for overview cards
+  const refreshOverview = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const [bRes, sRes] = await Promise.all([fetch("/api/bus"), fetch("/api/schedule")]);
+      const bData = await bRes.json();
+      const sData = await sRes.json();
+
+      if (!bRes.ok) throw new Error(bData.error || "Failed to load buses");
+      if (!sRes.ok) throw new Error(sData.error || "Failed to load schedules");
+
+      const newBuses = bData.buses || [];
+      const newSchedules = sData.schedules || {};
+
+      setBuses(newBuses);
+      setSchedules(newSchedules);
+
+      // compute available buses for selected date
+      if (!date) {
+        setBookedCounts({});
+        return;
+      }
+
+      const available = newBuses.filter((bus) => {
+        const busSched = newSchedules[bus.busId] || {};
+        return busSched[date] && busSched[date].available;
+      });
+
+      if (!available || available.length === 0) {
+        setBookedCounts({});
+        return;
+      }
+
+      const calls = available.map((b) =>
+        fetch(`/api/booking?busId=${encodeURIComponent(b.busId)}&date=${encodeURIComponent(date)}`)
+          .then((r) => r.json())
+          .then((d) => {
+            const raw = d.bookings || {};
+            let booked = 0;
+            let blocked = 0;
+
+            for (const key of Object.keys(raw)) {
+              if (!/^[0-9]+$/.test(key) && !/^CB[0-9]+$/i.test(key)) continue;
+
+              const rec = raw[key] || {};
+              if (rec && rec.status === "blocked") {
+                blocked++;
+              } else {
+                const hasMeaningful = Boolean(
+                  (rec.name && String(rec.name).trim()) ||
+                  (rec.phone && String(rec.phone).trim()) ||
+                  (rec.email && String(rec.email).trim()) ||
+                  rec.status ||
+                  rec.payment ||
+                  rec.fare
+                );
+                if (hasMeaningful) booked++;
+              }
+            }
+
+            return { busId: b.busId, booked, blocked };
+          })
+          .catch(() => ({ busId: b.busId, booked: 0, blocked: 0 }))
+      );
+
+      const results = await Promise.all(calls);
+      const map = {};
+      for (const r of results) {
+        map[r.busId] = {
+          booked: Number(r.booked) || 0,
+          blocked: Number(r.blocked) || 0,
+        };
+      }
+
+      setBookedCounts(map);
+    } catch (err) {
+      console.error(err);
+      // keep existing counts on error
+    } finally {
+      setLoading(false);
+    }
+  }, [date]);
 
   useEffect(() => {
-    const fetchAll = async () => {
-      setLoading(true);
+    // initial overview load
+    (async () => {
       try {
-        const [bRes, sRes] = await Promise.all([fetch("/api/bus"), fetch("/api/schedule")]);
-
-        const bData = await bRes.json();
-        const sData = await sRes.json();
-
-        if (!bRes.ok) throw new Error(bData.error || "Failed to load buses");
-        if (!sRes.ok) throw new Error(sData.error || "Failed to load schedules");
-
-        setBuses(bData.buses || []);
-        setSchedules(sData.schedules || {});
-      } catch (err) {
-        console.error(err);
-        showAppToast("error", err.message || "Failed to load data");
-      } finally {
-        setLoading(false);
+        await refreshOverview();
+      } catch (e) {
+        // ignore
       }
-    };
-
-    fetchAll();
+    })();
   }, []);
 
   const fetchBookings = async () => {
@@ -483,6 +582,63 @@ export default function BookingPage() {
 
   useEffect(() => {
     fetchBookings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBus, date]);
+
+  // Subscribe to cross-tab refresh events so bookings update automatically
+  useEffect(() => {
+    let unsub = null;
+    try {
+      if (typeof subscribeRefresh === "function") {
+        unsub = subscribeRefresh(() => {
+          try {
+            // refresh bookings for selected bus
+            fetchBookings();
+            // refresh overview counts and bus/schedule data
+            refreshOverview().catch(() => { });
+          } catch (e) {
+            // ignore
+          }
+        });
+      }
+    } catch (e) {
+      unsub = null;
+    }
+
+    return () => {
+      try {
+        if (typeof unsub === "function") unsub();
+      } catch (e) {
+        // ignore
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBus, date, subscribeRefresh]);
+
+  // Polling fallback: while a bus/date is selected, poll every 5s to ensure UI stays fresh
+  useEffect(() => {
+    let id = null;
+
+    if (selectedBus && date) {
+      // start immediate fetch then poll
+      try {
+        fetchBookings();
+      } catch (e) {
+        // ignore
+      }
+
+      id = setInterval(() => {
+        try {
+          fetchBookings();
+        } catch (e) {
+          // ignore
+        }
+      }, 5000);
+    }
+
+    return () => {
+      if (id) clearInterval(id);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBus, date]);
 
@@ -706,6 +862,11 @@ export default function BookingPage() {
       showAppToast("success", editingSeat ? "Booking updated" : "Seats booked successfully");
       await fetchBookings();
       resetBookingForm();
+      try {
+        if (typeof triggerRefresh === "function") triggerRefresh();
+      } catch (e) {
+        // ignore
+      }
     } catch (err) {
       console.error(err);
       showAppToast("error", err.message || "Booking failed");
@@ -862,6 +1023,11 @@ export default function BookingPage() {
             showAppToast("success", "Payment successful and booking created");
             await fetchBookings();
             resetBookingForm();
+            try {
+              if (typeof triggerRefresh === "function") triggerRefresh();
+            } catch (e) {
+              // ignore
+            }
           } catch (err) {
             console.error(err);
             showAppToast("error", err.message || "Payment succeeded but booking failed");
@@ -1016,6 +1182,11 @@ export default function BookingPage() {
       showAppToast("success", "Offline booking created");
       await fetchBookings();
       resetBookingForm();
+      try {
+        if (typeof triggerRefresh === "function") triggerRefresh();
+      } catch (e) {
+        // ignore
+      }
     } catch (err) {
       console.error(err);
       showAppToast("error", err.message || "Offline booking failed");
@@ -1042,6 +1213,11 @@ export default function BookingPage() {
         setEditingSeat(null);
         resetBookingForm();
         await fetchBookings();
+        try {
+          if (typeof triggerRefresh === "function") triggerRefresh();
+        } catch (e) {
+          // ignore
+        }
       } catch (err) {
         console.error(err);
         showAppToast("error", err.message || "Cancel failed");
@@ -1126,6 +1302,11 @@ export default function BookingPage() {
       });
       resetBookingForm();
       await fetchBookings();
+      try {
+        if (typeof triggerRefresh === "function") triggerRefresh();
+      } catch (e) {
+        // ignore
+      }
     } catch (err) {
       console.error(err);
       showAppToast("error", err.message || "Block failed");
@@ -1174,6 +1355,11 @@ export default function BookingPage() {
       showAppToast("success", "Seats unblocked");
       resetBookingForm();
       await fetchBookings();
+      try {
+        if (typeof triggerRefresh === "function") triggerRefresh();
+      } catch (e) {
+        // ignore
+      }
     } catch (err) {
       console.error(err);
       showAppToast("error", err.message || "Unblock failed");
@@ -1567,23 +1753,20 @@ export default function BookingPage() {
     }
 
     .ticket-tag {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      display: inline-block;
       font-size: 17px;
       font-weight: 700;
-      border: 1px solid #64748b;
       color: #0f172a;
-      background: #f1f5f9;
-      padding: 0.2mm 0.8mm;
-      border-radius: 5px;
+      background: transparent;
+      border: none;
+      padding: 0;
+      border-radius: 0;
       line-height: 1;
-      height: 3.2mm;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      height: auto;
+      max-width: none;
+      overflow: visible;
       white-space: nowrap;
-      flex-shrink: 1;
+      flex-shrink: 0;
     }
 
     /* =========================
@@ -2154,23 +2337,20 @@ export default function BookingPage() {
     }
 
     .ticket-tag {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      display: inline-block;
       font-size: 16px;
       font-weight: 700;
-      border: 1px solid #64748b;
       color: #0f172a;
-      background: #f1f5f9;
-      padding: 0.2mm 0.8mm;
-      border-radius: 5px;
+      background: transparent;
+      border: none;
+      padding: 0;
+      border-radius: 0;
       line-height: 1;
-      height: 5mm;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      height: auto;
+      max-width: none;
+      overflow: visible;
       white-space: nowrap;
-      flex-shrink: 1;
+      flex-shrink: 0;
     }
 
     /* =========================
@@ -2749,23 +2929,20 @@ export default function BookingPage() {
     }
 
     .ticket-tag {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      display: inline-block;
       font-size: 16px;
       font-weight: 700;
-      border: 1px solid #64748b;
       color: #0f172a;
-      background: #f1f5f9;
-      padding: 0.25mm 0.9mm;
-      border-radius: 6px;
+      background: transparent;
+      border: none;
+      padding: 0;
+      border-radius: 0;
       line-height: 1;
-      height: 3.4mm;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      height: auto;
+      max-width: none;
+      overflow: visible;
       white-space: nowrap;
-      flex-shrink: 1;
+      flex-shrink: 0;
     }
 
     /* =========================
@@ -3465,9 +3642,21 @@ export default function BookingPage() {
                       <input
                         placeholder="Phone number"
                         value={bookingForm.phone ?? ""}
-                        onChange={(e) =>
-                          setBookingForm((p) => ({ ...p, phone: sanitizePhoneInput(e.target.value) }))
-                        }
+                        onChange={(e) => {
+                          const v = e.target.value || "";
+                          if (isPhoneComposing) {
+                            // during IME composition keep raw value
+                            setBookingForm((p) => ({ ...p, phone: v }));
+                          } else {
+                            setBookingForm((p) => ({ ...p, phone: sanitizePhoneInput(v) }));
+                          }
+                        }}
+                        onCompositionStart={() => setIsPhoneComposing(true)}
+                        onCompositionEnd={(e) => {
+                          setIsPhoneComposing(false);
+                          // keep the final composed value as-is (don't force conversion here)
+                          setBookingForm((p) => ({ ...p, phone: e.target.value || "" }));
+                        }}
                         inputMode="numeric"
                         pattern="[0-9]*"
                         maxLength={10}
@@ -3990,6 +4179,11 @@ export default function BookingPage() {
                             showAppToast("success", `Seat ${seat} unblocked`);
                             setViewBooking(null);
                             await fetchBookings();
+                            try {
+                              if (typeof triggerRefresh === "function") triggerRefresh();
+                            } catch (e) {
+                              // ignore
+                            }
                           } catch (err) {
                             console.error(err);
                             showAppToast("error", err.message || "Unblock failed");

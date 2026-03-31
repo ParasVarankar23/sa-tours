@@ -1,8 +1,8 @@
 /* eslint-disable react/prop-types */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 import AppToaster from "@/components/AppToaster";
 import CookieConsent from "@/components/common/CookieConsent";
@@ -10,6 +10,7 @@ import DashboardNavbar from "@/components/common/Navbar";
 import Sidebar from "@/components/common/Sidebar";
 import Footer from "@/components/layout/Footer";
 import PublicNavbar from "@/components/layout/Navbar";
+import { AutoRefreshProvider } from "@/context/AutoRefreshContext";
 
 const publicShellRoutes = new Set([
     "/",
@@ -117,78 +118,86 @@ export default function ClientLayout({ children }) {
     // Prevent flash for /profile or /settings until token role is loaded
     if (isCommonDashboardRoute && !tokenReady) {
         return (
-            <div className="min-h-screen bg-[#f7f7f7] text-gray-900">
-                <AppToaster />
-                <div className="flex min-h-screen items-center justify-center">
-                    <div className="rounded-2xl bg-white px-6 py-4 shadow-sm border border-slate-200 text-sm font-medium text-slate-600">
-                        Loading dashboard...
+            <AutoRefreshProvider>
+                <div className="min-h-screen bg-[#f7f7f7] text-gray-900">
+                    <AppToaster />
+                    <div className="flex min-h-screen items-center justify-center">
+                        <div className="rounded-2xl bg-white px-6 py-4 shadow-sm border border-slate-200 text-sm font-medium text-slate-600">
+                            Loading dashboard...
+                        </div>
                     </div>
+                    <CookieConsent />
                 </div>
-                <CookieConsent />
-            </div>
+            </AutoRefreshProvider>
         );
     }
 
     // DASHBOARD SHELL (admin / staff / user + common pages like /profile /settings)
     if (effectivePortalMeta) {
         return (
-            <div className="min-h-screen bg-[#f7f7f7] text-gray-900">
-                <AppToaster />
+            <AutoRefreshProvider>
+                <div className="min-h-screen bg-[#f7f7f7] text-gray-900">
+                    <AppToaster />
 
-                <div className="flex min-h-screen">
-                    <Sidebar
-                        role={effectivePortalMeta.roleKey}
-                        isMobileOpen={isMobileSidebarOpen}
-                        onClose={() => setIsMobileSidebarOpen(false)}
-                    />
-
-                    <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-                        <DashboardNavbar
-                            role={effectivePortalMeta.roleLabel}
-                            onMenuClick={() => setIsMobileSidebarOpen(true)}
+                    <div className="flex min-h-screen">
+                        <Sidebar
+                            role={effectivePortalMeta.roleKey}
+                            isMobileOpen={isMobileSidebarOpen}
+                            onClose={() => setIsMobileSidebarOpen(false)}
                         />
 
-                        <main className="flex-1 p-4 sm:p-6 lg:p-8">
-                            {children}
-                        </main>
-                    </div>
-                </div>
+                        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+                            <DashboardNavbar
+                                role={effectivePortalMeta.roleLabel}
+                                onMenuClick={() => setIsMobileSidebarOpen(true)}
+                            />
 
-                <CookieConsent />
-            </div>
+                            <main className="flex-1 p-4 sm:p-6 lg:p-8">
+                                {children}
+                            </main>
+                        </div>
+                    </div>
+
+                    <CookieConsent />
+                </div>
+            </AutoRefreshProvider>
         );
     }
 
     // NO PUBLIC SHELL
     if (!showPublicShell) {
         return (
-            <div className="min-h-screen bg-[#f7f7f7] text-gray-900">
-                <AppToaster />
-                {children}
-                <CookieConsent />
-            </div>
+            <AutoRefreshProvider>
+                <div className="min-h-screen bg-[#f7f7f7] text-gray-900">
+                    <AppToaster />
+                    {children}
+                    <CookieConsent />
+                </div>
+            </AutoRefreshProvider>
         );
     }
 
     // PUBLIC SHELL
     return (
-        <div className="min-h-screen bg-[#f7f7f7] text-gray-900">
-            <AppToaster />
+        <AutoRefreshProvider>
+            <div className="min-h-screen bg-[#f7f7f7] text-gray-900">
+                <AppToaster />
 
-            <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col bg-white shadow-sm">
-                {/* Global Navbar */}
-                <PublicNavbar />
+                <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col bg-white shadow-sm">
+                    {/* Global Navbar */}
+                    <PublicNavbar />
 
-                {/* Page Content */}
-                <main className="flex-1 min-w-0">
-                    {children}
-                </main>
+                    {/* Page Content */}
+                    <main className="flex-1 min-w-0">
+                        {children}
+                    </main>
 
-                {/* Global Footer */}
-                <Footer />
+                    {/* Global Footer */}
+                    <Footer />
+                </div>
+
+                <CookieConsent />
             </div>
-
-            <CookieConsent />
-        </div>
+        </AutoRefreshProvider>
     );
 }
