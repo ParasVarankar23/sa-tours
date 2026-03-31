@@ -1059,11 +1059,11 @@ export async function DELETE(req) {
         } catch (e) {
             console.warn("Failed to return ticket to pool:", e?.message || e);
         }
-        // Calculate refund (20% to user) if fare/payment present
+        // Calculate refund (100% to user) if fare/payment present
         let refundResult = { attempted: false, success: false, amount: 0, error: null, raw: null };
         try {
             const fare = existingVal && existingVal.fare ? Number(existingVal.fare) : 0;
-            const refundPct = 0.1;
+            const refundPct = 1; // refund full fare
             const refundAmount = fare && Number.isFinite(fare) ? Math.round((fare * refundPct + Number.EPSILON) * 100) / 100 : 0;
             refundResult.amount = refundAmount;
 
@@ -1108,6 +1108,32 @@ export async function DELETE(req) {
             }
         } catch (e) {
             refundResult.error = e?.message || String(e);
+        }
+
+        // Persist refund metadata into payments/{paymentId}/refund so admin UI can reflect refunds
+        try {
+            const paymentId = existingVal && existingVal.payment ? String(existingVal.payment) : "";
+            if (paymentId) {
+                const refundRecord = {
+                    attempted: !!refundResult.attempted,
+                    success: !!refundResult.success,
+                    amount: refundResult.amount || 0,
+                    error: refundResult.error || null,
+                    raw: refundResult.raw || null,
+                    refundedAt: new Date().toISOString(),
+                };
+
+                // For offline/manual payments, mark as a cancel record (no gateway attempt)
+                const paymentMethod = existingVal && existingVal.paymentMethod ? String(existingVal.paymentMethod).toLowerCase() : "";
+                if (paymentMethod && paymentMethod.includes("offline") && !refundResult.attempted) {
+                    // keep attempted=false, success=false, but record a note so admins know this was an offline cancellation
+                    refundRecord.note = "offline_cancellation_needs_manual_refund";
+                }
+
+                await db.ref(`payments/${paymentId}/refund`).set(refundRecord);
+            }
+        } catch (e) {
+            console.warn("Failed to persist refund metadata to payments:", e && e.message ? e.message : e);
         }
 
         let emailResult = { attempted: false, sent: false, error: null };
