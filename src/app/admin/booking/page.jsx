@@ -471,6 +471,9 @@ export default function BookingPage() {
     dropTime: "",
     fareOverride: "",
   });
+  const [pickupFilter, setPickupFilter] = useState("");
+  const [dropFilter, setDropFilter] = useState("");
+  const [bookingFilter, setBookingFilter] = useState("");
   const [voucherInfo, setVoucherInfo] = useState(null);
   const [editingSeat, setEditingSeat] = useState(null);
   const [ticketLookupLoading, setTicketLookupLoading] = useState(false);
@@ -481,6 +484,9 @@ export default function BookingPage() {
   const [confirmAction, setConfirmAction] = useState(() => async () => { });
 
   const [computedFare, setComputedFare] = useState(null);
+
+  const [pickupOpen, setPickupOpen] = useState(false);
+  const [dropOpen, setDropOpen] = useState(false);
 
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [blockDetails, setBlockDetails] = useState({
@@ -785,6 +791,20 @@ export default function BookingPage() {
     [selectedBus, bookingForm.pickup]
   );
 
+  const filteredPickupOptions = useMemo(() => {
+    if (!pickupOptions || !pickupOptions.length) return [];
+    const q = String(pickupFilter || "").trim().toLowerCase();
+    if (!q) return pickupOptions;
+    return pickupOptions.filter((s) => getStopDisplayName(s).toLowerCase().includes(q));
+  }, [pickupOptions, pickupFilter]);
+
+  const filteredDropOptions = useMemo(() => {
+    if (!dropOptions || !dropOptions.length) return [];
+    const q = String(dropFilter || "").trim().toLowerCase();
+    if (!q) return dropOptions;
+    return dropOptions.filter((s) => getStopDisplayName(s).toLowerCase().includes(q));
+  }, [dropOptions, dropFilter]);
+
   const resetBookingForm = () => {
     setSelectedSeats([]);
     setEditingSeat(null);
@@ -862,12 +882,16 @@ export default function BookingPage() {
     const overrideVal = String(bookingForm.fareOverride || "").trim();
     const overrideNum = overrideVal === "" ? null : Number(overrideVal);
 
-    if (currentFare === null && (overrideNum === null || !Number.isFinite(overrideNum) || overrideNum <= 0)) {
+    if (
+      currentFare === null &&
+      (overrideNum === null || !Number.isFinite(overrideNum) || overrideNum <= 0)
+    ) {
       return showAppToast("error", "Fare not available for selected pickup and drop");
     }
 
     try {
       const results = [];
+      const finalName = String(bookingForm.name || "").trim();
 
       for (const seatNo of seatsToProcess) {
         const finalFare =
@@ -893,6 +917,7 @@ export default function BookingPage() {
           dropTime: bookingForm.dropTime || "",
           fare: Number(finalFare),
         };
+
         // For manual create (not editing), default payment method to offline
         if (!editingSeat) {
           payload.paymentMethod = "offline";
@@ -922,6 +947,7 @@ export default function BookingPage() {
       showAppToast("success", editingSeat ? "Booking updated" : "Seats booked successfully");
       await fetchBookings();
       resetBookingForm();
+
       try {
         if (typeof triggerRefresh === "function") triggerRefresh();
       } catch (e) {
@@ -3513,6 +3539,28 @@ export default function BookingPage() {
   };
 
 
+  // Precompute filtered bookings to simplify JSX and avoid IIFE parsing issues
+  const filteredVisibleBookings = (() => {
+    const q = String(bookingFilter || "").trim().toLowerCase();
+    if (!q) return visibleBookings;
+    return visibleBookings.filter(([seat, b]) => {
+      const s = String(seat || "").toLowerCase();
+      const name = String(b.name || "").toLowerCase();
+      const phone = String(b.phone || "").toLowerCase();
+      const pickup = String(b.pickup || "").toLowerCase();
+      const drop = String(b.drop || "").toLowerCase();
+      const ticket = String(b.ticket || "").toLowerCase();
+      return (
+        s.includes(q) ||
+        name.includes(q) ||
+        phone.includes(q) ||
+        pickup.includes(q) ||
+        drop.includes(q) ||
+        ticket.includes(q)
+      );
+    });
+  })();
+
   return (
     <div className="min-h-screen w-full bg-[#f8fafc] p-4 md:p-6 lg:p-8">
       {/* Header */}
@@ -3846,269 +3894,473 @@ export default function BookingPage() {
                   )}
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-3">
                   {/* Booking Form */}
-                  <div className="md:col-span-2 rounded-2xl border p-4">
-                    <h4 className="mb-2 font-semibold">Passenger Details</h4>
+                  <div className="xl:col-span-2 rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+                    <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                      <div>
+                        <h4 className="text-lg font-bold text-slate-900">Passenger Details</h4>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Fill passenger info, choose stops, and review fare before booking.
+                        </p>
+                      </div>
 
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <input
-                          placeholder="Ticket number (paste to autofill)"
-                          value={bookingForm.ticket ?? ""}
-                          onChange={(e) => setBookingForm((p) => ({ ...p, ticket: String(e.target.value || "").trim() }))}
-                          className="w-full rounded-lg border px-3 py-2"
-                          disabled={!editingSeat && selectedSeats.length === 0}
-                        />
+                      <div className="rounded-full border border-orange-200 bg-orange-50 px-4 py-1.5 text-sm font-semibold text-orange-700">
+                        {(editingSeat ? [editingSeat] : selectedSeats).length
+                          ? `${editingSeat ? 1 : selectedSeats.length} Seat Selected`
+                          : "No Seat Selected"}
+                      </div>
+                    </div>
 
-                        <button
-                          onClick={async () => {
-                            const code = String(bookingForm.ticket || "").trim();
-                            if (!code) return showAppToast("error", "Enter ticket number to lookup");
-                            try {
-                              setTicketLookupLoading(true);
-                              setVoucherInfo(null);
-                              const res = await fetch(`/api/booking?ticket=${encodeURIComponent(code)}`);
-                              const ct = (res.headers.get("content-type") || "").toLowerCase();
-                              if (!ct.includes("application/json")) {
-                                const txt = await res.text();
-                                const short = String(txt || "").slice(0, 200);
-                                throw new Error("Non-JSON response from server: " + (short || res.statusText));
-                              }
-                              const data = await res.json();
-                              if (!res.ok) throw new Error(data.error || "Ticket not found");
-                              const b = data.booking || {};
+                    <div className="space-y-4">
+                      {/* Ticket Lookup */}
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+                        <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Ticket Lookup
+                        </label>
 
-                              // Populate basic booking fields
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                          <input
+                            placeholder="Ticket number (paste to autofill)"
+                            value={bookingForm.ticket ?? ""}
+                            onChange={(e) =>
                               setBookingForm((p) => ({
                                 ...p,
-                                name: b.name || "",
-                                phone: b.phone || "",
-                                email: b.email || "",
-                                pickup: b.pickup || "",
-                                drop: b.drop || "",
-                                voucherCode: b.voucherCode || (b.voucher && (b.voucher.code || b.voucherCode)) || p.voucherCode || "",
-                              }));
+                                ticket: String(e.target.value || "").trim(),
+                              }))
+                            }
+                            className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                            disabled={!editingSeat && selectedSeats.length === 0}
+                          />
 
+                          <button
+                            onClick={async () => {
+                              const code = String(bookingForm.ticket || "").trim();
+                              if (!code) return showAppToast("error", "Enter ticket number to lookup");
                               try {
-                                const rawPt = getStopTime(selectedBus, b.pickup) || b.pickupTime || "";
-                                const rawDt = getStopTime(selectedBus, b.drop) || b.dropTime || "";
-                                const pt = normalizeTimeForInput(rawPt) || rawPt || "";
-                                const dt = normalizeTimeForInput(rawDt) || rawDt || "";
-                                setBookingForm((p) => ({ ...p, pickupTime: pt, dropTime: dt }));
-                              } catch { }
-
-                              // If booking has a voucher code, fetch voucher details (read-only) and surface status.
-                              const vcode = (b.voucherCode || (b.voucher && (b.voucher.code || b.voucherCode)) || "").trim();
-                              if (vcode) {
-                                try {
-                                  const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-                                  const headers = { "Content-Type": "application/json" };
-                                  if (token) headers.Authorization = `Bearer ${token}`;
-                                  const vr = await fetch(`/api/admin/vouchers`, { method: "GET", headers });
-                                  const vct = (vr.headers.get("content-type") || "").toLowerCase();
-                                  if (!vct.includes("application/json")) throw new Error("Failed to fetch voucher details");
-                                  const vdata = await vr.json();
-                                  const list = Array.isArray(vdata.vouchers) ? vdata.vouchers : [];
-                                  const found = list.find((x) => String(x.code || "").toUpperCase() === String(vcode || "").toUpperCase());
-                                  setVoucherInfo(found || null);
-                                  if (found) {
-                                    if (found.usedAt) {
-                                      showAppToast("info", `Voucher ${found.code} is already used`);
-                                    } else {
-                                      showAppToast("info", `Voucher ${found.code} is present (not redeemed).`);
-                                    }
-                                  } else {
-                                    showAppToast("warning", `Voucher ${vcode} not found`);
-                                  }
-                                } catch (verr) {
-                                  console.error(verr);
-                                  showAppToast("warning", "Could not fetch voucher status");
+                                setTicketLookupLoading(true);
+                                setVoucherInfo(null);
+                                const res = await fetch(`/api/booking?ticket=${encodeURIComponent(code)}`);
+                                const ct = (res.headers.get("content-type") || "").toLowerCase();
+                                if (!ct.includes("application/json")) {
+                                  const txt = await res.text();
+                                  const short = String(txt || "").slice(0, 200);
+                                  throw new Error("Non-JSON response from server: " + (short || res.statusText));
                                 }
+                                const data = await res.json();
+                                if (!res.ok) throw new Error(data.error || "Ticket not found");
+                                const b = data.booking || {};
+
+                                setBookingForm((p) => ({
+                                  ...p,
+                                  name: b.name || "",
+                                  phone: b.phone || "",
+                                  email: b.email || "",
+                                  pickup: b.pickup || "",
+                                  drop: b.drop || "",
+                                  voucherCode:
+                                    b.voucherCode ||
+                                    (b.voucher && (b.voucher.code || b.voucherCode)) ||
+                                    p.voucherCode ||
+                                    "",
+                                }));
+
+                                try {
+                                  const rawPt = getStopTime(selectedBus, b.pickup) || b.pickupTime || "";
+                                  const rawDt = getStopTime(selectedBus, b.drop) || b.dropTime || "";
+                                  const pt = normalizeTimeForInput(rawPt) || rawPt || "";
+                                  const dt = normalizeTimeForInput(rawDt) || rawDt || "";
+                                  setBookingForm((p) => ({ ...p, pickupTime: pt, dropTime: dt }));
+                                } catch { }
+
+                                const vcode = (
+                                  b.voucherCode ||
+                                  (b.voucher && (b.voucher.code || b.voucherCode)) ||
+                                  ""
+                                ).trim();
+
+                                if (vcode) {
+                                  try {
+                                    const token =
+                                      typeof window !== "undefined"
+                                        ? localStorage.getItem("authToken")
+                                        : null;
+                                    const headers = { "Content-Type": "application/json" };
+                                    if (token) headers.Authorization = `Bearer ${token}`;
+                                    const vr = await fetch(`/api/admin/vouchers`, {
+                                      method: "GET",
+                                      headers,
+                                    });
+                                    const vct = (vr.headers.get("content-type") || "").toLowerCase();
+                                    if (!vct.includes("application/json")) {
+                                      throw new Error("Failed to fetch voucher details");
+                                    }
+                                    const vdata = await vr.json();
+                                    const list = Array.isArray(vdata.vouchers) ? vdata.vouchers : [];
+                                    const found = list.find(
+                                      (x) =>
+                                        String(x.code || "").toUpperCase() ===
+                                        String(vcode || "").toUpperCase()
+                                    );
+                                    setVoucherInfo(found || null);
+                                    if (found) {
+                                      if (found.usedAt) {
+                                        showAppToast("info", `Voucher ${found.code} is already used`);
+                                      } else {
+                                        showAppToast("info", `Voucher ${found.code} is present (not redeemed).`);
+                                      }
+                                    } else {
+                                      showAppToast("warning", `Voucher ${vcode} not found`);
+                                    }
+                                  } catch (verr) {
+                                    console.error(verr);
+                                    showAppToast("warning", "Could not fetch voucher status");
+                                  }
+                                }
+
+                                showAppToast("success", "Ticket details loaded");
+                              } catch (err) {
+                                console.error(err);
+                                showAppToast("error", err.message || "Failed to load ticket");
+                              } finally {
+                                setTicketLookupLoading(false);
                               }
-
-                              showAppToast("success", "Ticket details loaded");
-                            } catch (err) {
-                              console.error(err);
-                              showAppToast("error", err.message || "Failed to load ticket");
-                            } finally {
-                              setTicketLookupLoading(false);
-                            }
-                          }}
-                          disabled={ticketLookupLoading}
-                          className="rounded-lg border px-3 py-2 text-sm"
-                        >
-                          {ticketLookupLoading ? "Loading..." : "Load by ticket"}
-                        </button>
+                            }}
+                            disabled={ticketLookupLoading}
+                            className="h-12 shrink-0 rounded-2xl bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+                          >
+                            {ticketLookupLoading ? "Loading..." : "Load Ticket"}
+                          </button>
+                        </div>
                       </div>
-                      <input
-                        placeholder="Name"
-                        value={bookingForm.name ?? ""}
-                        onCompositionStart={() => setIsNameComposing(true)}
-                        onCompositionEnd={(e) => {
-                          setIsNameComposing(false);
-                          setBookingForm((p) => ({ ...p, name: sanitizeNameInput(e.target.value) }));
-                        }}
-                        onChange={(e) => {
-                          const v = e.target.value || "";
-                          if (isNameComposing) {
-                            setBookingForm((p) => ({ ...p, name: v }));
-                          } else {
-                            setBookingForm((p) => ({ ...p, name: sanitizeNameInput(v) }));
-                          }
-                        }}
-                        className="w-full rounded-lg border px-3 py-2"
-                        disabled={!editingSeat && selectedSeats.length === 0}
-                      />
 
-                      <input
-                        placeholder="Phone number"
-                        value={bookingForm.phone ?? ""}
-                        onChange={(e) => {
-                          const v = e.target.value || "";
-                          if (isPhoneComposing) {
-                            // during IME composition keep raw value
-                            setBookingForm((p) => ({ ...p, phone: v }));
-                          } else {
-                            setBookingForm((p) => ({ ...p, phone: sanitizePhoneInput(v) }));
-                          }
-                        }}
-                        onCompositionStart={() => setIsPhoneComposing(true)}
-                        onCompositionEnd={(e) => {
-                          setIsPhoneComposing(false);
-                          // keep the final composed value as-is (don't force conversion here)
-                          setBookingForm((p) => ({ ...p, phone: e.target.value || "" }));
-                        }}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        maxLength={10}
-                        className="w-full rounded-lg border px-3 py-2"
-                        disabled={!editingSeat && selectedSeats.length === 0}
-                      />
+                      {/* Passenger Inputs */}
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="md:col-span-2">
+                          <label className="mb-2 block text-sm font-semibold text-slate-700">Passenger Name</label>
+                          <input
+                            placeholder="Enter passenger name"
+                            value={bookingForm.name ?? ""}
+                            onCompositionStart={() => setIsNameComposing(true)}
+                            onCompositionEnd={(e) => {
+                              setIsNameComposing(false);
+                              setBookingForm((p) => ({
+                                ...p,
+                                name: sanitizeNameInput(e.target.value),
+                              }));
+                            }}
+                            onChange={(e) => {
+                              const v = e.target.value || "";
+                              if (isNameComposing) {
+                                setBookingForm((p) => ({ ...p, name: v }));
+                              } else {
+                                setBookingForm((p) => ({
+                                  ...p,
+                                  name: sanitizeNameInput(v),
+                                }));
+                              }
+                            }}
+                            className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                            disabled={!editingSeat && selectedSeats.length === 0}
+                          />
+                        </div>
 
-                      <input
-                        placeholder="Email"
-                        value={bookingForm.email ?? ""}
-                        onChange={(e) =>
-                          setBookingForm((p) => ({ ...p, email: sanitizeEmailInput(e.target.value) }))
-                        }
-                        type="email"
-                        className="w-full rounded-lg border px-3 py-2"
-                        disabled={!editingSeat && selectedSeats.length === 0}
-                      />
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-slate-700">Phone Number</label>
+                          <input
+                            placeholder="Enter phone number"
+                            value={bookingForm.phone ?? ""}
+                            onChange={(e) => {
+                              const v = e.target.value || "";
+                              if (isPhoneComposing) {
+                                setBookingForm((p) => ({ ...p, phone: v }));
+                              } else {
+                                setBookingForm((p) => ({
+                                  ...p,
+                                  phone: sanitizePhoneInput(v),
+                                }));
+                              }
+                            }}
+                            onCompositionStart={() => setIsPhoneComposing(true)}
+                            onCompositionEnd={(e) => {
+                              setIsPhoneComposing(false);
+                              setBookingForm((p) => ({ ...p, phone: e.target.value || "" }));
+                            }}
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={10}
+                            className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                            disabled={!editingSeat && selectedSeats.length === 0}
+                          />
+                        </div>
 
-                      <div className="flex items-center gap-2">
-                        <input
-                          placeholder="Voucher code (optional)"
-                          value={bookingForm.voucherCode ?? ""}
-                          onChange={(e) =>
-                            setBookingForm((p) => ({ ...p, voucherCode: String(e.target.value || "").trim() }))
-                          }
-                          className="w-full rounded-lg border px-3 py-2"
-                          disabled={!editingSeat && selectedSeats.length === 0}
-                        />
-                        {voucherInfo ? (
-                          <div className="shrink-0 rounded-full px-3 py-1 text-sm font-semibold"
-                            style={{ background: voucherInfo.usedAt ? "#ECFCCB" : "#FEEBC8", color: voucherInfo.usedAt ? "#166534" : "#92400E", border: "1px solid rgba(0,0,0,0.04)" }}>
-                            {voucherInfo.usedAt ? "Used" : "Available"}
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-slate-700">Email Address</label>
+                          <input
+                            placeholder="Enter email"
+                            value={bookingForm.email ?? ""}
+                            onChange={(e) =>
+                              setBookingForm((p) => ({
+                                ...p,
+                                email: sanitizeEmailInput(e.target.value),
+                              }))
+                            }
+                            type="email"
+                            className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                            disabled={!editingSeat && selectedSeats.length === 0}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Voucher */}
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                        <label className="mb-2 block text-sm font-semibold text-slate-700">
+                          Voucher Code (Optional)
+                        </label>
+
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                          <input
+                            placeholder="Enter voucher code"
+                            value={bookingForm.voucherCode ?? ""}
+                            onChange={(e) =>
+                              setBookingForm((p) => ({
+                                ...p,
+                                voucherCode: String(e.target.value || "").trim(),
+                              }))
+                            }
+                            className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                            disabled={!editingSeat && selectedSeats.length === 0}
+                          />
+
+                          {voucherInfo ? (
+                            <div
+                              className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold"
+                              style={{
+                                background: voucherInfo.usedAt ? "#DCFCE7" : "#FFF7ED",
+                                color: voucherInfo.usedAt ? "#166534" : "#C2410C",
+                                border: "1px solid rgba(0,0,0,0.04)",
+                              }}
+                            >
+                              {voucherInfo.usedAt ? "Used" : "Available"}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* Pickup / Drop + Time + Fare */}
+                      <div className="rounded-3xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-4">
+                        <div className="mb-4 flex items-center justify-between">
+                          <div>
+                            <h5 className="text-base font-bold text-slate-900">Route & Fare Details</h5>
+                            <p className="text-xs text-slate-500">Select pickup and drop to auto-calculate fare.</p>
                           </div>
-                        ) : null}
-                      </div>
 
-                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                        {/* Pickup */}
-                        <div>
-                          <select
-                            value={bookingForm.pickup ?? ""}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              const time = getStopTime(selectedBus, val);
-
-                              setBookingForm((p) => ({
-                                ...p,
-                                pickup: val,
-                                pickupTime: time,
-                                drop: "",
-                                dropTime: "",
-                              }));
-                            }}
-                            className="w-full rounded-lg border px-3 py-2"
-                            disabled={!editingSeat && selectedSeats.length === 0}
-                          >
-                            <option value="">Select pickup</option>
-                            {pickupOptions.map((stop, i) => (
-                              <option key={i} value={normalizeStopName(stop)}>
-                                {getStopDisplayName(stop)}
-                              </option>
-                            ))}
-                          </select>
-
-                          <input
-                            type="time"
-                            value={bookingForm.pickupTime ?? ""}
-                            onChange={(e) =>
-                              setBookingForm((p) => ({
-                                ...p,
-                                pickupTime: e.target.value,
-                              }))
-                            }
-                            className="mt-2 w-full rounded-lg border px-3 py-2"
-                            disabled={!editingSeat && selectedSeats.length === 0}
-                          />
+                          <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-orange-600 shadow-sm">
+                            Smart Fare
+                          </div>
                         </div>
 
-                        {/* Drop */}
-                        <div>
-                          <select
-                            value={bookingForm.drop ?? ""}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              const time = getStopTime(selectedBus, val);
+                        <div className="space-y-4">
+                          {/* Pickup / Drop Dropdowns */}
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            {/* Pickup Dropdown */}
+                            <div className="relative stop-dropdown-wrapper">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPickupOpen((prev) => {
+                                    const next = !prev;
+                                    if (next) setDropOpen(false);
+                                    return next;
+                                  });
+                                }}
+                                className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-left text-[15px] text-slate-800 shadow-sm transition-all hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                              >
+                                <span className={bookingForm.pickup ? "text-slate-900" : "text-slate-400"}>
+                                  {bookingForm.pickup
+                                    ? `${getStopDisplayName(bookingForm.pickup)} — ${formatTime(getStopTime(selectedBus, bookingForm.pickup)) || "--:--"
+                                    }`
+                                    : "Select pickup stop"}
+                                </span>
+                                <span className="text-slate-400">▼</span>
+                              </button>
 
-                              setBookingForm((p) => ({
-                                ...p,
-                                drop: val,
-                                dropTime: time,
-                              }));
-                            }}
-                            className="w-full rounded-lg border px-3 py-2"
-                            disabled={(!editingSeat && selectedSeats.length === 0) || !bookingForm.pickup}
-                          >
-                            <option value="">Select drop</option>
-                            {dropOptions.map((stop, i) => {
-                              const fare = calculateFare(
-                                selectedBus,
-                                normalizeStopName(bookingForm.pickup),
-                                normalizeStopName(stop),
-                                date
-                              );
+                              {pickupOpen && (
+                                <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                                  <div className="border-b border-slate-100 p-3">
+                                    <input
+                                      type="text"
+                                      placeholder="Search pickup..."
+                                      value={pickupFilter}
+                                      onChange={(e) => setPickupFilter(e.target.value)}
+                                      className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-orange-400"
+                                    />
+                                  </div>
 
-                              return (
-                                <option key={i} value={normalizeStopName(stop)}>
-                                  {fare !== null ? `${getStopDisplayName(stop)} — ₹${fare}` : `${getStopDisplayName(stop)} — Fare N/A`}
-                                </option>
-                              );
-                            })}
-                          </select>
+                                  <div className="max-h-[220px] overflow-y-auto p-2">
+                                    {filteredPickupOptions.length > 0 ? (
+                                      filteredPickupOptions.map((stop) => {
+                                        const stopTime = getStopTime(selectedBus, stop);
 
-                          <input
-                            type="time"
-                            value={bookingForm.dropTime ?? ""}
-                            onChange={(e) =>
-                              setBookingForm((p) => ({
-                                ...p,
-                                dropTime: e.target.value,
-                              }))
-                            }
-                            className="mt-2 w-full rounded-lg border px-3 py-2"
-                            disabled={!editingSeat && selectedSeats.length === 0}
-                          />
+                                        return (
+                                          <button
+                                            key={stop}
+                                            type="button"
+                                            onClick={() => {
+                                              setBookingForm((prev) => ({
+                                                ...prev,
+                                                pickup: stop,
+                                                pickupTime: stopTime || "",
+                                                drop: "",
+                                                dropTime: "",
+                                              }));
+                                              setComputedFare(null);
+                                              setPickupFilter("");
+                                              setPickupOpen(false);
+                                              setDropFilter("");
+                                            }}
+                                            className={`mb-1 flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm transition ${bookingForm.pickup === stop
+                                                ? "bg-orange-50 text-orange-600"
+                                                : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                                              }`}
+                                          >
+                                            <span className="font-medium">{getStopDisplayName(stop)}</span>
+                                            <span className="ml-3 shrink-0 text-xs font-semibold text-slate-500">
+                                              {formatTime(stopTime) || "--:--"}
+                                            </span>
+                                          </button>
+                                        );
+                                      })
+                                    ) : (
+                                      <div className="px-3 py-4 text-sm text-slate-400">No stops found</div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Drop Dropdown */}
+                            <div className="relative stop-dropdown-wrapper">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!bookingForm.pickup) return;
+                                  setDropOpen((prev) => {
+                                    const next = !prev;
+                                    if (next) setPickupOpen(false);
+                                    return next;
+                                  });
+                                }}
+                                className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-left text-[15px] text-slate-800 shadow-sm transition-all hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                              >
+                                <span className={bookingForm.drop ? "text-slate-900" : "text-slate-400"}>
+                                  {bookingForm.drop
+                                    ? `${getStopDisplayName(bookingForm.drop)} — ${formatTime(getStopTime(selectedBus, bookingForm.drop)) || "--:--"
+                                    }`
+                                    : "Select drop stop"}
+                                </span>
+                                <span className="text-slate-400">▼</span>
+                              </button>
+
+                              {dropOpen && (
+                                <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                                  <div className="border-b border-slate-100 p-3">
+                                    <input
+                                      type="text"
+                                      placeholder="Search drop..."
+                                      value={dropFilter}
+                                      onChange={(e) => setDropFilter(e.target.value)}
+                                      className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-orange-400"
+                                    />
+                                  </div>
+
+                                  <div className="max-h-[220px] overflow-y-auto p-2">
+                                    {filteredDropOptions.length > 0 ? (
+                                      filteredDropOptions.map((stop) => {
+                                        const stopTime = getStopTime(selectedBus, stop);
+
+                                        return (
+                                          <button
+                                            key={stop}
+                                            type="button"
+                                            onClick={() => {
+                                              const fare = calculateFare(
+                                                selectedBus,
+                                                bookingForm.pickup,
+                                                stop,
+                                                date
+                                              );
+
+                                              setBookingForm((prev) => ({
+                                                ...prev,
+                                                drop: stop,
+                                                dropTime: stopTime || "",
+                                              }));
+
+                                              setComputedFare(fare);
+                                              setDropFilter("");
+                                              setDropOpen(false);
+                                            }}
+                                            className={`mb-1 flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm transition ${bookingForm.drop === stop
+                                                ? "bg-orange-50 text-orange-600"
+                                                : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                                              }`}
+                                          >
+                                            <span className="font-medium">{getStopDisplayName(stop)}</span>
+                                            <span className="ml-3 shrink-0 text-xs font-semibold text-slate-500">
+                                              {formatTime(stopTime) || "--:--"}
+                                            </span>
+                                          </button>
+                                        );
+                                      })
+                                    ) : (
+                                      <div className="px-3 py-4 text-sm text-slate-400">No stops found</div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Time + Fare Cards */}
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Pickup Time
+                              </div>
+                              <div className="mt-2 text-lg font-bold text-slate-900">
+                                {formatTime(bookingForm.pickupTime) || "--:--"}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Drop Time
+                              </div>
+                              <div className="mt-2 text-lg font-bold text-slate-900">
+                                {formatTime(bookingForm.dropTime) || "--:--"}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 shadow-sm">
+                              <div className="text-xs font-semibold uppercase tracking-wide text-orange-700">
+                                Fare
+                              </div>
+                              <div className="mt-2 text-lg font-bold text-orange-600">
+                                ₹
+                                {String(bookingForm.fareOverride || "").trim()
+                                  ? Number(bookingForm.fareOverride)
+                                  : computedFare ?? "--"}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm text-slate-500">Selected Seat(s):</div>
-                        <div className="font-semibold">
+                      {/* Selected Seats */}
+                      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <div className="text-sm font-medium text-slate-500">Selected Seat(s):</div>
+                        <div className="text-sm font-bold text-slate-900">
                           {(editingSeat ? [editingSeat] : selectedSeats).length
                             ? editingSeat
                               ? editingSeat
@@ -4117,8 +4369,9 @@ export default function BookingPage() {
                         </div>
                       </div>
 
+                      {/* Fare Summary */}
                       {(editingSeat ? 1 : selectedSeats.length) > 0 && (
-                        <div className="mt-2 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+                        <div className="rounded-3xl border border-orange-100 bg-gradient-to-r from-orange-50 via-white to-orange-50 p-4">
                           {computedFare !== null || bookingForm.fareOverride ? (
                             (() => {
                               const perSeat =
@@ -4131,27 +4384,31 @@ export default function BookingPage() {
                               const total = Number(perSeat) * seatsCount;
 
                               return (
-                                <div className="flex flex-wrap items-center gap-6">
-                                  <div className="text-sm text-slate-600">
-                                    Fare per seat:{" "}
-                                    <span className="font-semibold">
-                                      {perSeat && !Number.isNaN(perSeat)
-                                        ? `₹${perSeat.toFixed(2)}`
-                                        : "—"}
-                                    </span>
+                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                                  <div className="rounded-2xl border border-white/80 bg-white p-4 shadow-sm">
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                      Fare Per Seat
+                                    </div>
+                                    <div className="mt-2 text-xl font-bold text-slate-900">
+                                      {perSeat && !Number.isNaN(perSeat) ? `₹${perSeat.toFixed(2)}` : "—"}
+                                    </div>
                                   </div>
 
-                                  <div className="text-sm text-slate-700">
-                                    Total:{" "}
-                                    <span className="text-lg font-bold">
+                                  <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 shadow-sm">
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-orange-700">
+                                      Total Fare
+                                    </div>
+                                    <div className="mt-2 text-2xl font-bold text-orange-600">
                                       {!Number.isNaN(total) ? `₹${total.toFixed(2)}` : "—"}
-                                    </span>
+                                    </div>
                                   </div>
 
-                                  <div className="ml-2">
-                                    <label className="block text-xs text-slate-500">Override fare</label>
+                                  <div className="rounded-2xl border border-white/80 bg-white p-4 shadow-sm">
+                                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                      Override Fare
+                                    </label>
                                     <input
-                                      type="number"
+                                      type="text"
                                       step="0.01"
                                       min="0"
                                       value={bookingForm.fareOverride ?? ""}
@@ -4161,26 +4418,27 @@ export default function BookingPage() {
                                           fareOverride: e.target.value,
                                         }))
                                       }
-                                      className="mt-1 w-40 rounded-lg border px-3 py-2 text-sm"
+                                      className="mt-3 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
                                     />
                                   </div>
                                 </div>
                               );
                             })()
                           ) : (
-                            <div className="text-sm font-medium text-red-600">
+                            <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
                               Fare not available for selected pickup & drop
                             </div>
                           )}
                         </div>
                       )}
 
-                      <div className="flex flex-wrap gap-2">
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap gap-3 pt-1">
                         {editingSeat ? (
                           <>
                             <button
                               onClick={handleCreateOrUpdateBooking}
-                              className="rounded-xl bg-[#059669] px-4 py-2 text-white"
+                              className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
                             >
                               Update Booking
                             </button>
@@ -4188,7 +4446,7 @@ export default function BookingPage() {
                             <button
                               onClick={() => handleCancelSeat(editingSeat)}
                               disabled={confirmOpen}
-                              className="rounded-xl border border-red-200 px-4 py-2 text-red-600"
+                              className="inline-flex h-12 items-center justify-center rounded-2xl border border-red-200 bg-white px-5 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                             >
                               Cancel Booking
                             </button>
@@ -4197,14 +4455,14 @@ export default function BookingPage() {
                           <>
                             <button
                               onClick={handleOnlineBooking}
-                              className="rounded-xl bg-[#0ea5a4] px-4 py-2 text-white"
+                              className="inline-flex h-12 items-center justify-center rounded-2xl bg-teal-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
                             >
                               Online Booking
                             </button>
 
                             <button
                               onClick={handleOfflineBooking}
-                              className="rounded-xl border px-4 py-2 text-white bg-[#f97316]"
+                              className="inline-flex h-12 items-center justify-center rounded-2xl bg-orange-500 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600"
                             >
                               Offline Booking
                             </button>
@@ -4215,66 +4473,118 @@ export default function BookingPage() {
                   </div>
 
                   {/* Existing Bookings */}
-                  <div className="rounded-2xl border p-4">
-                    <h4 className="mb-2 font-semibold">Existing Bookings</h4>
+                  <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+                    <div className="mb-3 border-b border-slate-100 pb-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-lg font-bold text-slate-900">Existing Bookings</h4>
+                          <p className="mt-1 text-xs text-slate-500">
+                            2 tickets visible first • scroll for more
+                          </p>
+                        </div>
 
-                    <div className="space-y-2">
-                      {visibleBookings.length === 0 ? (
-                        <div className="text-sm text-slate-500">No bookings for this bus/date.</div>
+                        <div className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+                          {filteredVisibleBookings.length} Total
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-3">
+                      <input
+                        placeholder="Search by seat, name, phone, pickup..."
+                        value={bookingFilter}
+                        onChange={(e) => setBookingFilter(String(e.target.value || ""))}
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                      />
+                    </div>
+
+                    <div
+                      className="space-y-3 pr-1"
+                      style={{
+                        maxHeight: 1000,
+                        overflowY: "auto",
+                        scrollbarWidth: "thin",
+                      }}
+                    >
+                      {filteredVisibleBookings.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                          No bookings for this bus/date.
+                        </div>
                       ) : (
-                        visibleBookings.map(([seat, b]) => (
+                        filteredVisibleBookings.map(([seat, b]) => (
                           <div
                             key={seat}
-                            className="rounded-2xl border border-slate-200 bg-white p-4"
+                            className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-3 shadow-sm"
                           >
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2 text-lg font-bold text-slate-900">
-                                  <span>Seat {seat} {b.ticket ? `— ${b.ticket}` : ""}</span>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                {/* Top Row */}
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="text-[15px] font-bold text-slate-900">
+                                    Seat {seat}
+                                  </div>
+
+                                  {b.ticket ? (
+                                    <div className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                                      {b.ticket}
+                                    </div>
+                                  ) : null}
+
                                   {b.status === "blocked" ? (
-                                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                                    <span className="rounded-full bg-orange-100 px-2.5 py-1 text-[10px] font-bold text-orange-700">
                                       BLOCKED
                                     </span>
                                   ) : (
-                                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
                                       BOOKED
                                     </span>
                                   )}
                                 </div>
 
-                                <div className="mt-1 text-sm text-slate-700">
-                                  {b.name || "—"} <span className="mx-2 text-slate-400">•</span>{" "}
-                                  {b.phone || "—"}
+                                {/* Passenger */}
+                                <div className="mt-2 text-sm font-semibold text-slate-800">
+                                  {b.name || "—"}
                                 </div>
+
+                                <div className="mt-1 text-xs text-slate-500">{b.phone || "—"}</div>
 
                                 {b.email ? (
-                                  <div className="mt-1 text-sm text-slate-500">{b.email}</div>
+                                  <div className="mt-1 truncate text-xs text-slate-500">{b.email}</div>
                                 ) : null}
 
-                                <div className="mt-2 text-sm text-slate-400">
-                                  {b.pickup || "-"}
-                                  {b.pickupTime ? ` (${b.pickupTime})` : ""} → {b.drop || "-"}
-                                  {b.dropTime ? ` (${b.dropTime})` : ""}
+                                {/* Route */}
+                                <div className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600">
+                                  <span className="font-semibold text-slate-700">{b.pickup || "-"}</span>
+                                  {b.pickupTime ? ` (${formatTime(b.pickupTime)})` : ""} →{" "}
+                                  <span className="font-semibold text-slate-700">{b.drop || "-"}</span>
+                                  {b.dropTime ? ` (${formatTime(b.dropTime)})` : ""}
                                 </div>
 
+                                {/* Fare + Payment */}
+                                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                                  {b.fare !== undefined && b.fare !== null ? (
+                                    <div className="font-semibold text-slate-700">
+                                      Fare: ₹{Number(b.fare).toFixed(2)}
+                                    </div>
+                                  ) : null}
+
+                                  {b.paymentMethod ? (
+                                    <div className="font-medium text-slate-500">
+                                      Payment: {b.paymentMethod}
+                                    </div>
+                                  ) : null}
+                                </div>
+
+                                {/* Block note */}
                                 {b.status === "blocked" && b.note ? (
-                                  <div className="mt-1 text-xs text-orange-600">Note: {b.note}</div>
-                                ) : null}
-
-                                {b.fare !== undefined && b.fare !== null ? (
-                                  <div className="mt-1 text-sm font-medium text-slate-700">
-                                    Fare: ₹{Number(b.fare).toFixed(2)}
-                                  </div>
-                                ) : null}
-
-                                {b.paymentMethod ? (
-                                  <div className="mt-1 text-xs text-slate-500">
-                                    Payment: {b.paymentMethod}
+                                  <div className="mt-1 text-[11px] font-medium text-orange-600">
+                                    Note: {b.note}
                                   </div>
                                 ) : null}
                               </div>
 
-                              <div className="flex flex-col items-end gap-3">
+                              {/* Actions */}
+                              <div className="flex flex-col items-end gap-2">
                                 <button
                                   onClick={() => {
                                     setSelectedSeats([seat]);
@@ -4288,7 +4598,9 @@ export default function BookingPage() {
                                       drop: b.drop || "",
                                       dropTime: b.dropTime || "",
                                       fareOverride:
-                                        b.fare !== undefined && b.fare !== null ? String(b.fare) : "",
+                                        b.fare !== undefined && b.fare !== null
+                                          ? String(b.fare)
+                                          : "",
                                     });
 
                                     const fare = calculateFare(
@@ -4299,7 +4611,7 @@ export default function BookingPage() {
                                     );
                                     setComputedFare(fare);
                                   }}
-                                  className="rounded-full border border-slate-200 px-4 py-2 text-sm"
+                                  className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50"
                                 >
                                   Edit
                                 </button>
@@ -4307,7 +4619,7 @@ export default function BookingPage() {
                                 <button
                                   onClick={() => handleCancelSeat(seat)}
                                   disabled={confirmOpen}
-                                  className="rounded-full border border-red-200 px-4 py-2 text-sm text-red-600"
+                                  className="inline-flex h-9 items-center justify-center rounded-full border border-red-200 bg-white px-4 text-[11px] font-semibold text-red-600 transition hover:bg-red-50"
                                 >
                                   Cancel
                                 </button>
@@ -4460,7 +4772,10 @@ export default function BookingPage() {
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="text-lg font-bold text-slate-900">Seat {viewBooking.seat} {viewBooking.booking?.ticket ? `— ${viewBooking.booking.ticket}` : ""}</div>
+                  <div className="text-lg font-bold text-slate-900">
+                    Seat {viewBooking.seat}{" "}
+                    {viewBooking.booking?.ticket ? `— ${viewBooking.booking.ticket}` : ""}
+                  </div>
                   <div className="mt-2 text-sm font-semibold text-slate-700">
                     {viewBooking.booking?.name || "—"}
                   </div>
@@ -4486,16 +4801,23 @@ export default function BookingPage() {
 
                   <div className="mt-3 text-sm text-slate-400">
                     {viewBooking.booking?.pickup || "-"}
-                    {viewBooking.booking?.pickupTime ? ` (${viewBooking.booking?.pickupTime})` : ""} →{" "}
-                    {viewBooking.booking?.drop || "-"}
-                    {viewBooking.booking?.dropTime ? ` (${viewBooking.booking?.dropTime})` : ""}
+                    {viewBooking.booking?.pickupTime
+                      ? ` (${viewBooking.booking?.pickupTime})`
+                      : ""}{" "}
+                    → {viewBooking.booking?.drop || "-"}
+                    {viewBooking.booking?.dropTime
+                      ? ` (${viewBooking.booking?.dropTime})`
+                      : ""}
                   </div>
 
                   {viewBooking.booking?.status === "blocked" && viewBooking.booking?.note ? (
-                    <div className="mt-2 text-sm text-orange-600">Note: {viewBooking.booking?.note}</div>
+                    <div className="mt-2 text-sm text-orange-600">
+                      Note: {viewBooking.booking?.note}
+                    </div>
                   ) : null}
 
-                  {viewBooking.booking?.fare !== undefined && viewBooking.booking?.fare !== null ? (
+                  {viewBooking.booking?.fare !== undefined &&
+                    viewBooking.booking?.fare !== null ? (
                     <div className="mt-2 text-sm font-medium text-slate-700">
                       Fare: ₹{Number(viewBooking.booking.fare).toFixed(2)}
                     </div>
@@ -4578,7 +4900,8 @@ export default function BookingPage() {
                         pickupTime: b.pickupTime || "",
                         drop: b.drop || "",
                         dropTime: b.dropTime || "",
-                        fareOverride: b.fare !== undefined && b.fare !== null ? String(b.fare) : "",
+                        fareOverride:
+                          b.fare !== undefined && b.fare !== null ? String(b.fare) : "",
                       });
 
                       const fare = calculateFare(selectedBus, b.pickup || "", b.drop || "", date);
