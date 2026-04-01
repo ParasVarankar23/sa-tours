@@ -11,7 +11,7 @@ import {
     X,
     XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export default function AdminVouchersPage() {
     const [loading, setLoading] = useState(false);
@@ -20,19 +20,32 @@ export default function AdminVouchersPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [filterStatus, setFilterStatus] = useState("all");
 
-    const { subscribeRefresh, triggerRefresh } = useAutoRefresh();
+    const { subscribeRefresh } = useAutoRefresh();
 
-    const fetchVouchers = async () => {
+    const fetchVouchers = useCallback(async () => {
         try {
             setLoading(true);
+
             const token =
                 typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-            const headers = { "Content-Type": "application/json" };
+
+            const headers = {
+                "Content-Type": "application/json",
+            };
+
             if (token) headers.Authorization = `Bearer ${token}`;
 
-            const res = await fetch("/api/admin/vouchers", { method: "GET", headers });
+            const res = await fetch("/api/admin/vouchers", {
+                method: "GET",
+                headers,
+            });
+
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to fetch vouchers");
+
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to fetch vouchers");
+            }
+
             setVouchers(Array.isArray(data.vouchers) ? data.vouchers : []);
         } catch (err) {
             console.error(err);
@@ -40,14 +53,15 @@ export default function AdminVouchersPage() {
         } finally {
             setLoading(false);
         }
-    };
-
-    useEffect(() => {
-        fetchVouchers();
     }, []);
 
     useEffect(() => {
+        fetchVouchers();
+    }, [fetchVouchers]);
+
+    useEffect(() => {
         if (typeof subscribeRefresh !== "function") return;
+
         const unsub = subscribeRefresh(() => {
             fetchVouchers();
         });
@@ -62,17 +76,24 @@ export default function AdminVouchersPage() {
     const redeemVoucher = async (code) => {
         try {
             const token = localStorage.getItem("authToken");
-            const headers = { "Content-Type": "application/json" };
+
+            const headers = {
+                "Content-Type": "application/json",
+            };
+
             if (token) headers.Authorization = `Bearer ${token}`;
 
-            const res = await fetch(`/api/admin/vouchers/redeem`, {
+            const res = await fetch("/api/admin/vouchers/redeem", {
                 method: "POST",
                 headers,
                 body: JSON.stringify({ code }),
             });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Redeem failed");
+
+            if (!res.ok) {
+                throw new Error(data.error || "Redeem failed");
+            }
 
             showAppToast("success", data.message || "Voucher redeemed");
             fetchVouchers();
@@ -95,6 +116,35 @@ export default function AdminVouchersPage() {
         return "active";
     };
 
+    // ✅ Ticket No getter (supports your current Firebase structure)
+    const getTicketNo = (voucher) => {
+        return (
+            voucher.ticketNo ||
+            voucher.ticketNumber ||
+            voucher.ticket ||
+            voucher.metadata?.ticketNo ||
+            voucher.metadata?.ticketNumber ||
+            voucher.metadata?.ticket ||
+            voucher.metadata?.cancelledBooking?.ticketNo ||
+            voucher.metadata?.cancelledBooking?.ticketNumber ||
+            voucher.metadata?.cancelledBooking?.ticket ||
+            "—"
+        );
+    };
+
+    // ✅ Seat No getter (supports your current Firebase structure)
+    const getSeatNo = (voucher) => {
+        return (
+            voucher.seatNo ||
+            voucher.seatNumber ||
+            voucher.metadata?.seatNo ||
+            voucher.metadata?.seatNumber ||
+            voucher.metadata?.cancelledBooking?.seatNo ||
+            voucher.metadata?.cancelledBooking?.seatNumber ||
+            "—"
+        );
+    };
+
     const filteredVouchers = useMemo(() => {
         return vouchers.filter((v) => {
             const status = getVoucherStatus(v);
@@ -103,6 +153,7 @@ export default function AdminVouchersPage() {
                 filterStatus === "all" ? true : status === filterStatus;
 
             const search = searchTerm.toLowerCase();
+
             const matchesSearch =
                 !search ||
                 (v.code || "").toLowerCase().includes(search) ||
@@ -110,7 +161,9 @@ export default function AdminVouchersPage() {
                 (v.phone || "").toLowerCase().includes(search) ||
                 (v.name || v.customerName || v.metadata?.name || "")
                     .toLowerCase()
-                    .includes(search);
+                    .includes(search) ||
+                String(getTicketNo(v)).toLowerCase().includes(search) ||
+                String(getSeatNo(v)).toLowerCase().includes(search);
 
             return matchesFilter && matchesSearch;
         });
@@ -136,10 +189,12 @@ export default function AdminVouchersPage() {
         if (!t) return null;
         const m = String(t).trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
         if (!m) return String(t);
+
         let hh = Number(m[1]);
         const mm = m[2];
         const ampm = hh >= 12 ? "PM" : "AM";
         const hh12 = ((hh + 11) % 12) + 1;
+
         return `${hh12}:${mm} ${ampm}`;
     };
 
@@ -186,7 +241,7 @@ export default function AdminVouchersPage() {
                     )}
                 </div>
 
-                {/* Stats Cards */}
+                {/* Stats */}
                 <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
                         <div className="flex items-center justify-between">
@@ -240,14 +295,14 @@ export default function AdminVouchersPage() {
                 {/* Search + Filter */}
                 <div className="mb-6 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="relative w-full lg:max-w-md">
+                        <div className="relative w-full lg:max-w-lg">
                             <Search
                                 className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-500"
                                 size={18}
                             />
                             <input
                                 type="text"
-                                placeholder="Search by code, name, email or phone..."
+                                placeholder="Search by code, ticket no, seat no, name, email or phone..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full rounded-xl border border-orange-200 bg-white py-3 pl-11 pr-4 text-sm outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
@@ -274,23 +329,25 @@ export default function AdminVouchersPage() {
                 {/* Table */}
                 <div className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full">
+                        <table className="min-w-[1400px] w-full table-auto">
                             <thead className="bg-orange-50">
                                 <tr className="text-left text-sm font-semibold text-slate-700">
-                                    <th className="px-5 py-4">Code</th>
-                                    <th className="px-5 py-4">Amount</th>
-                                    <th className="px-5 py-4">Issued</th>
-                                    <th className="px-5 py-4">Expires</th>
-                                    <th className="px-5 py-4">Contact</th>
-                                    <th className="px-5 py-4">Status</th>
-                                    <th className="px-5 py-4">Actions</th>
+                                    <th className="px-5 py-4 min-w-[190px]">Code</th>
+                                    <th className="px-5 py-4 min-w-[140px]">Ticket No</th>
+                                    <th className="px-5 py-4 min-w-[100px]">Seat No</th>
+                                    <th className="px-5 py-4 min-w-[120px]">Amount</th>
+                                    <th className="px-5 py-4 min-w-[170px]">Issued</th>
+                                    <th className="px-5 py-4 min-w-[170px]">Expires</th>
+                                    <th className="px-5 py-4 min-w-[260px]">Contact</th>
+                                    <th className="px-5 py-4 min-w-[120px]">Status</th>
+                                    <th className="px-5 py-4 min-w-[190px]">Actions</th>
                                 </tr>
                             </thead>
 
                             <tbody>
                                 {filteredVouchers.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="px-5 py-12 text-center">
+                                        <td colSpan={9} className="px-5 py-12 text-center">
                                             <div className="flex flex-col items-center justify-center">
                                                 <div className="mb-3 rounded-full bg-orange-50 p-4 text-orange-500">
                                                     <TicketPercent size={28} />
@@ -310,37 +367,60 @@ export default function AdminVouchersPage() {
 
                                         return (
                                             <tr
-                                                key={v.code}
+                                                key={v.code || v.id}
                                                 className={`border-t border-slate-100 hover:bg-orange-50/40 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/30"
                                                     }`}
                                             >
-                                                <td className="px-5 py-4">
-                                                    <div className="font-mono text-sm font-semibold text-slate-800">
-                                                        {v.code}
+                                                {/* Code */}
+                                                <td className="px-5 py-4 min-w-[190px]">
+                                                    <div className="font-mono text-sm font-semibold text-slate-800 whitespace-nowrap">
+                                                        {v.code || "—"}
                                                     </div>
                                                 </td>
 
-                                                <td className="px-5 py-4 font-semibold text-slate-800">
+                                                {/* Ticket No */}
+                                                <td className="px-5 py-4 min-w-[140px]">
+                                                    <div className="font-mono text-sm font-semibold text-orange-700 whitespace-nowrap">
+                                                        {getTicketNo(v)}
+                                                    </div>
+                                                </td>
+
+                                                {/* Seat No */}
+                                                <td className="px-5 py-4 min-w-[100px]">
+                                                    <div className="font-semibold text-slate-800 whitespace-nowrap">
+                                                        {getSeatNo(v)}
+                                                    </div>
+                                                </td>
+
+                                                {/* Amount */}
+                                                <td className="px-5 py-4 min-w-[120px] font-semibold text-slate-800 whitespace-nowrap">
                                                     ₹ {v.amount ?? "—"}
                                                 </td>
 
-                                                <td className="px-5 py-4 text-sm text-slate-600">
+                                                {/* Issued */}
+                                                <td className="px-5 py-4 min-w-[170px] text-sm text-slate-600 whitespace-nowrap">
                                                     {formatDate(v.issuedAt)}
                                                 </td>
 
-                                                <td className="px-5 py-4 text-sm text-slate-600">
+                                                {/* Expires */}
+                                                <td className="px-5 py-4 min-w-[170px] text-sm text-slate-600 whitespace-nowrap">
                                                     {formatDate(v.expiresAt)}
                                                 </td>
 
-                                                <td className="px-5 py-4 text-sm text-slate-700">
-                                                    {v.email || v.phone || "—"}
+                                                {/* Contact */}
+                                                <td className="px-5 py-4 min-w-[260px] text-sm text-slate-700">
+                                                    <div className="truncate" title={v.email || v.phone || "—"}>
+                                                        {v.email || v.phone || "—"}
+                                                    </div>
                                                 </td>
 
-                                                <td className="px-5 py-4">
+                                                {/* Status */}
+                                                <td className="px-5 py-4 min-w-[120px]">
                                                     <StatusBadge status={status} />
                                                 </td>
 
-                                                <td className="px-5 py-4">
+                                                {/* Actions */}
+                                                <td className="px-5 py-4 min-w-[190px]">
                                                     <div className="flex flex-wrap gap-2">
                                                         <button
                                                             onClick={() => setViewVoucher(v)}
@@ -377,19 +457,18 @@ export default function AdminVouchersPage() {
                 {viewVoucher && (
                     <div className="fixed inset-0 z-[60] bg-black/50 p-3 sm:p-4">
                         <div className="flex min-h-full items-center justify-center">
-                            <div className="w-full max-w-4xl rounded-2xl border border-orange-100 bg-white shadow-2xl max-h-[92vh] overflow-hidden">
+                            <div className="max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-2xl">
                                 {/* Header */}
                                 <div className="flex items-start justify-between border-b border-orange-100 bg-orange-50 px-5 py-4 sm:px-6">
                                     <div className="pr-4">
                                         <h3 className="text-xl font-bold text-slate-900 sm:text-2xl">
                                             Voucher Details
                                         </h3>
-                                        <p className="mt-1 text-sm font-medium text-orange-600 break-all">
-                                            {viewVoucher.code}
+                                        <p className="mt-1 break-all text-sm font-medium text-orange-600">
+                                            {viewVoucher.code || "—"}
                                         </p>
                                     </div>
 
-                                    {/* ONLY ONE CLOSE BUTTON */}
                                     <button
                                         onClick={() => setViewVoucher(null)}
                                         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-orange-200 bg-white text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
@@ -398,14 +477,32 @@ export default function AdminVouchersPage() {
                                     </button>
                                 </div>
 
-                                {/* Body scroll only */}
+                                {/* Body */}
                                 <div className="max-h-[calc(92vh-88px)] overflow-y-auto px-5 py-5 sm:px-6">
                                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                         <div className="rounded-xl border border-orange-100 bg-orange-50/30 p-4">
                                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                Ticket No
+                                            </p>
+                                            <p className="mt-2 break-all font-mono text-base font-bold text-orange-700">
+                                                {getTicketNo(viewVoucher)}
+                                            </p>
+                                        </div>
+
+                                        <div className="rounded-xl border border-orange-100 bg-orange-50/30 p-4">
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                Seat No
+                                            </p>
+                                            <p className="mt-2 text-base font-bold text-slate-800">
+                                                {getSeatNo(viewVoucher)}
+                                            </p>
+                                        </div>
+
+                                        <div className="rounded-xl border border-orange-100 bg-orange-50/30 p-4">
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                 Name
                                             </p>
-                                            <p className="mt-2 text-base font-semibold text-slate-800 break-words">
+                                            <p className="mt-2 break-words text-base font-semibold text-slate-800">
                                                 {viewVoucher.name ||
                                                     viewVoucher.customerName ||
                                                     viewVoucher.metadata?.name ||
@@ -417,7 +514,7 @@ export default function AdminVouchersPage() {
                                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                 Phone
                                             </p>
-                                            <p className="mt-2 text-base font-semibold text-slate-800 break-words">
+                                            <p className="mt-2 break-words text-base font-semibold text-slate-800">
                                                 {viewVoucher.phone || viewVoucher.metadata?.phone || "—"}
                                             </p>
                                         </div>
@@ -426,7 +523,7 @@ export default function AdminVouchersPage() {
                                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                 Email
                                             </p>
-                                            <p className="mt-2 text-base font-semibold text-slate-800 break-all">
+                                            <p className="mt-2 break-all text-base font-semibold text-slate-800">
                                                 {viewVoucher.email || viewVoucher.metadata?.email || "—"}
                                             </p>
                                         </div>
@@ -444,11 +541,15 @@ export default function AdminVouchersPage() {
                                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                 Pickup
                                             </p>
-                                            <p className="mt-2 text-base font-medium capitalize text-slate-800 break-words">
+                                            <p className="mt-2 break-words text-base font-medium capitalize text-slate-800">
                                                 {viewVoucher.pickup || viewVoucher.metadata?.pickup || "—"}
                                             </p>
                                             {(() => {
-                                                const t = viewVoucher.pickupTime || viewVoucher.metadata?.pickupTime || viewVoucher.metadata?.cancelledBooking?.time || null;
+                                                const t =
+                                                    viewVoucher.pickupTime ||
+                                                    viewVoucher.metadata?.pickupTime ||
+                                                    viewVoucher.metadata?.cancelledBooking?.time ||
+                                                    null;
                                                 const ft = formatTimeStr(t);
                                                 return ft ? (
                                                     <p className="mt-1 text-sm text-slate-500">{ft}</p>
@@ -460,11 +561,15 @@ export default function AdminVouchersPage() {
                                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                 Drop
                                             </p>
-                                            <p className="mt-2 text-base font-medium capitalize text-slate-800 break-words">
+                                            <p className="mt-2 break-words text-base font-medium capitalize text-slate-800">
                                                 {viewVoucher.drop || viewVoucher.metadata?.drop || "—"}
                                             </p>
                                             {(() => {
-                                                const t = viewVoucher.dropTime || viewVoucher.metadata?.dropTime || viewVoucher.metadata?.cancelledBooking?.time || null;
+                                                const t =
+                                                    viewVoucher.dropTime ||
+                                                    viewVoucher.metadata?.dropTime ||
+                                                    viewVoucher.metadata?.cancelledBooking?.time ||
+                                                    null;
                                                 const ft = formatTimeStr(t);
                                                 return ft ? (
                                                     <p className="mt-1 text-sm text-slate-500">{ft}</p>
@@ -476,7 +581,7 @@ export default function AdminVouchersPage() {
                                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                 Issued
                                             </p>
-                                            <p className="mt-2 text-base font-medium text-slate-800 break-words">
+                                            <p className="mt-2 break-words text-base font-medium text-slate-800">
                                                 {formatDate(viewVoucher.issuedAt || viewVoucher.issued)}
                                             </p>
                                         </div>
@@ -485,7 +590,7 @@ export default function AdminVouchersPage() {
                                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                 Expires
                                             </p>
-                                            <p className="mt-2 text-base font-medium text-slate-800 break-words">
+                                            <p className="mt-2 break-words text-base font-medium text-slate-800">
                                                 {formatDate(viewVoucher.expiresAt)}
                                             </p>
                                         </div>
@@ -503,6 +608,44 @@ export default function AdminVouchersPage() {
                                                     : "Not used yet"}
                                             </p>
                                         </div>
+
+                                        {viewVoucher.metadata?.cancelledBooking && (
+                                            <div className="rounded-xl border border-orange-100 bg-orange-50/20 p-4 md:col-span-2">
+                                                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                                    Cancelled Booking Info
+                                                </p>
+
+                                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                                    <div>
+                                                        <p className="text-xs text-slate-500">Bus ID</p>
+                                                        <p className="mt-1 break-all text-sm font-semibold text-slate-800">
+                                                            {viewVoucher.metadata?.cancelledBooking?.busId || "—"}
+                                                        </p>
+                                                    </div>
+
+                                                    <div>
+                                                        <p className="text-xs text-slate-500">Date</p>
+                                                        <p className="mt-1 text-sm font-semibold text-slate-800">
+                                                            {viewVoucher.metadata?.cancelledBooking?.date || "—"}
+                                                        </p>
+                                                    </div>
+
+                                                    <div>
+                                                        <p className="text-xs text-slate-500">Ticket</p>
+                                                        <p className="mt-1 font-mono text-sm font-semibold text-orange-700">
+                                                            {viewVoucher.metadata?.cancelledBooking?.ticket || "—"}
+                                                        </p>
+                                                    </div>
+
+                                                    <div>
+                                                        <p className="text-xs text-slate-500">Seat</p>
+                                                        <p className="mt-1 text-sm font-semibold text-slate-800">
+                                                            {viewVoucher.metadata?.cancelledBooking?.seatNo || "—"}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
