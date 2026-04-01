@@ -1,6 +1,7 @@
 "use client";
 
 import SeatLayout from "@/components/SeatLayout";
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { showAppToast } from "@/lib/client/toast";
 import {
     BUS_TYPES,
@@ -326,6 +327,7 @@ export default function BookingPage() {
     const CONTACT_PHONE = "9209471601";
 
     const todayIso = new Date().toISOString().split("T")[0];
+    const { subscribeRefresh } = useAutoRefresh();
 
     async function fetchAllData() {
         setLoading(true);
@@ -357,6 +359,22 @@ export default function BookingPage() {
             if (!date) setDate(iso);
         } catch (e) { }
     }, []);
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            try {
+                fetchAllData();
+                fetchBookings();
+            } catch (e) { }
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh, selectedBus, date]);
 
     useEffect(() => {
         if (typeof window === "undefined" || !("BroadcastChannel" in window)) return;

@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { showAppToast } from "@/lib/client/toast";
 import {
     Bell,
@@ -17,6 +18,7 @@ export default function NotificationsPage() {
     const [notifications, setNotifications] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
+    const { subscribeRefresh } = useAutoRefresh();
 
     async function load() {
         setLoading(true);
@@ -53,6 +55,21 @@ export default function NotificationsPage() {
     useEffect(() => {
         load();
     }, []);
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            try {
+                load();
+            } catch (e) { }
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh]);
 
     const markRead = async (n, value = true, silent = false) => {
         try {
@@ -186,14 +203,6 @@ export default function NotificationsPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
-                        <button
-                            onClick={load}
-                            disabled={loading}
-                            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
-                        >
-                            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                            Refresh
-                        </button>
 
                         <button
                             onClick={markAllRead}

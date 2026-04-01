@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { showAppToast } from "@/lib/client/toast";
 import {
     Camera,
@@ -41,6 +42,9 @@ export default function ProfilePage() {
     const [selectedFile, setSelectedFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState("");
 
+    const activeRef = useRef(false);
+    const { subscribeRefresh } = useAutoRefresh();
+
     const initials = useMemo(() => {
         const name = String(formData.name || profile.name || "").trim();
 
@@ -52,60 +56,74 @@ export default function ProfilePage() {
         return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
     }, [formData.name, profile.name]);
 
-    useEffect(() => {
-        let active = true;
+    async function loadProfile() {
+        setLoading(true);
+        try {
+            const authToken = localStorage.getItem("authToken");
 
-        async function loadProfile() {
-            try {
-                const authToken = localStorage.getItem("authToken");
+            const res = await fetch("/api/auth/profile", {
+                method: "GET",
+                cache: "no-store",
+                headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+            });
 
-                const res = await fetch("/api/auth/profile", {
-                    method: "GET",
-                    cache: "no-store",
-                    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-                });
+            const data = await res.json().catch(() => ({}));
 
-                const data = await res.json().catch(() => ({}));
-
-                if (!res.ok) {
-                    throw new Error(data?.error || "Failed to load profile");
-                }
-
-                // ✅ IMPORTANT FIX: data.profile
-                const p = data?.profile || {};
-
-                if (active) {
-                    const normalized = {
-                        uid: p.uid || "",
-                        name: p.name || "",
-                        email: p.email || "",
-                        phone: p.phone || "",
-                        address: p.address || "",
-                        role: p.role || "user",
-                        photoUrl: p.photoUrl || "",
-                        photoPublicId: p.photoPublicId || "",
-                    };
-
-                    setProfile(normalized);
-                    setFormData({
-                        name: normalized.name,
-                        phone: normalized.phone,
-                        address: normalized.address,
-                    });
-                }
-            } catch (error) {
-                showAppToast("error", error.message || "Unable to load profile.");
-            } finally {
-                if (active) setLoading(false);
+            if (!res.ok) {
+                throw new Error(data?.error || "Failed to load profile");
             }
-        }
 
+            const p = data?.profile || {};
+
+            if (activeRef.current) {
+                const normalized = {
+                    uid: p.uid || "",
+                    name: p.name || "",
+                    email: p.email || "",
+                    phone: p.phone || "",
+                    address: p.address || "",
+                    role: p.role || "user",
+                    photoUrl: p.photoUrl || "",
+                    photoPublicId: p.photoPublicId || "",
+                };
+
+                setProfile(normalized);
+                setFormData({
+                    name: normalized.name,
+                    phone: normalized.phone,
+                    address: normalized.address,
+                });
+            }
+        } catch (error) {
+            showAppToast("error", error.message || "Unable to load profile.");
+        } finally {
+            if (activeRef.current) setLoading(false);
+        }
+    }
+
+    useEffect(() => {
+        activeRef.current = true;
         loadProfile();
 
         return () => {
-            active = false;
+            activeRef.current = false;
         };
     }, []);
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            try {
+                loadProfile();
+            } catch (e) { }
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh]);
 
     useEffect(() => {
         if (!selectedFile) {

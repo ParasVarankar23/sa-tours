@@ -1,6 +1,7 @@
 "use client";
 
 import SeatLayout from "@/components/SeatLayout";
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import {
     BUS_TYPES,
     getFare,
@@ -11,7 +12,7 @@ import {
     ROUTES,
 } from "@/lib/fare";
 import { Bus, Clock3, Eye, Filter, MapPin, Search, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export default function StaffBusPage() {
     const [buses, setBuses] = useState([]);
@@ -20,32 +21,48 @@ export default function StaffBusPage() {
     const [selected, setSelected] = useState(null);
     const [layoutFilter, setLayoutFilter] = useState("All Layouts");
 
-    useEffect(() => {
-        let mounted = true;
+    const isMountedRef = useRef(false);
+    const { subscribeRefresh } = useAutoRefresh();
 
-        const fetchBuses = async () => {
-            try {
-                const res = await fetch("/api/bus");
-                const data = await res.json();
+    const fetchBuses = async () => {
+        try {
+            if (isMountedRef.current) setLoading(true);
+            const res = await fetch("/api/bus");
+            const data = await res.json();
 
-                if (!res.ok) throw new Error(data.error || "Failed to load buses");
+            if (!res.ok) throw new Error(data.error || "Failed to load buses");
 
-                if (mounted) {
-                    setBuses(data.buses || []);
-                }
-            } catch (error) {
-                console.error("Failed to fetch buses:", error);
-            } finally {
-                if (mounted) setLoading(false);
+            if (isMountedRef.current) {
+                setBuses(data.buses || []);
             }
-        };
+        } catch (error) {
+            console.error("Failed to fetch buses:", error);
+        } finally {
+            if (isMountedRef.current) setLoading(false);
+        }
+    };
 
+    useEffect(() => {
+        isMountedRef.current = true;
         fetchBuses();
 
         return () => {
-            mounted = false;
+            isMountedRef.current = false;
         };
     }, []);
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            fetchBuses();
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh]);
 
     // Detect seat layout from bus data
     const getSeatCount = (bus) => {

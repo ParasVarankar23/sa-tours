@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import {
     CalendarDays,
     CheckCircle2,
@@ -20,6 +21,8 @@ export default function PaymentPage() {
     const [fetching, setFetching] = useState(false);
     const [search, setSearch] = useState("");
     const [selectedPayment, setSelectedPayment] = useState(null);
+
+    const { subscribeRefresh } = useAutoRefresh();
 
     const fetchPayments = async () => {
         if (!user?.uid) return;
@@ -47,6 +50,19 @@ export default function PaymentPage() {
         fetchPayments();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, loading]);
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            fetchPayments();
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh, user]);
 
     const normalizedPayments = useMemo(() => {
         return (payments || []).map((p) => {
