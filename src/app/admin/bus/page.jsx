@@ -2060,8 +2060,8 @@ function BusFormModal({
                             </div>
 
                             <PointSection
-                                title={`Pickup Points (${data.pickupPoints?.length || 0}/20)`}
-                                description="Add up to 20 pickup points."
+                                title={`Pickup Points (${data.pickupPoints?.length || 0}/50)`}
+                                description="Add up to 50 pickup points."
                                 points={shownPickups}
                                 totalCount={data.pickupPoints?.length || 0}
                                 visibleCount={visiblePickups}
@@ -2075,8 +2075,8 @@ function BusFormModal({
                             />
 
                             <PointSection
-                                title={`Drop Points (${data.dropPoints?.length || 0}/20)`}
-                                description="Add up to 20 drop points."
+                                title={`Drop Points (${data.dropPoints?.length || 0}/50)`}
+                                description="Add up to 50 drop points."
                                 points={shownDrops}
                                 totalCount={data.dropPoints?.length || 0}
                                 visibleCount={visibleDrops}
@@ -2512,7 +2512,7 @@ function PointSection({
     onChange,
     pointLabel,
 }) {
-    const showMore = () => setVisibleCount((v) => Math.min(20, v + 10));
+    const showMore = () => setVisibleCount((v) => Math.min(50, v + 10));
     const showLess = () => setVisibleCount(10);
 
     return (
@@ -2577,7 +2577,7 @@ function PointSection({
                     <button
                         type="button"
                         onClick={onAdd}
-                        disabled={totalCount >= 20}
+                        disabled={totalCount >= 50}
                         className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
                         Add {pointLabel}
