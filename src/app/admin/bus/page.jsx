@@ -3,7 +3,7 @@
 import SeatLayout from "@/components/SeatLayout";
 import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { showAppToast } from "@/lib/client/toast";
-import { BUS_TYPES, getFare, isBorliVillageStop, isCityStop, isDighiVillageStop, normalizeStopName, ROUTES } from "@/lib/fare";
+import { BUS_TYPES, getFare, getStopNameMarathi, isBorliVillageStop, isCityStop, isDighiVillageStop, normalizeStopName, ROUTES } from "@/lib/fare";
 import {
     Armchair,
     Building2,
@@ -585,6 +585,25 @@ export default function AdminBusPage() {
             }
         }
 
+        // if changing name, also set Marathi name automatically
+        if (field === "name") {
+            const nameMr = getStopNameMarathi(value) || "";
+            if (isEdit) {
+                setEditData((prev) => {
+                    const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
+                    updated[index] = { ...(updated[index] || {}), name: value, nameMr };
+                    return { ...prev, [section]: updated };
+                });
+            } else {
+                setFormData((prev) => {
+                    const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
+                    updated[index] = { ...(updated[index] || {}), name: value, nameMr };
+                    return { ...prev, [section]: updated };
+                });
+            }
+            return;
+        }
+
         if (isEdit) {
             setEditData((prev) => {
                 const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
@@ -605,7 +624,7 @@ export default function AdminBusPage() {
             setEditData((prev) => {
                 const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
                 if (updated.length < 50) {
-                    updated.push({ name: "", time: "" });
+                    updated.push({ name: "", nameMr: "", time: "" });
                 }
                 return { ...prev, [section]: updated };
             });
@@ -613,7 +632,7 @@ export default function AdminBusPage() {
             setFormData((prev) => {
                 const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
                 if (updated.length < 50) {
-                    updated.push({ name: "", time: "" });
+                    updated.push({ name: "", nameMr: "", time: "" });
                 }
                 return { ...prev, [section]: updated };
             });
@@ -827,13 +846,14 @@ export default function AdminBusPage() {
             const seen = new Set();
             const out = [];
             for (const p of Array.isArray(arr) ? arr : []) {
-                const name = String(p?.name || "").trim();
+                const name = String(p?.name || p || "").trim();
                 const time = String(p?.time || "").trim();
+                const nameMr = String(p?.nameMr || "").trim() || getStopNameMarathi(name) || "";
                 if (!name) continue;
                 const k = normalizeKey(name);
                 if (seen.has(k)) continue;
                 seen.add(k);
-                out.push({ name, time });
+                out.push({ name, nameMr, time });
             }
             return out;
         };
@@ -856,18 +876,30 @@ export default function AdminBusPage() {
         try {
             const payload = { ...sanitizedForm };
             // synthesize startPoint/endPoint objects for server compatibility using sanitizedForm
-            const synthesizedStart = { name: (typeof sanitizedForm.startPoint === "object" ? String(sanitizedForm.startPoint.name || "") : String(sanitizedForm.startPoint || "")).trim(), time: sanitizedForm.startTime || "" };
-            const synthesizedEnd = { name: (typeof sanitizedForm.endPoint === "object" ? String(sanitizedForm.endPoint.name || "") : String(sanitizedForm.endPoint || "")).trim(), time: sanitizedForm.endTime || "" };
+            const synthesizedStartName = typeof sanitizedForm.startPoint === "object" ? String(sanitizedForm.startPoint.name || "") : String(sanitizedForm.startPoint || "");
+            const synthesizedEndName = typeof sanitizedForm.endPoint === "object" ? String(sanitizedForm.endPoint.name || "") : String(sanitizedForm.endPoint || "");
+            const synthesizedStart = { name: synthesizedStartName.trim(), nameMr: getStopNameMarathi(synthesizedStartName) || "", time: sanitizedForm.startTime || "" };
+            const synthesizedEnd = { name: synthesizedEndName.trim(), nameMr: getStopNameMarathi(synthesizedEndName) || "", time: sanitizedForm.endTime || "" };
             payload.startPoint = synthesizedStart;
             payload.endPoint = synthesizedEnd;
             // ensure pickupPoints includes startPoint as first element and dropPoints includes endPoint as last element
             const rawPickups = Array.isArray(sanitizedForm.pickupPoints) ? sanitizedForm.pickupPoints.slice() : [];
             const rawDrops = Array.isArray(sanitizedForm.dropPoints) ? sanitizedForm.dropPoints.slice() : [];
             const cleanedPickups = rawPickups
-                .map((p) => ({ name: String(p?.name || "").trim(), time: String(p?.time || "").trim() }))
+                .map((p) => {
+                    const name = String(p?.name || p || "").trim();
+                    const time = String(p?.time || "").trim();
+                    const nameMr = String(p?.nameMr || "").trim() || getStopNameMarathi(name) || "";
+                    return { name, nameMr, time };
+                })
                 .filter((p) => p.name);
             const cleanedDrops = rawDrops
-                .map((p) => ({ name: String(p?.name || "").trim(), time: String(p?.time || "").trim() }))
+                .map((p) => {
+                    const name = String(p?.name || p || "").trim();
+                    const time = String(p?.time || "").trim();
+                    const nameMr = String(p?.nameMr || "").trim() || getStopNameMarathi(name) || "";
+                    return { name, nameMr, time };
+                })
                 .filter((p) => p.name);
             // dedupe by normalized name
             const dedupeByName = (arr) => {
@@ -929,6 +961,12 @@ export default function AdminBusPage() {
             return String(p || "").trim();
         };
 
+        const mapPoint = (p) => {
+            if (!p) return { name: "", nameMr: "", time: "" };
+            if (typeof p === "string") return { name: String(p || "").trim(), nameMr: getStopNameMarathi(p) || "", time: "" };
+            return { name: String(p.name || p.english || "").trim(), nameMr: String(p.nameMr || p.marathi || getStopNameMarathi(p.name || p.english || "") || "").trim(), time: String(p.time || "").trim() };
+        };
+
         setEditData({
             busId: bus.busId || "",
             busNumber: bus.busNumber || "",
@@ -940,8 +978,8 @@ export default function AdminBusPage() {
             endPoint: resolvePointToString(bus.endPoint || bus.end),
             endTime: bus.endTime || "",
             seatLayout: String(bus.seatLayout || ""),
-            pickupPoints: Array.isArray(bus.pickupPoints) ? bus.pickupPoints : [],
-            dropPoints: Array.isArray(bus.dropPoints) ? bus.dropPoints : [],
+            pickupPoints: Array.isArray(bus.pickupPoints) ? bus.pickupPoints.map(mapPoint) : [],
+            dropPoints: Array.isArray(bus.dropPoints) ? bus.dropPoints.map(mapPoint) : [],
             cabins: Array.isArray(bus.cabins) ? bus.cabins : [],
             fareRules: Array.isArray(bus.fareRulesRaw)
                 ? bus.fareRulesRaw.map((rule) => ({
@@ -968,13 +1006,14 @@ export default function AdminBusPage() {
             const seen = new Set();
             const out = [];
             for (const p of Array.isArray(arr) ? arr : []) {
-                const name = String(p?.name || "").trim();
+                const name = String(p?.name || p || "").trim();
                 const time = String(p?.time || "").trim();
+                const nameMr = String(p?.nameMr || "").trim() || getStopNameMarathi(name) || "";
                 if (!name) continue;
                 const k = normalizeKey(name);
                 if (seen.has(k)) continue;
                 seen.add(k);
-                out.push({ name, time });
+                out.push({ name, nameMr, time });
             }
             return out;
         };
@@ -997,8 +1036,10 @@ export default function AdminBusPage() {
         try {
             const payload = { ...sanitizedEdit };
             // synthesize startPoint/endPoint objects for server compatibility using sanitizedEdit
-            const synthesizedStartE = { name: (typeof sanitizedEdit.startPoint === "object" ? String(sanitizedEdit.startPoint.name || "") : String(sanitizedEdit.startPoint || "")).trim(), time: sanitizedEdit.startTime || "" };
-            const synthesizedEndE = { name: (typeof sanitizedEdit.endPoint === "object" ? String(sanitizedEdit.endPoint.name || "") : String(sanitizedEdit.endPoint || "")).trim(), time: sanitizedEdit.endTime || "" };
+            const synthesizedStartNameE = typeof sanitizedEdit.startPoint === "object" ? String(sanitizedEdit.startPoint.name || "") : String(sanitizedEdit.startPoint || "");
+            const synthesizedEndNameE = typeof sanitizedEdit.endPoint === "object" ? String(sanitizedEdit.endPoint.name || "") : String(sanitizedEdit.endPoint || "");
+            const synthesizedStartE = { name: synthesizedStartNameE.trim(), nameMr: getStopNameMarathi(synthesizedStartNameE) || "", time: sanitizedEdit.startTime || "" };
+            const synthesizedEndE = { name: synthesizedEndNameE.trim(), nameMr: getStopNameMarathi(synthesizedEndNameE) || "", time: sanitizedEdit.endTime || "" };
             payload.startPoint = synthesizedStartE;
             payload.endPoint = synthesizedEndE;
 
@@ -1009,10 +1050,20 @@ export default function AdminBusPage() {
             const rawPickupsE = Array.isArray(sanitizedEdit.pickupPoints) ? sanitizedEdit.pickupPoints.slice() : [];
             const rawDropsE = Array.isArray(sanitizedEdit.dropPoints) ? sanitizedEdit.dropPoints.slice() : [];
             const cleanedPickupsE = rawPickupsE
-                .map((p) => ({ name: String(p?.name || "").trim(), time: String(p?.time || "").trim() }))
+                .map((p) => {
+                    const name = String(p?.name || p || "").trim();
+                    const time = String(p?.time || "").trim();
+                    const nameMr = String(p?.nameMr || "").trim() || getStopNameMarathi(name) || "";
+                    return { name, nameMr, time };
+                })
                 .filter((p) => p.name);
             const cleanedDropsE = rawDropsE
-                .map((p) => ({ name: String(p?.name || "").trim(), time: String(p?.time || "").trim() }))
+                .map((p) => {
+                    const name = String(p?.name || p || "").trim();
+                    const time = String(p?.time || "").trim();
+                    const nameMr = String(p?.nameMr || "").trim() || getStopNameMarathi(name) || "";
+                    return { name, nameMr, time };
+                })
                 .filter((p) => p.name);
             const dedupeByNameE = (arr) => {
                 const seen = new Set();
@@ -2029,6 +2080,9 @@ function BusFormModal({
                                         icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
                                         placeholder="Borli"
                                     />
+                                    {data.startPoint ? (
+                                        <p className="mt-1 text-xs text-slate-500">{getStopNameMarathi(data.startPoint) || ""}</p>
+                                    ) : null}
 
                                     <InputField
                                         label="Start Time"
@@ -2047,6 +2101,9 @@ function BusFormModal({
                                         icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
                                         placeholder="Dongri"
                                     />
+                                    {data.endPoint ? (
+                                        <p className="mt-1 text-xs text-slate-500">{getStopNameMarathi(data.endPoint) || ""}</p>
+                                    ) : null}
 
                                     <InputField
                                         label="End Time"
@@ -2554,6 +2611,9 @@ function PointSection({
                                     icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
                                     placeholder={`${pointLabel} ${index + 1}`}
                                 />
+                                {point?.nameMr ? (
+                                    <p className="mt-1 text-xs text-slate-500">{point.nameMr}</p>
+                                ) : null}
 
                                 <InputField
                                     label="Time"

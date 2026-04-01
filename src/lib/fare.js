@@ -75,6 +75,7 @@ export const BORLI_VILLAGE_STOPS = [
     "Dighi",
     "Kudgaon",
     "Adgaon",
+    "Khalcha Velas",
     "Velas",
     "Vadavli",
     "Vadavli Fata",
@@ -97,6 +98,7 @@ export const DIGHI_VILLAGE_STOPS = [
     "Dighi",
     "Kudgaon",
     "Adgaon",
+    "Khalcha Velas",
     "Velas",
     "Vadavli",
     "Vadavli Fata",
@@ -114,7 +116,6 @@ export const DIGHI_VILLAGE_STOPS = [
 
 /* -------------------------------------------------------
    FARE GROUPS (NON-AC BASE FARE)
-   CUSTOM PRICING AS PER YOUR REQUIREMENT
 ------------------------------------------------------- */
 export const BORLI_FARE_GROUPS = [
     {
@@ -145,6 +146,7 @@ export const BORLI_FARE_GROUPS = [
         zone: "BORLI_GROUP_2",
         fare: 450,
         stops: [
+            "Khalcha Velas",
             "Velas",
             "Vadavli",
             "Vadavli Fata",
@@ -207,6 +209,7 @@ export const DIGHI_FARE_GROUPS = [
         zone: "DIGHI_GROUP_3",
         fare: 450,
         stops: [
+            "Khalcha Velas",
             "Velas",
             "Vadavli",
             "Vadavli Fata",
@@ -263,6 +266,84 @@ export const DIGHI_FARE_GROUPS = [
 ];
 
 /* -------------------------------------------------------
+   STOP NAMES IN MARATHI
+------------------------------------------------------- */
+export const STOP_NAMES_MARATHI = {
+    // CITY SIDE STOPS
+    Panvel: "पनवेल",
+    Kalamboli: "कळंबोली",
+    "Khanda Colony": "खंडा कॉलनी",
+    Kamothe: "कामोठे",
+    Kharghar: "खारघर",
+    "CBD Belapur": "सीबीडी बेलापूर",
+    Seawoods: "सीवूड्स",
+    Nerul: "नेरुळ",
+    Juinagar: "जुईनगर",
+    Vashi: "वाशी",
+    Mankhurd: "मानखुर्द",
+    Govandi: "गोवंडी",
+    Chembur: "चेंबूर",
+    Sion: "सायन",
+    Kurla: "कुर्ला",
+    Dadar: "दादर",
+    Byculla: "भायखळा",
+    "Masjid Bandar": "मस्जिद बंदर",
+    Dongri: "डोंगरी",
+
+    // BORLI / DIGHI SIDE VILLAGE STOPS
+    Shekhadi: "शेखाडी",
+    Valvati: "वाळवटी",
+    Bharadkhol: "भरडखोल",
+    Aravi: "आरावी",
+    Kondvili: "कोंडविली",
+
+    Dighi: "दिघी",
+    Kudgaon: "कुडगाव",
+    Adgaon: "आडगाव",
+    "Khalcha Velas": "खालचा वेळास",
+    Velas: "वेळास",
+
+    Vadavli: "वडवली",
+    "Vadavli Fata": "वडवली फाटा",
+
+    Borli: "बोर्ली",
+    Pohamil: "पोहामिल",
+    "ST Stand": "एसटी स्टँड",
+    "Ganesh Chowk": "गणेश चौक",
+    "Shivaji Chowk": "शिवाजी चौक",
+    Samtanagar: "समतानगर",
+    "Bhava Fata": "भावा फाटा",
+    Kapoli: "कापोली",
+    Shiste: "शिस्ते",
+
+    Gondghar: "गोंडघर",
+    Mendadi: "मेंडडी",
+    "Mendadi Grampanchayat": "मेंडडी ग्रामपंचायत",
+
+    "Kharsai Dam": "खारसई धरण",
+    "Kharsai School": "खारसई शाळा",
+
+    Varvatna: "वरवटणे",
+    Banoti: "बनोटी",
+    Tondsure: "तोंडसुरे",
+    Saklap: "साकळप",
+
+    Mhasla: "म्हसळा",
+    "Mhasla Stand": "म्हसळा स्टँड",
+
+    "Pabra Fata": "पाब्रा फाटा",
+    Dorje: "दोरजे",
+    Chandore: "चांदोरे",
+    Sai: "साई",
+    Morba: "मोर्बा",
+    Surle: "सुरळे",
+
+    Mangaon: "माणगाव",
+    Indapur: "इंदापूर",
+    Kolad: "कोलाड",
+};
+
+/* -------------------------------------------------------
    STOP ALIASES / NORMALIZATION MAP
 ------------------------------------------------------- */
 const STOP_ALIASES = {
@@ -295,6 +376,7 @@ const STOP_ALIASES = {
     // Village side
     shekhadi: "Shekhadi",
     valvati: "Valvati",
+    walvati: "Valvati",
     bharadkhol: "Bharadkhol",
     aravi: "Aravi",
     kondvili: "Kondvili",
@@ -302,6 +384,8 @@ const STOP_ALIASES = {
     dighi: "Dighi",
     kudgaon: "Kudgaon",
     adgaon: "Adgaon",
+    "khalcha velas": "Khalcha Velas",
+    khalchavelas: "Khalcha Velas",
     velas: "Velas",
 
     vadavli: "Vadavli",
@@ -387,7 +471,8 @@ function sanitizeStopKey(value) {
         .trim()
         .toLowerCase()
         .replace(/\s+/g, " ")
-        .replace(/[^a-z\s]/g, "")
+        // allow Unicode letters (including Devanagari)
+        .replace(/[^\p{L}\p{M}\s]/gu, "")
         .replace(/\s+/g, " ")
         .trim();
 }
@@ -399,10 +484,68 @@ function compactStopKey(value) {
 export function normalizeStopName(stop) {
     if (!stop) return "";
 
+    if (typeof stop === "object") {
+        const objName = String(stop.name || "").trim();
+        if (!objName) return "";
+        const rawObj = sanitizeStopKey(objName);
+        const compactObj = compactStopKey(objName);
+        return STOP_ALIASES[rawObj] || STOP_ALIASES[compactObj] || objName;
+    }
+
     const raw = sanitizeStopKey(stop);
     const compact = compactStopKey(stop);
 
     return STOP_ALIASES[raw] || STOP_ALIASES[compact] || String(stop).trim();
+}
+
+/* -------------------------------------------------------
+   MARATHI NAME HELPERS
+------------------------------------------------------- */
+export function getStopNameMarathi(stop) {
+    const normalized = normalizeStopName(stop);
+    return STOP_NAMES_MARATHI[normalized] || normalized;
+}
+
+export function getStopDisplayName(stop) {
+    const normalized = normalizeStopName(stop);
+    const marathi = getStopNameMarathi(normalized);
+
+    if (marathi && marathi !== normalized) {
+        return `${normalized} (${marathi})`;
+    }
+
+    return normalized;
+}
+
+export function getStopDisplayFromObject(stop) {
+    if (!stop) return "";
+
+    if (typeof stop === "string") {
+        const normalized = normalizeStopName(stop);
+        return `${normalized} (${getStopNameMarathi(normalized)})`;
+    }
+
+    const english = normalizeStopName(stop.name || "");
+    const marathi = stop.nameMr || getStopNameMarathi(english);
+
+    return marathi ? `${english} (${marathi})` : english;
+}
+
+export function createStopObject(stopName, time = "") {
+    const normalized = normalizeStopName(stopName);
+    return {
+        name: normalized,
+        nameMr: getStopNameMarathi(normalized),
+        time: time || "",
+    };
+}
+
+export function getStopsWithMarathi(stops = []) {
+    return stops.map((stop) => ({
+        english: normalizeStopName(stop),
+        marathi: getStopNameMarathi(stop),
+        display: getStopDisplayName(stop),
+    }));
 }
 
 export function isCityStop(stop) {
@@ -573,6 +716,14 @@ export function getAvailableDropStops(route) {
     }
 }
 
+export function getAvailablePickupStopsWithMarathi(route) {
+    return getStopsWithMarathi(getAvailablePickupStops(route));
+}
+
+export function getAvailableDropStopsWithMarathi(route) {
+    return getStopsWithMarathi(getAvailableDropStops(route));
+}
+
 /* -------------------------------------------------------
    MAIN FARE FUNCTION
 ------------------------------------------------------- */
@@ -594,7 +745,11 @@ export function getFare({
         routeLabel: getRouteDirectionLabel(route),
         zone: null,
         pickup: normalizedPickup,
+        pickupMarathi: getStopNameMarathi(normalizedPickup),
+        pickupDisplay: getStopDisplayName(normalizedPickup),
         drop: normalizedDrop,
+        dropMarathi: getStopNameMarathi(normalizedDrop),
+        dropDisplay: getStopDisplayName(normalizedDrop),
         isValid: false,
         error: null,
     };
@@ -729,9 +884,31 @@ export function getFarePreviewByRoute(route, busType = BUS_TYPES.NON_AC) {
     return groups.map((group) => ({
         zone: group.zone,
         stops: group.stops,
+        stopsWithMarathi: getStopsWithMarathi(group.stops),
         baseFare: group.fare,
         surcharge,
         amount: group.fare + surcharge,
         busType,
     }));
 }
+
+/* -------------------------------------------------------
+   OPTIONAL DISPLAY ARRAYS
+------------------------------------------------------- */
+export const CITY_STOPS_WITH_MARATHI = CITY_STOPS.map((stop) => ({
+    english: stop,
+    marathi: getStopNameMarathi(stop),
+    display: getStopDisplayName(stop),
+}));
+
+export const BORLI_VILLAGE_STOPS_WITH_MARATHI = BORLI_VILLAGE_STOPS.map((stop) => ({
+    english: stop,
+    marathi: getStopNameMarathi(stop),
+    display: getStopDisplayName(stop),
+}));
+
+export const DIGHI_VILLAGE_STOPS_WITH_MARATHI = DIGHI_VILLAGE_STOPS.map((stop) => ({
+    english: stop,
+    marathi: getStopNameMarathi(stop),
+    display: getStopDisplayName(stop),
+}));

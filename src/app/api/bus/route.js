@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getStopNameMarathi } from "../../../lib/fare";
 import { getAdminDb } from "../../../lib/firebaseAdmin";
 
 const COLLECTION_NAME = "buses";
@@ -40,27 +41,39 @@ function rangesOverlap(startA, endA, startB, endB) {
 }
 
 function sanitizeSinglePoint(point) {
-    if (!point || (!normalizeText(point.name) && !normalizeText(point.time))) {
-        return { name: "", time: "" };
+    if (!point) return { name: "", nameMr: "", time: "" };
+
+    // accept string or object
+    if (typeof point === "string") {
+        const name = normalizeText(point);
+        return { name, nameMr: getStopNameMarathi(name) || "", time: "" };
     }
 
-    return {
-        name: normalizeText(point.name),
-        time: normalizeText(point.time),
-    };
+    const name = normalizeText(point.name);
+    const nameMr = normalizeText(point.nameMr) || getStopNameMarathi(name) || "";
+    const time = normalizeText(point.time);
+    if (!name && !time) return { name: "", nameMr: "", time: "" };
+    return { name, nameMr, time };
 }
 
 function sanitizePoints(points, max = 50) {
     if (!Array.isArray(points)) return [];
 
     return points
-        .filter((point) => point && (normalizeText(point.name) || normalizeText(point.time)))
         .slice(0, max)
-        .map((point) => ({
-            name: normalizeText(point.name),
-            time: normalizeText(point.time),
-        }))
-        .filter((point) => point.name);
+        .map((point) => {
+            if (!point) return null;
+            if (typeof point === "string") {
+                const name = normalizeText(point);
+                return name ? { name, nameMr: getStopNameMarathi(name) || "", time: "" } : null;
+            }
+
+            const name = normalizeText(point.name);
+            const nameMr = normalizeText(point.nameMr) || getStopNameMarathi(name) || "";
+            const time = normalizeText(point.time);
+            return name ? { name, nameMr, time } : null;
+        })
+        .filter(Boolean);
 }
 
 function sanitizeCabins(cabins) {

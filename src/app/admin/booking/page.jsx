@@ -7,9 +7,12 @@ import { showAppToast } from "@/lib/client/toast";
 import {
   BUS_TYPES,
   getFare,
+  getStopDisplayFromObject,
+  getStopDisplayName,
   isBorliVillageStop,
   isCityStop,
   isDighiVillageStop,
+  normalizeStopName,
   ROUTES,
 } from "@/lib/fare";
 import {
@@ -249,6 +252,11 @@ function calculateFare(bus, pickup, drop, dateStr) {
   if (!bus || !pickup || !drop) return null;
 
   let routeKey = null;
+  // Debug: show what values we're receiving to help diagnose fare issues
+  try {
+    // eslint-disable-next-line no-console
+    console.debug("calculateFare input:", { pickup, drop, busRouteName: bus?.routeName });
+  } catch (e) { }
   try {
     if (isBorliVillageStop(pickup) && isCityStop(drop)) routeKey = ROUTES.BORLI_TO_DONGRI;
     else if (isDighiVillageStop(pickup) && isCityStop(drop)) routeKey = ROUTES.DIGHI_TO_DONGRI;
@@ -261,7 +269,6 @@ function calculateFare(bus, pickup, drop, dateStr) {
   let baseAmount = 0;
   if (routeKey) {
     try {
-      const finalName = String(bookingForm.name || "").trim();
       const mappedType = (() => {
         if (!bus?.busType) return BUS_TYPES.NON_AC;
         const s = String(bus.busType).trim().toLowerCase();
@@ -289,6 +296,20 @@ function calculateFare(bus, pickup, drop, dateStr) {
       baseAmount = 0;
     }
   }
+
+  // Debug: route detection state
+  try {
+    // eslint-disable-next-line no-console
+    console.debug("calculateFare detection", {
+      normalizedPickup: normalizeStopName(pickup),
+      normalizedDrop: normalizeStopName(drop),
+      isBorli: isBorliVillageStop(pickup),
+      isDighi: isDighiVillageStop(pickup),
+      isCity: isCityStop(drop),
+      routeKey,
+      baseAmount,
+    });
+  } catch (e) { }
 
   const rules = Array.isArray(bus.fareRulesRaw)
     ? bus.fareRulesRaw
@@ -1214,7 +1235,8 @@ export default function BookingPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to create booking");
 
-        created.push({ seat: seatNo });
+        // store created booking data so we can update UI immediately
+        created.push({ seat: seatNo, booking: data, fare: Number(finalFare) });
 
         // mark voucher consumed after the first successful booking that used it
         if (voucherToUse && !voucherConsumed && data && data.success) {
@@ -1269,6 +1291,50 @@ export default function BookingPage() {
       }
 
       showAppToast("success", "Offline booking created");
+
+      // Update local bookings state immediately so the UI shows the new bookings
+      try {
+        setBookings((prev) => {
+          const next = { ...(prev || {}) };
+          for (const c of created) {
+            const key = String(c.seat);
+            const server = c.booking || {};
+            next[key] = {
+              // prefer server-provided fields, but ensure essential display fields are present
+              ...(typeof server === 'object' ? server : {}),
+              name: String(finalName || server.name || bookingForm.name || "").trim(),
+              phone: String(bookingForm.phone || server.phone || "").trim(),
+              email: String(bookingForm.email || server.email || "").trim(),
+              pickup: String(bookingForm.pickup || (server && server.pickup) || "").trim(),
+              pickupTime: String(bookingForm.pickupTime || (server && server.pickupTime) || "").trim(),
+              drop: String(bookingForm.drop || (server && server.drop) || "").trim(),
+              dropTime: String(bookingForm.dropTime || (server && server.dropTime) || "").trim(),
+              fare: Number(c.fare || server.fare || 0),
+              payment: (server && server.payment) || "offline",
+              status: (server && server.status) || "booked",
+              ticket: (server && server.ticket) || null,
+            };
+          }
+          return next;
+        });
+
+        // bump booked count for this bus so overview updates instantly
+        try {
+          setBookedCounts((prev) => {
+            const map = { ...(prev || {}) };
+            const id = selectedBus?.busId;
+            if (!id) return map;
+            const cur = map[id] || { booked: 0, blocked: 0 };
+            map[id] = { ...cur, booked: Number(cur.booked || 0) + created.length };
+            return map;
+          });
+        } catch (e) {
+          // ignore
+        }
+      } catch (e) {
+        // ignore local update failures and fall back to full fetch
+      }
+
       await fetchBookings();
       resetBookingForm();
       try {
@@ -1894,11 +1960,13 @@ export default function BookingPage() {
     }
 
     .blocked-tag {
-      font-size: 16px;
-      border: 1px solid #ea580c;
+      font-size: 20px;
+      font-weight: 700;
       color: #ea580c;
-      padding: 0 3px;
-      border-radius: 6px;
+      background: transparent;
+      border: none;
+      padding: 0 6px;
+      border-radius: 0;
       line-height: 1;
       flex-shrink: 0;
     }
@@ -2061,12 +2129,12 @@ export default function BookingPage() {
 
       <div class="line-row">
         <span class="label">Pickup :</span>
-        <span class="value">${safeHtml(data.pickup || "")}</span>
+        <span class="value">${safeHtml(getStopDisplayFromObject(data.pickup) || data.pickup || "")}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(data.drop || "")}</span>
+        <span class="value">${safeHtml(getStopDisplayFromObject(data.drop) || data.drop || "")}</span>
       </div>
     </div>
   `;
@@ -2478,11 +2546,13 @@ export default function BookingPage() {
     }
 
     .blocked-tag {
-      font-size: 7px;
-      border: 1px solid #ea580c;
+      font-size: 18px;
+      font-weight: 700;
       color: #ea580c;
-      padding: 0 3px;
-      border-radius: 6px;
+      background: transparent;
+      border: none;
+      padding: 0 6px;
+      border-radius: 0;
       line-height: 1;
       flex-shrink: 0;
     }
@@ -2640,12 +2710,12 @@ export default function BookingPage() {
       <div class="line-row">
         <span class="label">Pickup</span>
         <span class="colon">:</span>
-        <span class="value">${safeHtml(data.pickup || "")}</span>
+        <span class="value">${safeHtml(getStopDisplayFromObject(data.pickup) || data.pickup || "")}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(data.drop || "")}</span>
+        <span class="value">${safeHtml(getStopDisplayFromObject(data.drop) || data.drop || "")}</span>
       </div>
     </div>
   `;
@@ -3070,11 +3140,13 @@ export default function BookingPage() {
     }
 
     .blocked-tag {
-      font-size: 7px;
-      border: 1px solid #ea580c;
+      font-size: 18px;
+      font-weight: 700;
       color: #ea580c;
-      padding: 0 2px;
-      border-radius: 6px;
+      background: transparent;
+      border: none;
+      padding: 0 6px;
+      border-radius: 0;
       line-height: 1;
       flex-shrink: 0;
     }
@@ -3255,12 +3327,12 @@ export default function BookingPage() {
 
       <div class="line-row">
         <span class="label">Pickup :</span>
-        <span class="value">${safeHtml(data.pickup || "")}</span>
+        <span class="value">${safeHtml(getStopDisplayFromObject(data.pickup) || data.pickup || "")}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(data.drop || "")}</span>
+        <span class="value">${safeHtml(getStopDisplayFromObject(data.drop) || data.drop || "")}</span>
       </div>
     </div>
   `;
@@ -3965,8 +4037,8 @@ export default function BookingPage() {
                           >
                             <option value="">Select pickup</option>
                             {pickupOptions.map((stop, i) => (
-                              <option key={i} value={stop}>
-                                {stop}
+                              <option key={i} value={normalizeStopName(stop)}>
+                                {getStopDisplayName(stop)}
                               </option>
                             ))}
                           </select>
@@ -4004,11 +4076,16 @@ export default function BookingPage() {
                           >
                             <option value="">Select drop</option>
                             {dropOptions.map((stop, i) => {
-                              const fare = calculateFare(selectedBus, bookingForm.pickup, stop, date);
+                              const fare = calculateFare(
+                                selectedBus,
+                                normalizeStopName(bookingForm.pickup),
+                                normalizeStopName(stop),
+                                date
+                              );
 
                               return (
-                                <option key={i} value={stop}>
-                                  {fare !== null ? `${stop} — ₹${fare}` : `${stop} — Fare N/A`}
+                                <option key={i} value={normalizeStopName(stop)}>
+                                  {fare !== null ? `${getStopDisplayName(stop)} — ₹${fare}` : `${getStopDisplayName(stop)} — Fare N/A`}
                                 </option>
                               );
                             })}
@@ -4127,9 +4204,9 @@ export default function BookingPage() {
 
                             <button
                               onClick={handleOfflineBooking}
-                              className="rounded-xl border px-4 py-2 text-sm"
+                              className="rounded-xl border px-4 py-2 text-white bg-[#f97316]"
                             >
-                              Offline Booking (Cash)
+                              Offline Booking
                             </button>
                           </>
                         )}
