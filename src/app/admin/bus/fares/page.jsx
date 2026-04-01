@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { showAppToast } from "@/lib/client/toast";
 import {
     BUS_TYPES,
@@ -667,6 +668,22 @@ export default function AdminFareViewPage() {
         }
     }
 
+    const { subscribeRefresh, triggerRefresh } = useAutoRefresh();
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            // refresh buses and keep current selection
+            refreshBuses(selectedBus?.busId);
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh]);
+
     async function handleDeleteRule(idx) {
         if (!selectedBus) {
             return showAppToast("error", "No bus selected");
@@ -901,8 +918,8 @@ export default function AdminFareViewPage() {
                                                 type="button"
                                                 onClick={() => setDateMode("single")}
                                                 className={`h-11 rounded-2xl border px-2 text-xs font-semibold transition sm:h-12 sm:text-sm ${dateMode === "single"
-                                                        ? "border-orange-300 bg-orange-50 text-orange-700"
-                                                        : "border-slate-200 bg-white text-slate-600"
+                                                    ? "border-orange-300 bg-orange-50 text-orange-700"
+                                                    : "border-slate-200 bg-white text-slate-600"
                                                     }`}
                                             >
                                                 Single Date
@@ -912,8 +929,8 @@ export default function AdminFareViewPage() {
                                                 type="button"
                                                 onClick={() => setDateMode("range")}
                                                 className={`h-11 rounded-2xl border px-2 text-xs font-semibold transition sm:h-12 sm:text-sm ${dateMode === "range"
-                                                        ? "border-orange-300 bg-orange-50 text-orange-700"
-                                                        : "border-slate-200 bg-white text-slate-600"
+                                                    ? "border-orange-300 bg-orange-50 text-orange-700"
+                                                    : "border-slate-200 bg-white text-slate-600"
                                                     }`}
                                             >
                                                 Date Range

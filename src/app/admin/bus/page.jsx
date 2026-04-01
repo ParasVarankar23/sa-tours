@@ -1,6 +1,7 @@
 "use client";
 
 import SeatLayout from "@/components/SeatLayout";
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { showAppToast } from "@/lib/client/toast";
 import { BUS_TYPES, getFare, isBorliVillageStop, isCityStop, isDighiVillageStop, normalizeStopName, ROUTES } from "@/lib/fare";
 import {
@@ -51,6 +52,8 @@ export default function AdminBusPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [seatFilter, setSeatFilter] = useState("All");
     const [currentPage, setCurrentPage] = useState(1);
+
+    const { subscribeRefresh, triggerRefresh } = useAutoRefresh();
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -242,6 +245,19 @@ export default function AdminBusPage() {
     useEffect(() => {
         fetchBuses();
     }, []);
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            fetchBuses();
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh, fetchBuses]);
 
     const filteredBuses = useMemo(() => {
         const term = searchTerm.toLowerCase().trim();

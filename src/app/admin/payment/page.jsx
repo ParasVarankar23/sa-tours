@@ -1,5 +1,5 @@
 "use client";
-
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import {
   Calendar,
   CheckCircle2,
@@ -26,6 +26,7 @@ export default function AdminPaymentPage() {
   const [sortOrder, setSortOrder] = useState("desc"); // 'desc' = newest first
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 10;
+  const { subscribeRefresh, triggerRefresh } = useAutoRefresh();
 
   const getTimestamp = (p) => {
     const d = p?.createdAt || p?.verifiedAt || (p?.details && p.details.created_at ? new Date(p.details.created_at * 1000).toISOString() : null) || null;
@@ -63,6 +64,19 @@ export default function AdminPaymentPage() {
   useEffect(() => {
     fetchPayments();
   }, []);
+
+  useEffect(() => {
+    if (typeof subscribeRefresh !== "function") return;
+    const unsub = subscribeRefresh(() => {
+      fetchPayments();
+    });
+
+    return () => {
+      try {
+        if (typeof unsub === "function") unsub();
+      } catch (e) { }
+    };
+  }, [subscribeRefresh, fetchPayments]);
 
   const getAmount = (p) => {
     const base = p?.details?.amount ? p.details.amount / 100 : p?.amount ? Number(p.amount) : 0;

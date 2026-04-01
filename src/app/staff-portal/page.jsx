@@ -1,8 +1,26 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 export default function StaffPortalIndex() {
+    const [refreshCount, setRefreshCount] = useState(0);
+    const { subscribeRefresh } = useAutoRefresh();
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            setRefreshCount((c) => c + 1);
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh]);
+
     return (
         <div className="p-6">
             <h1 className="mb-4 text-2xl font-bold">Staff Portal (View Only)</h1>

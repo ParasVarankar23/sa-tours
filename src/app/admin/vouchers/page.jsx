@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { showAppToast } from "@/lib/client/toast";
 import {
     CheckCircle2,
@@ -18,6 +19,8 @@ export default function AdminVouchersPage() {
     const [viewVoucher, setViewVoucher] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterStatus, setFilterStatus] = useState("all");
+
+    const { subscribeRefresh, triggerRefresh } = useAutoRefresh();
 
     const fetchVouchers = async () => {
         try {
@@ -42,6 +45,19 @@ export default function AdminVouchersPage() {
     useEffect(() => {
         fetchVouchers();
     }, []);
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            fetchVouchers();
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh, fetchVouchers]);
 
     const redeemVoucher = async (code) => {
         try {

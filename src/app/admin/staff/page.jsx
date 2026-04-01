@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import {
     BriefcaseBusiness,
     Building2,
@@ -76,6 +77,8 @@ export default function AdminStaffPage() {
         position: "Driver",
     });
 
+    const { subscribeRefresh, triggerRefresh } = useAutoRefresh();
+
     const fetchStaff = async () => {
         try {
             setLoading(true);
@@ -98,6 +101,19 @@ export default function AdminStaffPage() {
     useEffect(() => {
         fetchStaff();
     }, []);
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            fetchStaff();
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh, fetchStaff]);
 
     const positionCounts = useMemo(() => {
         return {

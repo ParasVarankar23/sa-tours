@@ -1,23 +1,56 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import {
-    X,
-    Search,
-    Eye,
     Bus,
     CalendarDays,
+    CheckCircle2,
+    Eye,
+    Filter,
     MapPin,
     Route,
-    CheckCircle2,
-    Filter,
-    Clock3,
+    Search,
+    X
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export default function StaffSchedulePage() {
     const [buses, setBuses] = useState([]);
     const [schedules, setSchedules] = useState({});
     const [loading, setLoading] = useState(true);
+    const isMountedRef = useRef(false);
+
+    const { subscribeRefresh } = useAutoRefresh();
+
+    const fetchAllData = async () => {
+        try {
+            if (isMountedRef.current) setLoading(true);
+
+            const [bRes, sRes] = await Promise.all([
+                fetch("/api/bus"),
+                fetch("/api/schedule"),
+            ]);
+
+            const bData = await bRes.json();
+            const sData = await sRes.json();
+
+            if (!bRes.ok) throw new Error(bData.error || "Failed to load buses");
+            if (!sRes.ok) throw new Error(sData.error || "Failed to load schedules");
+
+            if (isMountedRef.current) {
+                setBuses(Array.isArray(bData.buses) ? bData.buses : []);
+                setSchedules(
+                    sData && typeof sData.schedules === "object" && sData.schedules
+                        ? sData.schedules
+                        : {}
+                );
+            }
+        } catch (error) {
+            console.error("Schedule fetch error:", error);
+        } finally {
+            if (isMountedRef.current) setLoading(false);
+        }
+    };
 
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState(null);
@@ -30,42 +63,26 @@ export default function StaffSchedulePage() {
     const [endDate, setEndDate] = useState("");
 
     useEffect(() => {
-        let mounted = true;
-
-        const fetchAll = async () => {
-            try {
-                const [bRes, sRes] = await Promise.all([
-                    fetch("/api/bus"),
-                    fetch("/api/schedule"),
-                ]);
-
-                const bData = await bRes.json();
-                const sData = await sRes.json();
-
-                if (!bRes.ok) throw new Error(bData.error || "Failed to load buses");
-                if (!sRes.ok) throw new Error(sData.error || "Failed to load schedules");
-
-                if (mounted) {
-                    setBuses(Array.isArray(bData.buses) ? bData.buses : []);
-                    setSchedules(
-                        sData && typeof sData.schedules === "object" && sData.schedules
-                            ? sData.schedules
-                            : {}
-                    );
-                }
-            } catch (error) {
-                console.error("Schedule fetch error:", error);
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        };
-
-        fetchAll();
+        isMountedRef.current = true;
+        fetchAllData();
 
         return () => {
-            mounted = false;
+            isMountedRef.current = false;
         };
     }, []);
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            fetchAllData();
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh]);
 
     // =========================
     // SAFE HELPERS

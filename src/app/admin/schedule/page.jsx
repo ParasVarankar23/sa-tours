@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { useAuth } from "@/hooks/useAuth";
 import { showAppToast } from "@/lib/client/toast";
 import {
@@ -34,6 +35,8 @@ export default function SchedulePage() {
     const today = new Date();
     const router = useRouter();
     const { user } = useAuth();
+
+    const { subscribeRefresh, triggerRefresh } = useAutoRefresh();
 
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmMessage, setConfirmMessage] = useState("");
@@ -100,69 +103,83 @@ export default function SchedulePage() {
         return String(point);
     }
 
-    useEffect(() => {
-        const fetchBuses = async () => {
-            try {
-                setLoading(true);
-                const res = await fetch("/api/bus");
-                const data = await res.json();
+    const fetchBuses = async () => {
+        try {
+            setLoading(true);
+            const res = await fetch("/api/bus");
+            const data = await res.json();
 
-                if (!res.ok) {
-                    throw new Error(data.error || "Failed to load buses");
-                }
-
-                const normalized = (data.buses || []).map((b) => {
-                    const stops = Array.isArray(b.stops) ? b.stops : [];
-                    const firstStopName = stops.length
-                        ? stops[0].stopName || stops[0].label || ""
-                        : "";
-                    const lastStopName = stops.length
-                        ? stops[stops.length - 1].stopName || stops[stops.length - 1].label || ""
-                        : "";
-
-                    const resolvePoint = (val, fallback) => {
-                        if (!val && !fallback) return "";
-                        if (val && typeof val === "object") return String(val.name || "");
-                        if (val) return String(val);
-                        return String(fallback || "");
-                    };
-
-                    return {
-                        ...b,
-                        busId: b.busId || b.id || "",
-                        busNumber: b.busNumber || b.busNo || "--",
-                        routeName: b.routeName || "--",
-                        busName: b.busName || "--",
-                        busType: b.busType || "--",
-                        seatLayout: b.seatLayout || "--",
-                        startTime: b.startTime || b.start_time || b.start || "",
-                        endTime: b.endTime || b.end_time || b.end || "",
-                        startPoint: resolvePoint(
-                            b.startPoint || b.start_point || b.start,
-                            firstStopName
-                        ),
-                        endPoint: resolvePoint(
-                            b.endPoint || b.end_point || b.end,
-                            lastStopName
-                        ),
-                        pickupPoints: Array.isArray(b.pickupPoints) ? b.pickupPoints : [],
-                        dropPoints: Array.isArray(b.dropPoints) ? b.dropPoints : [],
-                    };
-                });
-
-                console.debug("[schedule] loaded buses:", normalized);
-
-                setBuses(normalized);
-            } catch (err) {
-                console.error(err);
-                showAppToast("error", err.message || "Failed to load buses");
-            } finally {
-                setLoading(false);
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to load buses");
             }
-        };
 
+            const normalized = (data.buses || []).map((b) => {
+                const stops = Array.isArray(b.stops) ? b.stops : [];
+                const firstStopName = stops.length
+                    ? stops[0].stopName || stops[0].label || ""
+                    : "";
+                const lastStopName = stops.length
+                    ? stops[stops.length - 1].stopName || stops[stops.length - 1].label || ""
+                    : "";
+
+                const resolvePoint = (val, fallback) => {
+                    if (!val && !fallback) return "";
+                    if (val && typeof val === "object") return String(val.name || "");
+                    if (val) return String(val);
+                    return String(fallback || "");
+                };
+
+                return {
+                    ...b,
+                    busId: b.busId || b.id || "",
+                    busNumber: b.busNumber || b.busNo || "--",
+                    routeName: b.routeName || "--",
+                    busName: b.busName || "--",
+                    busType: b.busType || "--",
+                    seatLayout: b.seatLayout || "--",
+                    startTime: b.startTime || b.start_time || b.start || "",
+                    endTime: b.endTime || b.end_time || b.end || "",
+                    startPoint: resolvePoint(
+                        b.startPoint || b.start_point || b.start,
+                        firstStopName
+                    ),
+                    endPoint: resolvePoint(
+                        b.endPoint || b.end_point || b.end,
+                        lastStopName
+                    ),
+                    pickupPoints: Array.isArray(b.pickupPoints) ? b.pickupPoints : [],
+                    dropPoints: Array.isArray(b.dropPoints) ? b.dropPoints : [],
+                };
+            });
+
+            console.debug("[schedule] loaded buses:", normalized);
+
+            setBuses(normalized);
+        } catch (err) {
+            console.error(err);
+            showAppToast("error", err.message || "Failed to load buses");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchBuses();
     }, []);
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            fetchSchedules();
+            fetchBuses();
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh]);
 
     useEffect(() => {
         fetchSchedules();
@@ -749,8 +766,8 @@ export default function SchedulePage() {
 
                                 <div
                                     className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${singleDateDisabled
-                                            ? "border-slate-100 bg-slate-100"
-                                            : "border-slate-200 bg-white"
+                                        ? "border-slate-100 bg-slate-100"
+                                        : "border-slate-200 bg-white"
                                         }`}
                                 >
                                     <CalendarDays className="h-5 w-5 text-[#f97316]" />
@@ -810,8 +827,8 @@ export default function SchedulePage() {
 
                                     <div
                                         className={`flex h-14 w-full items-center gap-3 rounded-2xl border px-4 transition-all duration-200 ${rangeDisabled
-                                                ? "border-slate-100 bg-slate-100"
-                                                : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
+                                            ? "border-slate-100 bg-slate-100"
+                                            : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
                                             }`}
                                     >
                                         <CalendarDays className="h-5 w-5 shrink-0 text-[#f97316]" />
@@ -836,8 +853,8 @@ export default function SchedulePage() {
 
                                     <div
                                         className={`flex h-14 w-full items-center gap-3 rounded-2xl border px-4 transition-all duration-200 ${rangeDisabled
-                                                ? "border-slate-100 bg-slate-100"
-                                                : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
+                                            ? "border-slate-100 bg-slate-100"
+                                            : "border-slate-200 bg-white focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100"
                                             }`}
                                     >
                                         <CalendarDays className="h-5 w-5 shrink-0 text-[#f97316]" />

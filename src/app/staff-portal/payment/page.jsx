@@ -1,5 +1,6 @@
 "use client";
 
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import {
     Calendar,
     CheckCircle2,
@@ -27,6 +28,8 @@ export default function StaffPaymentPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const PAGE_SIZE = 10;
 
+    const { subscribeRefresh, triggerRefresh } = useAutoRefresh();
+
     const fetchPayments = async () => {
         setLoading(true);
         try {
@@ -49,6 +52,19 @@ export default function StaffPaymentPage() {
     useEffect(() => {
         fetchPayments();
     }, []);
+
+    useEffect(() => {
+        if (typeof subscribeRefresh !== "function") return;
+        const unsub = subscribeRefresh(() => {
+            fetchPayments();
+        });
+
+        return () => {
+            try {
+                if (typeof unsub === "function") unsub();
+            } catch (e) { }
+        };
+    }, [subscribeRefresh]);
 
     const getAmount = (p) => {
         if (p?.details?.amount) return p.details.amount / 100;

@@ -1,6 +1,7 @@
 "use client";
 
 import SeatLayout from "@/components/SeatLayout";
+import { useAutoRefresh } from "@/context/AutoRefreshContext";
 import { showAppToast } from "@/lib/client/toast";
 import {
   BUS_TYPES,
@@ -414,6 +415,7 @@ export default function StaffBookingPage() {
 
   const { user } = useAuth();
   const router = useRouter();
+  const { subscribeRefresh, triggerRefresh } = useAutoRefresh();
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -485,6 +487,19 @@ export default function StaffBookingPage() {
     fetchBookings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBus, date]);
+
+  useEffect(() => {
+    if (typeof subscribeRefresh !== "function") return;
+    const unsub = subscribeRefresh(() => {
+      fetchBookings();
+    });
+
+    return () => {
+      try {
+        if (typeof unsub === "function") unsub();
+      } catch (e) { }
+    };
+  }, [subscribeRefresh]);
 
   useEffect(() => {
     if (!selectedBus || !bookingForm.pickup || !bookingForm.drop) {
