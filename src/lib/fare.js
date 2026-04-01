@@ -13,13 +13,15 @@ export const BUS_TYPES = {
 export const AC_SURCHARGE = 0;
 
 /* -------------------------------------------------------
-   CITY SIDE STOPS (FORWARD ORDER: PANVEL -> DONGRI)
+   CITY SIDE STOPS (FORWARD ORDER: VILLAGE -> DONGRI)
 ------------------------------------------------------- */
 export const CITY_STOPS = [
     "Panvel",
+    "Kalamboli",
+    "Khanda Colony",
     "Kamothe",
     "Kharghar",
-    "Belapur",
+    "CBD Belapur",
     "Seawoods",
     "Nerul",
     "Juinagar",
@@ -27,8 +29,9 @@ export const CITY_STOPS = [
     "Mankhurd",
     "Govandi",
     "Chembur",
+    "Sion",
     "Kurla",
-    "Wadala",
+    "Dadar",
     "Byculla",
     "Masjid Bandar",
     "Dongri",
@@ -40,80 +43,144 @@ export const CITY_STOPS = [
 export const COMMON_VILLAGE_STOPS = [
     "Gondghar",
     "Mendadi",
-    "Kharasai",
+    "Mendadi Grampanchayat",
+    "Kharsai Dam",
+    "Kharsai School",
     "Varvatna",
     "Banoti",
+    "Tondsure",
+    "Saklap",
     "Mhasla",
+    "Mhasla Stand",
+    "Pabra Fata",
+    "Dorje",
+    "Chandore",
     "Sai",
     "Morba",
+    "Surle",
     "Mangaon",
     "Indapur",
     "Kolad",
 ];
 
 /* -------------------------------------------------------
-   BORLI UNIQUE + CONNECTOR + DIGHI UNIQUE + COMMON
+   BORLI SIDE VILLAGE STOPS
 ------------------------------------------------------- */
 export const BORLI_VILLAGE_STOPS = [
     "Shekhadi",
+    "Valvati",
+    "Bharadkhol",
+    "Aravi",
+    "Kondvili",
+    "Dighi",
+    "Kudgaon",
+    "Adgaon",
+    "Velas",
+    "Vadavli",
+    "Vadavli Fata",
     "Borli",
+    "Pohamil",
+    "ST Stand",
+    "Ganesh Chowk",
+    "Shivaji Chowk",
+    "Samtanagar",
+    "Bhava Fata",
     "Kapoli",
     "Shiste",
-    "Vadvali Phata",
-    "Vadvali",
-    "Velas",
-    "Adgaon",
-    "Kudgaon",
-    "Dighi",
     ...COMMON_VILLAGE_STOPS,
 ];
 
 /* -------------------------------------------------------
-   DIGHI UNIQUE + CONNECTOR + BORLI SIDE + COMMON
+   DIGHI SIDE VILLAGE STOPS
 ------------------------------------------------------- */
 export const DIGHI_VILLAGE_STOPS = [
     "Dighi",
     "Kudgaon",
     "Adgaon",
     "Velas",
-    "Vadvali",
-    "Vadvali Phata",
-    "Shiste",
-    "Kapoli",
+    "Vadavli",
+    "Vadavli Fata",
     "Borli",
+    "Pohamil",
+    "ST Stand",
+    "Ganesh Chowk",
+    "Shivaji Chowk",
+    "Samtanagar",
+    "Bhava Fata",
+    "Kapoli",
+    "Shiste",
     ...COMMON_VILLAGE_STOPS,
 ];
 
 /* -------------------------------------------------------
    FARE GROUPS (NON-AC BASE FARE)
+   CUSTOM PRICING AS PER YOUR REQUIREMENT
 ------------------------------------------------------- */
 export const BORLI_FARE_GROUPS = [
     {
         zone: "BORLI_GROUP_1",
         fare: 550,
-        stops: ["Shekhadi"],
+        stops: [
+            "Shekhadi",
+            "Valvati",
+            "Bharadkhol",
+            "Aravi",
+            "Kondvili",
+        ],
+    },
+    {
+        zone: "BORLI_GROUP_1A",
+        fare: 500,
+        stops: ["Dighi"],
+    },
+    {
+        zone: "BORLI_GROUP_1B",
+        fare: 550,
+        stops: [
+            "Adgaon",
+            "Kudgaon",
+        ],
     },
     {
         zone: "BORLI_GROUP_2",
         fare: 450,
         stops: [
+            "Velas",
+            "Vadavli",
+            "Vadavli Fata",
             "Borli",
+            "Pohamil",
+            "ST Stand",
+            "Ganesh Chowk",
+            "Shivaji Chowk",
+            "Samtanagar",
+            "Bhava Fata",
             "Kapoli",
             "Shiste",
-            "Vadvali Phata",
-            "Vadvali",
-            "Velas",
-            "Adgaon",
-            "Kudgaon",
-            "Dighi",
             "Gondghar",
             "Mendadi",
+            "Mendadi Grampanchayat",
         ],
     },
     {
         zone: "BORLI_GROUP_3",
         fare: 400,
-        stops: ["Kharasai", "Varvatna", "Banoti", "Mhasla", "Sai", "Morba"],
+        stops: [
+            "Kharsai Dam",
+            "Kharsai School",
+            "Varvatna",
+            "Banoti",
+            "Tondsure",
+            "Saklap",
+            "Mhasla",
+            "Mhasla Stand",
+            "Pabra Fata",
+            "Dorje",
+            "Chandore",
+            "Sai",
+            "Morba",
+            "Surle",
+        ],
     },
     {
         zone: "BORLI_GROUP_4",
@@ -126,7 +193,10 @@ export const DIGHI_FARE_GROUPS = [
     {
         zone: "DIGHI_GROUP_1",
         fare: 500,
-        stops: ["Dighi"],
+        stops: [
+            "Dighi",
+            "Kudgaon",
+        ],
     },
     {
         zone: "DIGHI_GROUP_2",
@@ -137,26 +207,58 @@ export const DIGHI_FARE_GROUPS = [
         zone: "DIGHI_GROUP_3",
         fare: 450,
         stops: [
-            "Kudgaon",
             "Velas",
-            "Vadvali",
-            "Vadvali Phata",
+            "Vadavli",
+            "Vadavli Fata",
             "Shiste",
             "Kapoli",
             "Borli",
+            "Ganesh Chowk",
+            "Shivaji Chowk",
+            "Samtanagar",
+            "Bhava Fata",
+            "Pohamil",
+            "ST Stand",
             "Gondghar",
             "Mendadi",
+            "Mendadi Grampanchayat",
         ],
     },
     {
         zone: "DIGHI_GROUP_4",
         fare: 400,
-        stops: ["Kharasai", "Varvatna", "Banoti", "Mhasla", "Sai", "Morba"],
+        stops: [
+            "Kharsai Dam",
+            "Kharsai School",
+            "Varvatna",
+            "Banoti",
+            "Tondsure",
+            "Saklap",
+            "Mhasla",
+            "Mhasla Stand",
+            "Pabra Fata",
+            "Dorje",
+            "Chandore",
+            "Sai",
+            "Morba",
+            "Surle",
+        ],
     },
     {
         zone: "DIGHI_GROUP_5",
         fare: 350,
         stops: ["Mangaon", "Indapur", "Kolad"],
+    },
+    {
+        zone: "DIGHI_GROUP_6",
+        fare: 550,
+        stops: [
+            "Shekhadi",
+            "Valvati",
+            "Bharadkhol",
+            "Aravi",
+            "Kondvili",
+        ],
     },
 ];
 
@@ -166,57 +268,113 @@ export const DIGHI_FARE_GROUPS = [
 const STOP_ALIASES = {
     // City side
     panvel: "Panvel",
+    kalamboli: "Kalamboli",
+    "khanda colony": "Khanda Colony",
+    khandacolony: "Khanda Colony",
     kamothe: "Kamothe",
     kharghar: "Kharghar",
-    belapur: "Belapur",
-    cbdbelapur: "Belapur",
-    "cbd belapur": "Belapur",
+    belapur: "CBD Belapur",
+    cbdbelapur: "CBD Belapur",
+    "cbd belapur": "CBD Belapur",
     seawoods: "Seawoods",
     seawood: "Seawoods",
     nerul: "Nerul",
     juinagar: "Juinagar",
     vashi: "Vashi",
     mankhurd: "Mankhurd",
-    mankhur: "Mankhurd",
     govandi: "Govandi",
     chembur: "Chembur",
+    sion: "Sion",
     kurla: "Kurla",
-    wadala: "Wadala",
+    dadar: "Dadar",
     byculla: "Byculla",
     masjidbandar: "Masjid Bandar",
     "masjid bandar": "Masjid Bandar",
-    majizdbandar: "Masjid Bandar",
-    "majizd bandar": "Masjid Bandar",
     dongri: "Dongri",
 
-    // Borli side
+    // Village side
     shekhadi: "Shekhadi",
+    valvati: "Valvati",
+    bharadkhol: "Bharadkhol",
+    aravi: "Aravi",
+    kondvili: "Kondvili",
+
+    dighi: "Dighi",
+    kudgaon: "Kudgaon",
+    adgaon: "Adgaon",
+    velas: "Velas",
+
+    vadavli: "Vadavli",
+    vadvali: "Vadavli",
+    "vadavli fata": "Vadavli Fata",
+    vadavlifata: "Vadavli Fata",
+    "vadvali fata": "Vadavli Fata",
+    "vadvali phata": "Vadavli Fata",
+    vadvaliphata: "Vadavli Fata",
+
     borli: "Borli",
     kapoli: "Kapoli",
     shiste: "Shiste",
     shishti: "Shiste",
-    vadvaliphata: "Vadvali Phata",
-    "vadvali phata": "Vadvali Phata",
 
-    // Dighi side
-    dighi: "Dighi",
-    kudgaon: "Kudgaon",
-    adgaon: "Adgaon",
+    pohamil: "Pohamil",
+    "st stand": "ST Stand",
+    ststand: "ST Stand",
 
-    // Connector + common
-    velas: "Velas",
-    vadvali: "Vadvali",
+    "ganesh chowk": "Ganesh Chowk",
+    ganeshchowk: "Ganesh Chowk",
+
+    "shivaji chowk": "Shivaji Chowk",
+    shivajichowk: "Shivaji Chowk",
+
+    samtanagar: "Samtanagar",
+
+    "bhava fata": "Bhava Fata",
+    bhavafata: "Bhava Fata",
+
     gondghar: "Gondghar",
+
     mendadi: "Mendadi",
-    kharasai: "Kharasai",
+    "mendadi grampanchayat": "Mendadi Grampanchayat",
+    mendadigrampanchayat: "Mendadi Grampanchayat",
+    "mendadi gram panchayat": "Mendadi Grampanchayat",
+    mendadigrampanchyat: "Mendadi Grampanchayat",
+    "mendadi grampanchyat": "Mendadi Grampanchayat",
+
+    "kharsai dam": "Kharsai Dam",
+    kharsaidam: "Kharsai Dam",
+
+    "kharsai school": "Kharsai School",
+    kharsaischool: "Kharsai School",
+
+    // old typo compatibility
+    kharasai: "Kharsai Dam",
+
     varvatna: "Varvatna",
     varvatane: "Varvatna",
+
     banoti: "Banoti",
+    tondsure: "Tondsure",
+    saklap: "Saklap",
+
     mhasla: "Mhasla",
+    "mhasla stand": "Mhasla Stand",
+    mhaslastand: "Mhasla Stand",
+
+    "pabra fata": "Pabra Fata",
+    pabrafata: "Pabra Fata",
+
+    dorje: "Dorje",
+    chandore: "Chandore",
+
     sai: "Sai",
     morba: "Morba",
+    surle: "Surle",
+    surl: "Surle",
+
     mangaon: "Mangaon",
     mangoan: "Mangaon",
+
     indapur: "Indapur",
     kolad: "Kolad",
 };
@@ -469,7 +627,7 @@ export function getFare({
         };
     }
 
-    // FORWARD ROUTE
+    // FORWARD ROUTE (Village -> City)
     if (isForwardRoute(route)) {
         const validVillageStops = getVillageStopsByRoute(route);
 
@@ -512,7 +670,7 @@ export function getFare({
         };
     }
 
-    // RETURN ROUTE
+    // RETURN ROUTE (City -> Village)
     if (isReturnRoute(route)) {
         const validVillageStops = getVillageStopsByRoute(route);
 

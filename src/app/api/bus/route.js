@@ -50,7 +50,7 @@ function sanitizeSinglePoint(point) {
     };
 }
 
-function sanitizePoints(points, max = 20) {
+function sanitizePoints(points, max = 50) {
     if (!Array.isArray(points)) return [];
 
     return points
@@ -456,8 +456,8 @@ function getSanitizedBusData(body) {
     const startPoint = sanitizeSinglePoint(body.startPoint);
     const endPoint = sanitizeSinglePoint(body.endPoint);
 
-    let pickupPoints = sanitizePoints(body.pickupPoints, 20);
-    let dropPoints = sanitizePoints(body.dropPoints, 20);
+    let pickupPoints = sanitizePoints(body.pickupPoints, 50);
+    let dropPoints = sanitizePoints(body.dropPoints, 50);
 
     // IMPORTANT:
     // Remove start point if frontend sends it inside pickupPoints

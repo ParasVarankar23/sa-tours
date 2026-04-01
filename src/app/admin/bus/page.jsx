@@ -588,7 +588,7 @@ export default function AdminBusPage() {
         if (isEdit) {
             setEditData((prev) => {
                 const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
-                if (updated.length < 20) {
+                if (updated.length < 50) {
                     updated.push({ name: "", time: "" });
                 }
                 return { ...prev, [section]: updated };
@@ -596,7 +596,7 @@ export default function AdminBusPage() {
         } else {
             setFormData((prev) => {
                 const updated = Array.isArray(prev[section]) ? [...prev[section]] : [];
-                if (updated.length < 20) {
+                if (updated.length < 50) {
                     updated.push({ name: "", time: "" });
                 }
                 return { ...prev, [section]: updated };
@@ -869,10 +869,10 @@ export default function AdminBusPage() {
             const dedupedDrops = dedupeByName(cleanedDrops);
             const finalPickups = [];
             if (synthesizedStart.name) finalPickups.push(synthesizedStart);
-            finalPickups.push(...dedupedPickups.slice(0, 20 - (finalPickups.length)));
+            finalPickups.push(...dedupedPickups.slice(0, 50 - (finalPickups.length)));
             const finalDrops = [];
-            finalDrops.push(...dedupedDrops.slice(0, 20));
-            if (synthesizedEnd.name && finalDrops.length < 20) finalDrops.push(synthesizedEnd);
+            finalDrops.push(...dedupedDrops.slice(0, 50));
+            if (synthesizedEnd.name && finalDrops.length < 50) finalDrops.push(synthesizedEnd);
             payload.pickupPoints = finalPickups;
             payload.dropPoints = finalDrops;
 
@@ -1013,10 +1013,10 @@ export default function AdminBusPage() {
             const dedupedDropsE = dedupeByNameE(cleanedDropsE);
             const finalPickupsE = [];
             if (synthesizedStartE.name) finalPickupsE.push(synthesizedStartE);
-            finalPickupsE.push(...dedupedPickupsE.slice(0, 20 - (finalPickupsE.length)));
+            finalPickupsE.push(...dedupedPickupsE.slice(0, 50 - (finalPickupsE.length)));
             const finalDropsE = [];
-            finalDropsE.push(...dedupedDropsE.slice(0, 20));
-            if (synthesizedEndE.name && finalDropsE.length < 20) finalDropsE.push(synthesizedEndE);
+            finalDropsE.push(...dedupedDropsE.slice(0, 50));
+            if (synthesizedEndE.name && finalDropsE.length < 50) finalDropsE.push(synthesizedEndE);
             payload.pickupPoints = finalPickupsE;
             payload.dropPoints = finalDropsE;
 
