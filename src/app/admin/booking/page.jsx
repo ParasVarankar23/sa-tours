@@ -4428,9 +4428,10 @@ export default function BookingPage() {
                 <div className="flex flex-col items-end gap-3">
                   <button
                     onClick={() => setViewBooking(null)}
-                    className="rounded-full border border-slate-200 px-4 py-2 text-sm"
+                    className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-100"
+                    aria-label="Close"
                   >
-                    Close
+                    <X className="h-5 w-5" />
                   </button>
 
                   {viewBooking.booking?.status === "blocked" &&
@@ -4600,11 +4601,26 @@ function ConfirmModal({ message, onCancel, onConfirm, loading }) {
   );
 }
 
+
 function CancelChoicesModal({ seat, onClose, onAction, processing, voucherCode }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-        <h3 className="text-lg font-bold text-slate-900">Cancel booking — Seat {seat}</h3>
+      <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+
+        {/* Top Right Close Icon */}
+        <button
+          onClick={onClose}
+          disabled={processing}
+          className="absolute right-4 top-4 rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+          aria-label="Close modal"
+        >
+          <X size={20} />
+        </button>
+
+        <h3 className="text-lg font-bold text-slate-900 pr-10">
+          Cancel booking — Seat {seat}
+        </h3>
+
         {!voucherCode ? (
           <>
             <p className="mt-3 text-sm text-slate-600">
@@ -4616,7 +4632,7 @@ function CancelChoicesModal({ seat, onClose, onAction, processing, voucherCode }
               <button
                 onClick={() => onAction("refund")}
                 disabled={processing}
-                className="w-full rounded-xl border px-4 py-2 text-sm"
+                className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Refund to original method
               </button>
@@ -4624,7 +4640,7 @@ function CancelChoicesModal({ seat, onClose, onAction, processing, voucherCode }
               <button
                 onClick={() => onAction("voucher")}
                 disabled={processing}
-                className="w-full rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white"
+                className="w-full rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Issue voucher (valid 1 year)
               </button>
@@ -4632,7 +4648,7 @@ function CancelChoicesModal({ seat, onClose, onAction, processing, voucherCode }
               <button
                 onClick={() => onAction("void")}
                 disabled={processing}
-                className="w-full rounded-xl border border-red-200 px-4 py-2 text-sm text-red-600"
+                className="w-full rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Mark cancelled (no refund)
               </button>
@@ -4641,8 +4657,9 @@ function CancelChoicesModal({ seat, onClose, onAction, processing, voucherCode }
         ) : (
           <>
             <p className="mt-3 text-sm text-slate-600">Voucher issued successfully:</p>
-            <div className="mt-4 flex items-center justify-between rounded-lg border px-3 py-2">
-              <div className="truncate font-mono text-sm">{voucherCode}</div>
+
+            <div className="mt-4 flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
+              <div className="truncate font-mono text-sm text-slate-800">{voucherCode}</div>
               <button
                 onClick={() => {
                   try {
@@ -4652,7 +4669,7 @@ function CancelChoicesModal({ seat, onClose, onAction, processing, voucherCode }
                     // ignore
                   }
                 }}
-                className="ml-3 rounded-md bg-slate-100 px-3 py-1 text-sm"
+                className="ml-3 rounded-md bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
               >
                 Copy
               </button>
@@ -4661,9 +4678,10 @@ function CancelChoicesModal({ seat, onClose, onAction, processing, voucherCode }
             <div className="mt-6 flex justify-end">
               <button
                 onClick={onClose}
-                className="rounded-xl border px-4 py-2 text-sm"
+                className="rounded-full border border-slate-300 p-2 text-slate-500 transition hover:bg-slate-50"
+                aria-label="Close"
               >
-                Close
+                <X className="h-5 w-5" />
               </button>
             </div>
           </>
@@ -4672,6 +4690,7 @@ function CancelChoicesModal({ seat, onClose, onAction, processing, voucherCode }
     </div>
   );
 }
+
 
 function MiniStat({ label, value, bg, text }) {
   return (
