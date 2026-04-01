@@ -469,6 +469,85 @@ async function createUserNotification(db, uid, { title, message, data }) {
 export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
+        const ticketQ = searchParams.get("ticket") || searchParams.get("ticketNo") || searchParams.get("ticketNumber");
+        if (ticketQ) {
+            const code = normalizeText(ticketQ);
+            const db = getAdminDb();
+            const rootSnap = await db.ref(`bookings`).once("value");
+            const all = rootSnap.exists() ? rootSnap.val() : {};
+            for (const d of Object.keys(all || {})) {
+                const buses = all[d] || {};
+                for (const bId of Object.keys(buses || {})) {
+                    const seats = buses[bId] || {};
+                    for (const sNo of Object.keys(seats || {})) {
+                        const rec = seats[sNo] || {};
+                        if (String(rec.ticket || "") === String(code)) {
+                            return NextResponse.json({ success: true, booking: { date: d, busId: bId, seatNo: sNo, ...rec }, source: "booking" }, { status: 200 });
+                        }
+                    }
+                }
+            }
+
+            // fallback: check vouchers by code — vouchers may be issued on cancellation and contain passenger details
+            try {
+                // first try exact voucher code lookup (user entered voucher code)
+                const vSnap = await db.ref(`vouchers/${code}`).once("value");
+                if (vSnap.exists()) {
+                    const v = vSnap.val() || {};
+                    const mapped = {
+                        name: v.name || null,
+                        phone: v.phone || null,
+                        email: v.email || null,
+                        pickup: v.pickup || (v.metadata && v.metadata.cancelledBooking && v.metadata.cancelledBooking.pickup) || "",
+                        drop: v.drop || (v.metadata && v.metadata.cancelledBooking && v.metadata.cancelledBooking.drop) || "",
+                        pickupTime:
+                            v.pickupTime || v.metadata?.pickupTime || v.metadata?.cancelledBooking?.time || null,
+                        dropTime:
+                            v.dropTime || v.metadata?.dropTime || v.metadata?.cancelledBooking?.time || null,
+                        voucherCode: v.code || code,
+                        voucherAmount: v.amount || null,
+                        voucherExpiresAt: v.expiresAt || null,
+                    };
+
+                    return NextResponse.json({ success: true, booking: mapped, source: "voucher", voucher: v }, { status: 200 });
+                }
+
+                // If not found by voucher key, scan all vouchers to see if any voucher was
+                // created from a cancelled booking that contains the requested ticket number.
+                const allVouchersSnap = await db.ref(`vouchers`).once("value");
+                if (allVouchersSnap.exists()) {
+                    const allVouchers = allVouchersSnap.val() || {};
+                    for (const k of Object.keys(allVouchers)) {
+                        const v = allVouchers[k] || {};
+                        const cancelled = v.metadata && v.metadata.cancelledBooking ? v.metadata.cancelledBooking : null;
+                        const ticketInVoucher = String((cancelled && cancelled.ticket) || v.ticket || "").trim();
+                        if (ticketInVoucher && String(ticketInVoucher) === String(code)) {
+                            const mapped = {
+                                name: v.name || null,
+                                phone: v.phone || null,
+                                email: v.email || null,
+                                pickup: v.pickup || (cancelled && cancelled.pickup) || "",
+                                drop: v.drop || (cancelled && cancelled.drop) || "",
+                                pickupTime:
+                                    v.pickupTime || v.metadata?.pickupTime || (cancelled && cancelled.time) || null,
+                                dropTime:
+                                    v.dropTime || v.metadata?.dropTime || (cancelled && cancelled.time) || null,
+                                voucherCode: v.code || k || null,
+                                voucherAmount: v.amount || null,
+                                voucherExpiresAt: v.expiresAt || null,
+                            };
+
+                            return NextResponse.json({ success: true, booking: mapped, source: "voucher", voucher: v }, { status: 200 });
+                        }
+                    }
+                }
+            } catch (e) {
+                // ignore
+            }
+
+            return NextResponse.json({ success: false, error: "Ticket not found" }, { status: 404 });
+        }
+
         const busId = searchParams.get("busId");
         const date = searchParams.get("date");
 
@@ -721,6 +800,71 @@ export async function POST(req) {
             paymentMethod: paymentMethodNormalized,
             ticket: ticket,
         };
+
+        // If a voucher code is provided, verify it first and then attempt to atomically mark it used
+        if (body.voucherCode) {
+            try {
+                const code = String(body.voucherCode || "").trim().toUpperCase();
+                if (code) {
+                    const vRef = db.ref(`vouchers/${code}`);
+
+                    // quick pre-check so we can return a clearer error (not found vs already used)
+                    try {
+                        const vSnap = await vRef.once("value");
+                        if (!vSnap.exists()) {
+                            return NextResponse.json({ success: false, error: "Voucher not found" }, { status: 404 });
+                        }
+                        const vVal = vSnap.val() || {};
+
+                        // If voucher already has been marked used, allow it only when it was
+                        // pre-redeemed for THIS exact booking id (admin redeem flow).
+                        const intendedBookingId = `${date}/${busId}/${seatNo}`;
+                        if (vVal.usedAt) {
+                            const usedById = vVal.usedByBookingId || (vVal.usedByBooking && `${vVal.usedByBooking.date}/${vVal.usedByBooking.busId}/${vVal.usedByBooking.seatNo}`) || null;
+                            if (usedById && usedById === intendedBookingId) {
+                                // voucher was already redeemed for this exact booking — accept it
+                                payload.voucherCode = code;
+                            } else {
+                                return NextResponse.json({ success: false, error: "Voucher already used" }, { status: 400 });
+                            }
+                        } else {
+                            // perform atomic transaction to mark voucher used
+                            let txResult = null;
+                            try {
+                                txResult = await vRef.transaction((curr) => {
+                                    if (!curr) return; // voucher not found -> abort
+                                    if (curr.usedAt) return; // already used -> abort
+                                    const nowLocal = new Date().toISOString();
+                                    curr.usedAt = nowLocal;
+                                    // store a compact booking identifier for consistency with other voucher APIs
+                                    try {
+                                        curr.usedByBookingId = `${date}/${busId}/${seatNo}`;
+                                    } catch { }
+                                    // also keep verbose reference for backward compatibility
+                                    curr.usedByBooking = { date, busId, seatNo };
+                                    return curr;
+                                });
+                            } catch (e) {
+                                console.error("Voucher transaction error:", e);
+                                txResult = null;
+                            }
+
+                            if (!txResult || !txResult.committed) {
+                                return NextResponse.json({ success: false, error: "Voucher invalid or already used" }, { status: 400 });
+                            }
+
+                            payload.voucherCode = code;
+                        }
+                    } catch (e) {
+                        // ignore and continue to attempt transaction below, but log for debugging
+                        console.warn("Voucher pre-check failed:", e && e.message ? e.message : e);
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to consume voucher:", e);
+                return NextResponse.json({ success: false, error: "Voucher consume failed" }, { status: 500 });
+            }
+        }
 
         await seatRef.set(payload);
 
@@ -1031,6 +1175,8 @@ export async function DELETE(req) {
 
         await seatRef.remove();
 
+        const action = String(searchParams.get("action") || "refund").toLowerCase();
+
         // if booking had a ticket, push it to monthly pool for reuse
         try {
             const t = existingVal.ticket;
@@ -1059,78 +1205,115 @@ export async function DELETE(req) {
         } catch (e) {
             console.warn("Failed to return ticket to pool:", e?.message || e);
         }
-        // Calculate refund (100% to user) if fare/payment present
+        // Handle cancel action: 'refund' (try gateway refund), 'voucher' (create voucher), 'void' (no refund)
         let refundResult = { attempted: false, success: false, amount: 0, error: null, raw: null };
-        try {
-            const fare = existingVal && existingVal.fare ? Number(existingVal.fare) : 0;
-            const refundPct = 1; // refund full fare
-            const refundAmount = fare && Number.isFinite(fare) ? Math.round((fare * refundPct + Number.EPSILON) * 100) / 100 : 0;
-            refundResult.amount = refundAmount;
+        let voucherIssued = null;
 
-            const paymentId = existingVal && existingVal.payment ? String(existingVal.payment) : "";
-            const paymentMethod = existingVal && existingVal.paymentMethod ? String(existingVal.paymentMethod).toLowerCase() : "";
+        if (action === "voucher") {
+            try {
+                const fare = existingVal && existingVal.fare ? Number(existingVal.fare) : 0;
+                const amount = fare && Number.isFinite(fare) ? Math.round((fare + Number.EPSILON) * 100) / 100 : 0;
+                const now = new Date().toISOString();
+                const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+                const base = `VCHR-${Date.now().toString(36).toUpperCase()}`;
+                const code = `${base}-${Math.floor(Math.random() * 9000 + 1000)}`;
 
-            if (paymentId && paymentMethod && /razor/.test(paymentMethod)) {
-                const keyId = process.env.RAZORPAY_KEY_ID;
-                const keySecret = process.env.RAZORPAY_KEY_SECRET;
-                if (keyId && keySecret && refundAmount > 0) {
-                    refundResult.attempted = true;
-                    const paise = Math.round(refundAmount * 100);
-                    try {
-                        const basic = Buffer.from(keyId + ":" + keySecret).toString("base64");
-                        const resp = await fetch(
-                            `https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`,
-                            {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/json",
-                                    Authorization: "Basic " + basic,
-                                },
-                                body: JSON.stringify({ amount: paise }),
-                            }
-                        );
-
-                        const data = await resp.json();
-                        if (!resp.ok) {
-                            refundResult.success = false;
-                            refundResult.error = data.error || data.description || "Refund failed";
-                            refundResult.raw = data;
-                        } else {
-                            refundResult.success = true;
-                            refundResult.raw = data;
-                        }
-                    } catch (e) {
-                        refundResult.success = false;
-                        refundResult.error = e?.message || String(e);
-                        refundResult.raw = null;
-                    }
-                }
-            }
-        } catch (e) {
-            refundResult.error = e?.message || String(e);
-        }
-
-        // Persist refund metadata into payments/{paymentId}/refund so admin UI can reflect refunds
-        try {
-            const paymentId = existingVal && existingVal.payment ? String(existingVal.payment) : "";
-            if (paymentId) {
-                const refundRecord = {
-                    attempted: !!refundResult.attempted,
-                    success: !!refundResult.success,
-                    amount: refundResult.amount || 0,
-                    error: refundResult.error || null,
-                    raw: refundResult.raw || null,
-                    refundedAt: new Date().toISOString(),
+                const payload = {
+                    code,
+                    amount: amount || 0,
+                    currency: "INR",
+                    name: existingVal.name || null,
+                    email: existingVal.email || null,
+                    phone: existingVal.phone || null,
+                    pickup: existingVal.pickup || null,
+                    drop: existingVal.drop || null,
+                    pickupTime: existingVal.pickupTime || null,
+                    dropTime: existingVal.dropTime || null,
+                    issuedAt: now,
+                    expiresAt,
+                    issuedBy: null,
+                    usedAt: null,
+                    usedByBookingId: null,
+                    metadata: { cancelledBooking: { date, busId, seatNo, ticket: existingVal.ticket || null }, originalFare: fare || 0 },
                 };
 
-                // For offline/manual payments, mark as a cancel record (no gateway attempt)
-                const paymentMethod = existingVal && existingVal.paymentMethod ? String(existingVal.paymentMethod).toLowerCase() : "";
-                if (paymentMethod && paymentMethod.includes("offline") && !refundResult.attempted) {
-                    // keep attempted=false, success=false, but record a note so admins know this was an offline cancellation
-                    refundRecord.note = "offline_cancellation_needs_manual_refund";
-                }
+                await db.ref(`vouchers/${code}`).set(payload);
+                voucherIssued = code;
+            } catch (e) {
+                console.error("Failed to create voucher on cancel:", e);
+            }
+        } else if (action === "refund") {
+            try {
+                const fare = existingVal && existingVal.fare ? Number(existingVal.fare) : 0;
+                const refundPct = 1; // refund full fare
+                const refundAmount = fare && Number.isFinite(fare) ? Math.round((fare * refundPct + Number.EPSILON) * 100) / 100 : 0;
+                refundResult.amount = refundAmount;
 
-                await db.ref(`payments/${paymentId}/refund`).set(refundRecord);
+                const paymentId = existingVal && existingVal.payment ? String(existingVal.payment) : "";
+                const paymentMethod = existingVal && existingVal.paymentMethod ? String(existingVal.paymentMethod).toLowerCase() : "";
+
+                if (paymentId && paymentMethod && /razor/.test(paymentMethod)) {
+                    const keyId = process.env.RAZORPAY_KEY_ID;
+                    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+                    if (keyId && keySecret && refundAmount > 0) {
+                        refundResult.attempted = true;
+                        const paise = Math.round(refundAmount * 100);
+                        try {
+                            const basic = Buffer.from(keyId + ":" + keySecret).toString("base64");
+                            const resp = await fetch(
+                                `https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`,
+                                {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        Authorization: "Basic " + basic,
+                                    },
+                                    body: JSON.stringify({ amount: paise }),
+                                }
+                            );
+
+                            const data = await resp.json();
+                            if (!resp.ok) {
+                                refundResult.success = false;
+                                refundResult.error = data.error || data.description || "Refund failed";
+                                refundResult.raw = data;
+                            } else {
+                                refundResult.success = true;
+                                refundResult.raw = data;
+                            }
+                        } catch (e) {
+                            refundResult.success = false;
+                            refundResult.error = e?.message || String(e);
+                            refundResult.raw = null;
+                        }
+                    }
+                }
+            } catch (e) {
+                refundResult.error = e?.message || String(e);
+            }
+        }
+
+        // Persist refund metadata into payments/{paymentId}/refund so admin UI can reflect refunds (only for refund action)
+        try {
+            if (action === "refund") {
+                const paymentId = existingVal && existingVal.payment ? String(existingVal.payment) : "";
+                if (paymentId) {
+                    const refundRecord = {
+                        attempted: !!refundResult.attempted,
+                        success: !!refundResult.success,
+                        amount: refundResult.amount || 0,
+                        error: refundResult.error || null,
+                        raw: refundResult.raw || null,
+                        refundedAt: new Date().toISOString(),
+                    };
+
+                    const paymentMethod = existingVal && existingVal.paymentMethod ? String(existingVal.paymentMethod).toLowerCase() : "";
+                    if (paymentMethod && paymentMethod.includes("offline") && !refundResult.attempted) {
+                        refundRecord.note = "offline_cancellation_needs_manual_refund";
+                    }
+
+                    await db.ref(`payments/${paymentId}/refund`).set(refundRecord);
+                }
             }
         } catch (e) {
             console.warn("Failed to persist refund metadata to payments:", e && e.message ? e.message : e);
@@ -1144,8 +1327,9 @@ export async function DELETE(req) {
 
             emailResult.attempted = true;
             try {
-                // include refund info into booking passed to email generator
+                // include refund/voucher info into booking passed to email generator
                 const bookingForEmail = { seatNo, date, ...existingVal, refund: refundResult };
+                if (voucherIssued) bookingForEmail.voucherCode = voucherIssued;
                 await sendBookingCancellation(emailTo, nameTo, bookingForEmail);
                 emailResult.sent = true;
             } catch (e) {
@@ -1180,6 +1364,7 @@ export async function DELETE(req) {
                 message: "Booking cancelled",
                 email: emailResult,
                 refund: refundResult,
+                voucherCode: voucherIssued || null,
             },
             { status: 200 }
         );

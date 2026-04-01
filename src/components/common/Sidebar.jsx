@@ -27,6 +27,7 @@ const roleLinks = {
         { href: "/admin/bus", label: "Buses", icon: BusFront },
         { href: "/admin/schedule", label: "Schedule", icon: CalendarDays },
         { href: "/admin/booking", label: "Booking", icon: Ticket },
+        { href: "/admin/vouchers", label: "Vouchers", icon: Ticket },
         { href: "/admin/payment", label: "Payment History", icon: ReceiptText },
         { href: "/notifications", label: "Notifications", icon: Bell },
         { href: "/settings", label: "Settings", icon: Settings },
