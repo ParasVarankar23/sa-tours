@@ -3281,8 +3281,8 @@ export default function BookingPage() {
     ========================= */
     .seat-box {
       width: 100%;
-      height: 26.5mm;
-      min-height: 26.5mm;
+      height: 26.3mm;
+      min-height: 26.3mm;
       border: 1.2px solid #222;
       padding: 0.8mm 1mm 0.55mm;
       background: #fff;
