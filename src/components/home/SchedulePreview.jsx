@@ -1,17 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
 import {
     ArrowRight,
+    ArrowRightLeft,
+    Bus,
     Clock3,
     MapPin,
-    Bus,
-    ArrowRightLeft,
-    Route,
     Phone,
+    Route,
     X,
 } from "lucide-react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 import Reveal from "../Reveal";
 import StaggerContainer from "../StaggerContainer";
 import StaggerItem from "../StaggerItem";
@@ -54,6 +54,7 @@ const routeOptions = [
             { stop: "Kharghar", time: "8:05 AM", type: "stop" },
             { stop: "Nerul", time: "8:15 AM", type: "stop" },
             { stop: "Juinagar", time: "8:18 AM", type: "stop" },
+            { stop: "Sanpada", time: "8:19 AM", type: "stop" },
             { stop: "Vashi", time: "8:20 AM", type: "stop" },
             { stop: "Mankhurd", time: "8:25 AM", type: "stop" },
             { stop: "Govandi", time: "8:30 AM", type: "stop" },
@@ -98,6 +99,7 @@ const routeOptions = [
             { stop: "Kharghar", time: "8:35 AM", type: "stop" },
             { stop: "Nerul", time: "8:45 AM", type: "stop" },
             { stop: "Juinagar", time: "8:48 AM", type: "stop" },
+            { stop: "Sanpada", time: "8:49 AM", type: "stop" },
             { stop: "Vashi", time: "8:50 AM", type: "stop" },
             { stop: "Mankhurd", time: "8:55 AM", type: "stop" },
             { stop: "Govandi", time: "9:00 AM", type: "stop" },
@@ -130,6 +132,7 @@ const routeOptions = [
             { stop: "Mankhurd", time: "2:35 PM", type: "stop" },
             { stop: "Vashi", time: "2:40 PM", type: "stop" },
             { stop: "Juinagar", time: "2:43 PM", type: "stop" },
+            { stop: "Sanpada", time: "2:45 PM", type: "stop" },
             { stop: "Nerul", time: "2:48 PM", type: "stop" },
             { stop: "Kharghar", time: "3:00 PM", type: "stop" },
             { stop: "Kamothe", time: "3:10 PM", type: "stop" },
@@ -174,6 +177,7 @@ const routeOptions = [
             { stop: "Mankhurd", time: "4:35 PM", type: "stop" },
             { stop: "Vashi", time: "4:40 PM", type: "stop" },
             { stop: "Juinagar", time: "4:43 PM", type: "stop" },
+            { stop: "Sanpada", time: "4:45 PM", type: "stop" },
             { stop: "Nerul", time: "4:48 PM", type: "stop" },
             { stop: "Kharghar", time: "5:00 PM", type: "stop" },
             { stop: "Kamothe", time: "5:10 PM", type: "stop" },
@@ -229,8 +233,8 @@ function RouteTable({ route }) {
 
                                 <span
                                     className={`rounded-full px-3 py-1 text-xs font-semibold ${item.type === "break"
-                                            ? "bg-orange-100 text-orange-700"
-                                            : "bg-slate-100 text-slate-700"
+                                        ? "bg-orange-100 text-orange-700"
+                                        : "bg-slate-100 text-slate-700"
                                         }`}
                                 >
                                     {item.time}
@@ -266,8 +270,8 @@ function RouteTable({ route }) {
                             <tr
                                 key={`${route.key}-${index}`}
                                 className={`border-b border-slate-100 transition ${item.type === "break"
-                                        ? "bg-orange-50/60 hover:bg-orange-50"
-                                        : "hover:bg-slate-50"
+                                    ? "bg-orange-50/60 hover:bg-orange-50"
+                                    : "hover:bg-slate-50"
                                     }`}
                             >
                                 <td className="px-6 py-4 text-sm font-semibold text-slate-700">
@@ -415,8 +419,8 @@ export default function SchedulePreview() {
 
                                         <span
                                             className={`rounded-full px-3 py-1 text-[11px] font-semibold ${item.type === "Departure"
-                                                    ? "bg-orange-50 text-orange-600"
-                                                    : "bg-slate-100 text-slate-600"
+                                                ? "bg-orange-50 text-orange-600"
+                                                : "bg-slate-100 text-slate-600"
                                                 }`}
                                         >
                                             {item.type}
