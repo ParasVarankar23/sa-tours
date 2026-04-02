@@ -138,7 +138,17 @@ export default function ChatWidget() {
     function renderMessageContent(text) {
         if (!text) return null;
 
-        const lines = String(text)
+        // Strip basic Markdown formatting (**, *, __) so users
+        // don't see raw asterisks in the chat bubbles.
+        const toPlain = (value) =>
+            String(value)
+                .replace(/\*\*(.+?)\*\*/g, "$1")
+                .replace(/__(.+?)__/g, "$1")
+                .replace(/\*/g, "");
+
+        const raw = String(text);
+
+        const lines = raw
             .split(/\r?\n/)
             .map((l) => l.trim())
             .filter(Boolean);
@@ -148,8 +158,10 @@ export default function ChatWidget() {
             return (
                 <div className="space-y-2">
                     {lines.map((line, idx) => {
-                        // strip leading bullets or markdown
-                        const clean = line.replace(/^[\*\-\d\.\s]+/, "").replace(/\*\*/g, "").trim();
+                        // strip leading bullets or markdown and convert to plain text
+                        const clean = toPlain(
+                            line.replace(/^[\*\-\d\.\s]+/, "").trim()
+                        );
 
                         // choose icon: route (has arrow), time (contains AM/PM), contact/phone (contains call/phone/helpline)
                         let Icon = MapPin;
@@ -162,11 +174,7 @@ export default function ChatWidget() {
                         const detail = rest.join(":").trim();
 
                         return (
-                            <div key={idx} className="flex items-start gap-3">
-                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-700">
-                                    <span className="text-[10px] font-semibold">{idx + 1}</span>
-                                </div>
-
+                            <div key={idx} className="flex items-start gap-2">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2">
                                         <Icon className="h-4 w-4 text-orange-500" />
@@ -188,8 +196,8 @@ export default function ChatWidget() {
             );
         }
 
-        // single-line or fallback: preserve line breaks
-        return <p className="whitespace-pre-wrap break-words">{text}</p>;
+        // single-line or fallback: preserve line breaks but hide markdown
+        return <p className="whitespace-pre-wrap break-words">{toPlain(text)}</p>;
     }
 
     /* -------------------------------------------------------
@@ -330,11 +338,9 @@ export default function ChatWidget() {
 
                                                 {modelInfo?.source && (
                                                     <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600 sm:text-xs">
-                                                        {modelInfo.source === "gemini"
-                                                            ? `Powered by ${modelInfo.modelUsed || "Gemini"}`
-                                                            : modelInfo.source === "local-fallback"
-                                                                ? "Local fallback"
-                                                                : "Chat support"}
+                                                        {modelInfo.source === "local-fallback"
+                                                            ? "AI assistant (fallback)"
+                                                            : "AI assistant"}
                                                     </span>
                                                 )}
                                             </div>

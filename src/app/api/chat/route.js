@@ -24,8 +24,8 @@ const ROUTES = [
         busNumber: CONTACTS.dighiBus,
     },
     {
-        name: "Borli → Dongri",
-        timing: "4:00 AM to 9:30 AM",
+        name: "Velas → Borli → Dongri",
+        timing: "3:00 AM to 9:30 AM",
         type: "Morning Departure",
         busNumber: CONTACTS.borliBus,
     },
@@ -74,13 +74,13 @@ Contact details:
 
 Main routes:
 1. Dighi → Dongri (Morning) - Bus: ${CONTACTS.dighiBus}
-2. Borli → Dongri (Morning) - Bus: ${CONTACTS.borliBus}
+2. Velas → Borli → Dongri (Morning) - Bus: ${CONTACTS.borliBus}
 3. Dongri → Borli (Return) - Bus: ${CONTACTS.borliBus}
 4. Dongri → Dighi (Return) - Bus: ${CONTACTS.dighiBus}
 
 Known timings:
 - Dighi → Dongri: 3:00 AM to 9:00 AM
-- Borli → Dongri: 4:00 AM to 9:30 AM
+- Velas → Borli → Dongri: 3:00 AM to 9:30 AM
 - Dongri → Borli: 2:00 PM to 8:30 PM
 - Dongri → Dighi: 4:00 PM to 10:30 PM
 
@@ -94,6 +94,7 @@ Rules:
 - Never invent payment success.
 - If fare is not known from the user’s exact route, say: "Please select your pickup, drop, and travel date in the booking page to see the exact fare."
 - Keep answers concise and natural.
+- Answer in plain text only (no markdown, no **bold**, no bullet lists, no links).
 `;
 
 /* -------------------------------------------------------
@@ -122,7 +123,7 @@ function getLocalBotReply(message = "") {
         return `Here are today’s bus timings for SA Tours & Travels:
 
 • Dighi → Dongri: 3:00 AM to 9:00 AM (Bus: ${CONTACTS.dighiBus})
-• Borli → Dongri: 4:00 AM to 9:30 AM (Bus: ${CONTACTS.borliBus})
+• Velas → Borli → Dongri: 3:00 AM to 9:30 AM (Bus: ${CONTACTS.borliBus})
 • Dongri → Borli: 2:00 PM to 8:30 PM (Bus: ${CONTACTS.borliBus})
 • Dongri → Dighi: 4:00 PM to 10:30 PM (Bus: ${CONTACTS.dighiBus})
 
@@ -192,8 +193,8 @@ For fare help:
     ) {
         return `Borli ↔ Dongri / Borli Mumbai route details:
 
-• Route: Borli → Dongri
-• Morning timing: 4:00 AM to 9:30 AM
+• Route: Velas → Borli → Dongri
+• Morning timing: 3:00 AM to 9:30 AM
 • Return timing: Dongri → Borli, 2:00 PM to 8:30 PM
 • Borli bus number: ${CONTACTS.borliBus}
 
@@ -235,7 +236,7 @@ For urgent help:
         return `Available routes:
 
 • Dighi → Dongri (Bus: ${CONTACTS.dighiBus})
-• Borli → Dongri (Bus: ${CONTACTS.borliBus})
+• Velas → Borli → Dongri (Bus: ${CONTACTS.borliBus})
 • Dongri → Borli (Bus: ${CONTACTS.borliBus})
 • Dongri → Dighi (Bus: ${CONTACTS.dighiBus})
 
