@@ -137,6 +137,8 @@ export const BORLI_FARE_GROUPS = [
         stops: [
             "Dighi",
             "Karlas",
+            "Khalcha Velas",
+            "Velas",
         ],
     },
     {
@@ -151,8 +153,6 @@ export const BORLI_FARE_GROUPS = [
         zone: "BORLI_GROUP_2",
         fare: 450,
         stops: [
-            "Khalcha Velas",
-            "Velas",
             "Vadavli",
             "Vadavli Fata",
             "Borli",
@@ -204,6 +204,8 @@ export const DIGHI_FARE_GROUPS = [
             "Dighi",
             "Karlas",
             "Kudgaon",
+            "Khalcha Velas",
+            "Velas",
         ],
     },
     {
@@ -215,8 +217,6 @@ export const DIGHI_FARE_GROUPS = [
         zone: "DIGHI_GROUP_3",
         fare: 450,
         stops: [
-            "Khalcha Velas",
-            "Velas",
             "Vadavli",
             "Vadavli Fata",
             "Shiste",
