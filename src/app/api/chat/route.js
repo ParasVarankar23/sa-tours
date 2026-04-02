@@ -30,7 +30,7 @@ const ROUTES = [
         busNumber: CONTACTS.borliBus,
     },
     {
-        name: "Dongri → Borli",
+        name: "Dongri → Borli → Velas",
         timing: "2:00 PM to 8:30 PM",
         type: "Evening Return",
         busNumber: CONTACTS.borliBus,
@@ -75,13 +75,13 @@ Contact details:
 Main routes:
 1. Dighi → Dongri (Morning) - Bus: ${CONTACTS.dighiBus}
 2. Velas → Borli → Dongri (Morning) - Bus: ${CONTACTS.borliBus}
-3. Dongri → Borli (Return) - Bus: ${CONTACTS.borliBus}
+3. Dongri → Borli → Velas (Return) - Bus: ${CONTACTS.borliBus}
 4. Dongri → Dighi (Return) - Bus: ${CONTACTS.dighiBus}
 
 Known timings:
 - Dighi → Dongri: 3:00 AM to 9:00 AM
 - Velas → Borli → Dongri: 3:00 AM to 9:30 AM
-- Dongri → Borli: 2:00 PM to 8:30 PM
+- Dongri → Borli → Velas: 2:00 PM to 8:30 PM
 - Dongri → Dighi: 4:00 PM to 10:30 PM
 
 Rules:
@@ -124,7 +124,7 @@ function getLocalBotReply(message = "") {
 
 • Dighi → Dongri: 3:00 AM to 9:00 AM (Bus: ${CONTACTS.dighiBus})
 • Velas → Borli → Dongri: 3:00 AM to 9:30 AM (Bus: ${CONTACTS.borliBus})
-• Dongri → Borli: 2:00 PM to 8:30 PM (Bus: ${CONTACTS.borliBus})
+• Dongri → Borli → Velas: 2:00 PM to 8:30 PM (Bus: ${CONTACTS.borliBus})
 • Dongri → Dighi: 4:00 PM to 10:30 PM (Bus: ${CONTACTS.dighiBus})
 
 ${fullContactBlock}`;
@@ -195,7 +195,7 @@ For fare help:
 
 • Route: Velas → Borli → Dongri
 • Morning timing: 3:00 AM to 9:30 AM
-• Return timing: Dongri → Borli, 2:00 PM to 8:30 PM
+• Return timing: Dongri → Borli → Velas, 2:00 PM to 8:30 PM
 • Borli bus number: ${CONTACTS.borliBus}
 
 For booking:
@@ -237,7 +237,7 @@ For urgent help:
 
 • Dighi → Dongri (Bus: ${CONTACTS.dighiBus})
 • Velas → Borli → Dongri (Bus: ${CONTACTS.borliBus})
-• Dongri → Borli (Bus: ${CONTACTS.borliBus})
+• Dongri → Borli → Velas (Bus: ${CONTACTS.borliBus})
 • Dongri → Dighi (Bus: ${CONTACTS.dighiBus})
 
 Main route coverage:
