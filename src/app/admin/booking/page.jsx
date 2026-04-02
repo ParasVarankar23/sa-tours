@@ -7,13 +7,13 @@ import { showAppToast } from "@/lib/client/toast";
 import {
   BUS_TYPES,
   getFare,
-  getStopDisplayFromObject,
   getStopDisplayName,
+  getStopNameMarathi,
   isBorliVillageStop,
   isCityStop,
   isDighiVillageStop,
   normalizeStopName,
-  ROUTES,
+  ROUTES
 } from "@/lib/fare";
 import {
   BusFront,
@@ -1670,6 +1670,25 @@ export default function BookingPage() {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
 
+  // For printed tickets, show only the Marathi stop name when available.
+  const getStopMarathiOnly = (stop) => {
+    if (!stop) return "";
+
+    // If we already have the combined display string, strip to the part in brackets.
+    if (typeof stop === "string") {
+      const s = String(stop).trim();
+      const match = s.match(/\(([^)]+)\)\s*$/);
+      if (match) return match[1];
+
+      // Fallback: use mapping from fare helpers.
+      return getStopNameMarathi(normalizeStopName(s));
+    }
+
+    const english = normalizeStopName(stop.name || "");
+    const marathi = stop.nameMr || getStopNameMarathi(english);
+    return marathi || english;
+  };
+
   const getSeatMapForTemplate = () => {
     const seatMap = {};
     Object.entries(bookings || {}).forEach(([seat, b]) => {
@@ -2166,12 +2185,12 @@ export default function BookingPage() {
 
       <div class="line-row">
         <span class="label">Pickup :</span>
-        <span class="value">${safeHtml(getStopDisplayFromObject(data.pickup) || data.pickup || "")}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.pickup) || "")}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(getStopDisplayFromObject(data.drop) || data.drop || "")}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.drop) || "")}</span>
       </div>
     </div>
   `;
@@ -2754,12 +2773,12 @@ export default function BookingPage() {
       <div class="line-row">
         <span class="label">Pickup</span>
         <span class="colon">:</span>
-        <span class="value">${safeHtml(getStopDisplayFromObject(data.pickup) || data.pickup || "")}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.pickup) || "")}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(getStopDisplayFromObject(data.drop) || data.drop || "")}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.drop) || "")}</span>
       </div>
     </div>
   `;
@@ -3379,12 +3398,12 @@ export default function BookingPage() {
 
       <div class="line-row">
         <span class="label">Pickup :</span>
-        <span class="value">${safeHtml(getStopDisplayFromObject(data.pickup) || data.pickup || "")}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.pickup) || "")}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(getStopDisplayFromObject(data.drop) || data.drop || "")}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.drop) || "")}</span>
       </div>
     </div>
   `;

@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { getStopNameMarathi } from "./fare";
 import { getAdminDb } from "./firebaseAdmin";
 
 const allowSelfSignedCert = process.env.SMTP_ALLOW_SELF_SIGNED === "true";
@@ -78,18 +79,30 @@ function normalizeStopName(name) {
     const key = n.toLowerCase();
 
     const aliasMap = {
-        "borli mumbai": "Borli Dongri",
-        "borli": "Borli Dongri",
-        "borli dongri": "Borli Dongri",
-        "dongri borli": "Dongri Borli",
+        // Route-style aliases -> canonical stop names
+        "borli mumbai": "Borli",
+        "borli dongri": "Borli",
+        "borli": "Borli",
+        "dighi dongri": "Dighi",
+        "dongri dighi": "Dongri",
         "dighi": "Dighi",
-        "dighi dongri": "Dighi Dongri",
-        "dongri dighi": "Dongri Dighi",
+        "dongri borli": "Dongri",
         "panvel": "Panvel",
         "dongri": "Dongri",
     };
 
     return aliasMap[key] || n;
+}
+
+// English + Marathi combined label for emails
+function formatStopForEmail(name) {
+    const normalized = normalizeStopName(name || "");
+    if (!normalized) return "";
+
+    const marathi = getStopNameMarathi(normalized);
+    return marathi && marathi !== normalized
+        ? `${normalized} (${marathi})`
+        : normalized;
 }
 
 function getPaymentMethod(booking = {}) {
@@ -626,8 +639,8 @@ export async function sendForgotPasswordEmail(email, otp) {
    3) BOOKING CONFIRMATION EMAIL
 ========================================================= */
 export async function sendBookingConfirmation(email, name, booking = {}) {
-    const pickupName = normalizeStopName(booking.pickup || "");
-    const dropName = normalizeStopName(booking.drop || "");
+    const pickupName = formatStopForEmail(booking.pickup || "");
+    const dropName = formatStopForEmail(booking.drop || "");
 
     const formattedStartTime = formatTime12Hour(booking.startTime || "");
     const formattedEndTime = formatTime12Hour(booking.endTime || "");
@@ -914,8 +927,8 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
    4) BOOKING CANCELLATION EMAIL
 ========================================================= */
 export async function sendBookingCancellation(email, name, booking = {}) {
-    const pickupName = normalizeStopName(booking.pickup || "");
-    const dropName = normalizeStopName(booking.drop || "");
+    const pickupName = formatStopForEmail(booking.pickup || "");
+    const dropName = formatStopForEmail(booking.drop || "");
 
     const formattedStartTime = formatTime12Hour(booking.startTime || "");
     const formattedEndTime = formatTime12Hour(booking.endTime || "");
