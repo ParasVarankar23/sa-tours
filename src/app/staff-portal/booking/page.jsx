@@ -7,6 +7,7 @@ import {
   BUS_TYPES,
   getFare,
   getStopDisplayName,
+  getStopNameMarathi,
   isBorliVillageStop,
   isCityStop,
   isDighiVillageStop,
@@ -354,8 +355,11 @@ export default function StaffBookingPage() {
   // --- Input sanitizers / validators ---
   const sanitizeNameInput = (v) => {
     if (typeof v !== "string") return "";
-    // remove digits, allow letters, spaces, apostrophes, hyphens; cap length
-    return v.replace(/\d+/g, "").replace(/[^A-Za-z\s'\-]/g, "").slice(0, 100);
+    // remove digits, allow letters in any language (including Marathi), spaces, apostrophes, hyphens; cap length
+    return v
+      .replace(/\d+/g, "")
+      .replace(/[^\p{L}\p{M}\s'\-]/gu, "")
+      .slice(0, 100);
   };
 
   const sanitizePhoneInput = (v) => {
@@ -368,7 +372,7 @@ export default function StaffBookingPage() {
     return v.trim().slice(0, 254).toLowerCase();
   };
 
-  const isValidName = (v) => /^[A-Za-z\s'\-]{2,}$/.test(String(v || "").trim());
+  const isValidName = (v) => /^[\p{L}\p{M}\s'\-]{2,}$/u.test(String(v || "").trim());
   const isValidPhone = (v) => /^\d{10}$/.test(String(v || "").trim());
   const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
 
@@ -1585,7 +1589,7 @@ export default function StaffBookingPage() {
       border: 1px solid #ea580c;
       color: #ea580c;
       padding: 0 3px;
-      border-radius: 6px;
+      border-radius: 0;
       line-height: 1;
       flex-shrink: 0;
     }
@@ -1596,11 +1600,11 @@ export default function StaffBookingPage() {
       justify-content: center;
       font-size: 17px;
       font-weight: 700;
-      border: 1px solid #64748b;
+      border: none;
       color: #0f172a;
-      background: #f1f5f9;
+      background: transparent;
       padding: 0.2mm 0.8mm;
-      border-radius: 5px;
+      border-radius: 0;
       line-height: 1;
       height: 3.2mm;
       max-width: 100%;
@@ -1642,7 +1646,15 @@ export default function StaffBookingPage() {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      border-bottom: 1px solid #555;
+      border-bottom: none;
+    }
+
+    .value-no-border {
+      border-bottom: none;
+    }
+
+    .marathi-text {
+      font-family: "Noto Sans Devanagari", "Noto Serif Devanagari", "Mangal", "Nirmala UI", "Kohinoor Devanagari", system-ui, sans-serif;
     }
 
     .back-row .label {
@@ -1651,6 +1663,7 @@ export default function StaffBookingPage() {
 
     .back-row .value {
       font-size: 17px;
+      border-bottom: none;
     }
 
     @media print {
@@ -1729,8 +1742,8 @@ export default function StaffBookingPage() {
     isWindowSeat = false,
   }) => {
     const data = seatMap[String(seatNo)] || {};
-    const pickupDisplay = data.pickup ? getStopDisplayName(data.pickup) : "";
-    const dropDisplay = data.drop ? getStopDisplayName(data.drop) : "";
+    const pickupDisplay = data.pickup ? getStopNameMarathi(data.pickup) : "";
+    const dropDisplay = data.drop ? getStopNameMarathi(data.drop) : "";
     const isBlocked = data?.status === "blocked";
     const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
 
@@ -1753,12 +1766,12 @@ export default function StaffBookingPage() {
 
       <div class="line-row">
         <span class="label">Pickup :</span>
-        <span class="value">${safeHtml(pickupDisplay)}</span>
+        <span class="value value-no-border marathi-text">${safeHtml(pickupDisplay)}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(dropDisplay)}</span>
+        <span class="value value-no-border marathi-text">${safeHtml(dropDisplay)}</span>
       </div>
     </div>
   `;
@@ -2174,7 +2187,7 @@ export default function StaffBookingPage() {
       border: 1px solid #ea580c;
       color: #ea580c;
       padding: 0 3px;
-      border-radius: 6px;
+      border-radius: 0;
       line-height: 1;
       flex-shrink: 0;
     }
@@ -2185,11 +2198,11 @@ export default function StaffBookingPage() {
       justify-content: center;
       font-size: 16px;
       font-weight: 700;
-      border: 1px solid #64748b;
+      border: none;
       color: #0f172a;
-      background: #f1f5f9;
+      background: transparent;
       padding: 0.2mm 0.8mm;
-      border-radius: 5px;
+      border-radius: 0;
       line-height: 1;
       height: 5mm;
       max-width: 100%;
@@ -2231,7 +2244,15 @@ export default function StaffBookingPage() {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      border-bottom: 1px solid #555;
+      border-bottom: none;
+    }
+
+    .value-no-border {
+      border-bottom: none;
+    }
+
+    .marathi-text {
+      font-family: "Noto Sans Devanagari", "Noto Serif Devanagari", "Mangal", "Nirmala UI", "Kohinoor Devanagari", system-ui, sans-serif;
     }
 
     @media print {
@@ -2309,8 +2330,8 @@ export default function StaffBookingPage() {
     isWindowSeat = false,
   }) => {
     const data = seatMap[String(seatNo)] || {};
-    const pickupDisplay = data.pickup ? getStopDisplayName(data.pickup) : "";
-    const dropDisplay = data.drop ? getStopDisplayName(data.drop) : "";
+    const pickupDisplay = data.pickup ? getStopNameMarathi(data.pickup) : "";
+    const dropDisplay = data.drop ? getStopNameMarathi(data.drop) : "";
     const isBlocked = data?.status === "blocked";
     const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
 
@@ -2337,12 +2358,12 @@ export default function StaffBookingPage() {
       <div class="line-row">
         <span class="label">Pickup</span>
         <span class="colon">:</span>
-        <span class="value">${safeHtml(pickupDisplay)}</span>
+        <span class="value value-no-border marathi-text">${safeHtml(pickupDisplay)}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(dropDisplay)}</span>
+        <span class="value value-no-border marathi-text">${safeHtml(dropDisplay)}</span>
       </div>
     </div>
   `;
@@ -2771,7 +2792,7 @@ export default function StaffBookingPage() {
       border: 1px solid #ea580c;
       color: #ea580c;
       padding: 0 2px;
-      border-radius: 6px;
+      border-radius: 0;
       line-height: 1;
       flex-shrink: 0;
     }
@@ -2782,11 +2803,11 @@ export default function StaffBookingPage() {
       justify-content: center;
       font-size: 16px;
       font-weight: 700;
-      border: 1px solid #64748b;
+      border: none;
       color: #0f172a;
-      background: #f1f5f9;
+      background: transparent;
       padding: 0.25mm 0.9mm;
-      border-radius: 6px;
+      border-radius: 0;
       line-height: 1;
       height: 3.4mm;
       max-width: 100%;
@@ -2833,7 +2854,7 @@ export default function StaffBookingPage() {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      border-bottom: 1px solid #333;
+      border-bottom: none;
     }
 
     .back-row .label {
@@ -2843,7 +2864,15 @@ export default function StaffBookingPage() {
     .back-row .value {
       font-size: 17px;
       min-height: 2.15mm;
-      border-bottom: 1px solid #333;
+      border-bottom: none;
+    }
+
+    .value-no-border {
+      border-bottom: none;
+    }
+
+    .marathi-text {
+      font-family: "Noto Sans Devanagari", "Noto Serif Devanagari", "Mangal", "Nirmala UI", "Kohinoor Devanagari", system-ui, sans-serif;
     }
 
     @media print {
@@ -2927,8 +2956,8 @@ export default function StaffBookingPage() {
     isWindowSeat = false,
   }) => {
     const data = seatMap[String(seatNo)] || {};
-    const pickupDisplay = data.pickup ? getStopDisplayName(data.pickup) : "";
-    const dropDisplay = data.drop ? getStopDisplayName(data.drop) : "";
+    const pickupDisplay = data.pickup ? getStopNameMarathi(data.pickup) : "";
+    const dropDisplay = data.drop ? getStopNameMarathi(data.drop) : "";
     const isBlocked = data?.status === "blocked";
     const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
 
@@ -2957,12 +2986,12 @@ export default function StaffBookingPage() {
 
       <div class="line-row">
         <span class="label">Pickup :</span>
-        <span class="value">${safeHtml(pickupDisplay)}</span>
+        <span class="value value-no-border marathi-text">${safeHtml(pickupDisplay)}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(dropDisplay)}</span>
+        <span class="value value-no-border marathi-text">${safeHtml(dropDisplay)}</span>
       </div>
     </div>
   `;
@@ -3986,7 +4015,7 @@ export default function StaffBookingPage() {
 
               <div className="space-y-3">
                 <input
-                  placeholder="Name"
+                  placeholder="Name / नाव"
                   value={blockDetails.name}
                   onChange={(e) =>
                     setBlockDetails((p) => ({ ...p, name: sanitizeNameInput(e.target.value) }))
@@ -3995,7 +4024,7 @@ export default function StaffBookingPage() {
                 />
 
                 <input
-                  placeholder="Phone"
+                  placeholder="Phone / फोन"
                   value={blockDetails.phone}
                   onChange={(e) =>
                     setBlockDetails((p) => ({ ...p, phone: sanitizePhoneInput(e.target.value) }))
@@ -4007,7 +4036,7 @@ export default function StaffBookingPage() {
                 />
 
                 <input
-                  placeholder="Email"
+                  placeholder="Email / ई-मेल आयडी"
                   value={blockDetails.email}
                   onChange={(e) =>
                     setBlockDetails((p) => ({ ...p, email: sanitizeEmailInput(e.target.value) }))
