@@ -104,6 +104,74 @@ function getStopTime(bus, stopName) {
     return typeof found === "string" ? "" : normalizeText(found.time || found.stopTime || "");
 }
 
+// Convert various time formats (e.g. "4:15", "04:15", "4:15 PM") into
+// a normalized 24-hour HH:MM string for consistent comparison.
+function normalizeTimeForSort(t) {
+    if (!t) return "";
+    const s = String(t || "").trim();
+
+    // Already HH:MM
+    if (/^\d{2}:\d{2}$/.test(s)) return s;
+
+    // H:MM or HH:MM without leading zero
+    if (/^\d{1,2}:\d{2}$/.test(s)) {
+        const [hh, mm] = s.split(":");
+        return hh.padStart(2, "0") + ":" + mm;
+    }
+
+    // With AM/PM, with or without space
+    const m = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)$/);
+    const m2 = s.match(/^(\d{1,2}):(\d{2})(AM|PM|am|pm)$/);
+    const match = m || m2;
+    if (match) {
+        let hh = Number(match[1]);
+        const mm = match[2];
+        const ap = match[3].toLowerCase();
+        if (ap === "pm" && hh !== 12) hh += 12;
+        if (ap === "am" && hh === 12) hh = 0;
+        return String(hh).padStart(2, "0") + ":" + mm;
+    }
+
+    return "";
+}
+
+// Turn a time string into minutes since midnight for sorting.
+function getTimeSortValueFromString(t) {
+    const norm = normalizeTimeForSort(t);
+    if (!norm) return Number.MAX_SAFE_INTEGER;
+    const [hhStr, mmStr] = norm.split(":");
+    const hh = Number(hhStr);
+    const mm = Number(mmStr);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return Number.MAX_SAFE_INTEGER;
+    return hh * 60 + mm;
+}
+
+// For a given bus+stop, compute sortable numeric time value.
+function getStopTimeSortValue(bus, stopName) {
+    if (!bus || !stopName) return Number.MAX_SAFE_INTEGER;
+    const timeStr = getStopTime(bus, stopName);
+    if (!timeStr) return Number.MAX_SAFE_INTEGER;
+    return getTimeSortValueFromString(timeStr);
+}
+
+// Sort a list of stop names by their time on this bus.
+// Stops without a valid time are pushed to the end.
+function sortStopsByTime(bus, stops) {
+    if (!Array.isArray(stops) || !stops.length) return Array.isArray(stops) ? stops : [];
+    if (!bus) return stops;
+
+    return [...stops].sort((a, b) => {
+        const va = getStopTimeSortValue(bus, a);
+        const vb = getStopTimeSortValue(bus, b);
+
+        if (va === vb) {
+            return normalizeKey(a).localeCompare(normalizeKey(b));
+        }
+
+        return va - vb;
+    });
+}
+
 function calculateFare({ bus, fromStop, toStop, busType, season, dateStr }) {
     if (!bus || !fromStop || !toStop) return { fare: 0 };
 
@@ -1804,12 +1872,13 @@ function getPickupOptions(bus) {
             if (!out.some((x) => normalizeKey(x) === normalizeKey(p))) out.push(p);
         }
 
-        return out;
+        // Sort pickup stops by their times for nicer UI ordering
+        return sortStopsByTime(bus, out);
     }
 
     const stops = buildRouteStops(bus);
     if (stops.length <= 1) return [];
-    return stops.slice(0, stops.length - 1);
+    return sortStopsByTime(bus, stops.slice(0, stops.length - 1));
 }
 
 function getDropOptions(bus, pickup) {
@@ -1844,17 +1913,19 @@ function getDropOptions(bus, pickup) {
         const dropSet = new Set(drops.map((d) => normalizeKey(d)));
         const pickupSet = new Set(pickups.map((p) => normalizeKey(p)));
 
-        return sliced.filter((s) => {
+        const filtered = sliced.filter((s) => {
             const key = normalizeKey(s);
             if (pickupSet.has(key)) return false;
             return dropSet.has(key) || (end && key === normalizeKey(end));
         });
+
+        return sortStopsByTime(bus, filtered);
     }
 
     const stops = buildRouteStops(bus);
     const pickupIndex = stops.findIndex((s) => normalizeKey(s) === normalizeKey(pickup));
     if (pickupIndex === -1) return [];
-    return stops.slice(pickupIndex + 1);
+    return sortStopsByTime(bus, stops.slice(pickupIndex + 1));
 }
 
 function canCancelBookingForUser(booking, user) {

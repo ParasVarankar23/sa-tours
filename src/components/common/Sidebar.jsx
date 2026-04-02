@@ -2,14 +2,12 @@
 "use client";
 
 import {
+    BadgePercent,
     Bell,
     Bus,
     BusFront,
     CalendarDays,
-    GraduationCap,
-    LayoutDashboard,
     ReceiptText,
-    Route,
     Settings,
     ShieldCheck,
     Ticket,
@@ -19,7 +17,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-;
 
 const roleLinks = {
     admin: [
@@ -27,7 +24,7 @@ const roleLinks = {
         { href: "/admin/bus", label: "Buses", icon: BusFront },
         { href: "/admin/schedule", label: "Schedule", icon: CalendarDays },
         { href: "/admin/booking", label: "Booking", icon: Ticket },
-        { href: "/admin/vouchers", label: "Vouchers", icon: Ticket },
+        { href: "/admin/vouchers", label: "Vouchers", icon: BadgePercent }, // changed
         { href: "/admin/payment", label: "Payment History", icon: ReceiptText },
         { href: "/notifications", label: "Notifications", icon: Bell },
         { href: "/settings", label: "Settings", icon: Settings },
@@ -129,8 +126,8 @@ function SidebarContent({ role, pathname, onClose }) {
                                 href={item.href}
                                 onClick={onClose}
                                 className={`group relative flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all duration-200 ${active
-                                    ? "bg-orange-50 text-orange-600 shadow-sm ring-1 ring-orange-100"
-                                    : "text-slate-600 hover:bg-slate-50 hover:text-orange-500"
+                                        ? "bg-orange-50 text-orange-600 shadow-sm ring-1 ring-orange-100"
+                                        : "text-slate-600 hover:bg-slate-50 hover:text-orange-500"
                                     }`}
                             >
                                 {active && (
@@ -139,8 +136,8 @@ function SidebarContent({ role, pathname, onClose }) {
 
                                 <div
                                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition ${active
-                                        ? "bg-white text-orange-600 shadow-sm"
-                                        : "bg-slate-100 text-slate-500 group-hover:bg-orange-50 group-hover:text-orange-500"
+                                            ? "bg-white text-orange-600 shadow-sm"
+                                            : "bg-slate-100 text-slate-500 group-hover:bg-orange-50 group-hover:text-orange-500"
                                         }`}
                                 >
                                     <Icon size={18} />

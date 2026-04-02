@@ -24,7 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../../hooks/useAuth";
 
 /* =========================
@@ -145,6 +145,72 @@ function getStopTime(bus, stopName) {
 
   if (!found) return "";
   return typeof found === "string" ? "" : normalizeText(found.time);
+}
+
+// Normalize various time strings to a 24-hour HH:MM format for comparison.
+function normalizeTimeForInput(t) {
+  if (!t) return "";
+  const s = String(t || "").trim();
+  if (/^\d{2}:\d{2}$/.test(s)) return s; // already HH:MM
+  if (/^\d{1,2}:\d{2}$/.test(s)) {
+    const [hh, mm] = s.split(":");
+    return hh.padStart(2, "0") + ":" + mm;
+  }
+  const m = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)$/);
+  if (m) {
+    let hh = Number(m[1]);
+    const mm = m[2];
+    const ap = m[3].toLowerCase();
+    if (ap === "pm" && hh !== 12) hh += 12;
+    if (ap === "am" && hh === 12) hh = 0;
+    return String(hh).padStart(2, "0") + ":" + mm;
+  }
+  const m2 = s.match(/^(\d{1,2}):(\d{2})(AM|PM|am|pm)$/);
+  if (m2) {
+    let hh = Number(m2[1]);
+    const mm = m2[2];
+    const ap = m2[3].toLowerCase();
+    if (ap === "pm" && hh !== 12) hh += 12;
+    if (ap === "am" && hh === 12) hh = 0;
+    return String(hh).padStart(2, "0") + ":" + mm;
+  }
+  return "";
+}
+
+// Convert a time string into minutes since midnight for sorting.
+function getTimeSortValueFromString(t) {
+  const norm = normalizeTimeForInput(t);
+  if (!norm) return Number.MAX_SAFE_INTEGER;
+  const [hhStr, mmStr] = norm.split(":");
+  const hh = Number(hhStr);
+  const mm = Number(mmStr);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return Number.MAX_SAFE_INTEGER;
+  return hh * 60 + mm;
+}
+
+// For a given bus and stop name, get a numeric time value used for sorting.
+function getStopTimeSortValue(bus, stopName) {
+  if (!bus || !stopName) return Number.MAX_SAFE_INTEGER;
+  const timeStr = getStopTime(bus, stopName);
+  if (!timeStr) return Number.MAX_SAFE_INTEGER;
+  return getTimeSortValueFromString(timeStr);
+}
+
+// Sort list of stops by their scheduled time on this bus.
+function sortStopsByTime(bus, stops) {
+  if (!Array.isArray(stops) || !stops.length) return Array.isArray(stops) ? stops : [];
+  if (!bus) return stops;
+
+  return [...stops].sort((a, b) => {
+    const va = getStopTimeSortValue(bus, a);
+    const vb = getStopTimeSortValue(bus, b);
+
+    if (va === vb) {
+      return normalizeKey(a).localeCompare(normalizeKey(b));
+    }
+
+    return va - vb;
+  });
 }
 
 function getPickupOptions(bus) {
@@ -419,6 +485,10 @@ export default function StaffBookingPage() {
   const [pickupDropdownOpen, setPickupDropdownOpen] = useState(false);
   const [dropDropdownOpen, setDropDropdownOpen] = useState(false);
 
+  // Refs to detect clicks outside custom dropdowns
+  const pickupDropdownRef = useRef(null);
+  const dropDropdownRef = useRef(null);
+
   const visibleBookings = useMemo(() => {
     return Object.entries(bookings || {}).filter(([, b]) => !!b);
   }, [bookings]);
@@ -426,6 +496,32 @@ export default function StaffBookingPage() {
   const { user } = useAuth();
   const router = useRouter();
   const { subscribeRefresh, triggerRefresh } = useAutoRefresh();
+
+  // Close pickup/drop dropdowns when clicking outside their containers
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!pickupDropdownOpen && !dropDropdownOpen) return;
+
+      const pickupEl = pickupDropdownRef.current;
+      const dropEl = dropDropdownRef.current;
+
+      const isInsidePickup = pickupEl && pickupEl.contains(event.target);
+      const isInsideDrop = dropEl && dropEl.contains(event.target);
+
+      if (!isInsidePickup && !isInsideDrop) {
+        setPickupDropdownOpen(false);
+        setDropDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [pickupDropdownOpen, dropDropdownOpen]);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -595,23 +691,34 @@ export default function StaffBookingPage() {
     [selectedBus, bookingForm.pickup]
   );
 
+  // For UI, show stops ordered by their times
+  const sortedPickupOptions = useMemo(
+    () => sortStopsByTime(selectedBus, pickupOptions),
+    [selectedBus, pickupOptions]
+  );
+
+  const sortedDropOptions = useMemo(
+    () => sortStopsByTime(selectedBus, dropOptions),
+    [selectedBus, dropOptions]
+  );
+
   const filteredPickupOptions = useMemo(() => {
-    if (!pickupSearch) return pickupOptions;
+    if (!pickupSearch) return sortedPickupOptions;
 
     const q = pickupSearch.toLowerCase();
-    return pickupOptions.filter((stop) =>
+    return sortedPickupOptions.filter((stop) =>
       getStopDisplayName(stop).toLowerCase().includes(q)
     );
-  }, [pickupOptions, pickupSearch]);
+  }, [sortedPickupOptions, pickupSearch]);
 
   const filteredDropOptions = useMemo(() => {
-    if (!dropSearch) return dropOptions;
+    if (!dropSearch) return sortedDropOptions;
 
     const q = dropSearch.toLowerCase();
-    return dropOptions.filter((stop) =>
+    return sortedDropOptions.filter((stop) =>
       getStopDisplayName(stop).toLowerCase().includes(q)
     );
-  }, [dropOptions, dropSearch]);
+  }, [sortedDropOptions, dropSearch]);
 
   const resetBookingForm = () => {
     setSelectedSeats([]);
@@ -3548,7 +3655,10 @@ export default function StaffBookingPage() {
                           </label>
 
                           <div className="space-y-2">
-                            <div className="relative">
+                            <div
+                              ref={pickupDropdownRef}
+                              className="relative"
+                            >
                               <button
                                 type="button"
                                 onClick={() => {
@@ -3647,7 +3757,10 @@ export default function StaffBookingPage() {
                           </label>
 
                           <div className="space-y-2">
-                            <div className="relative">
+                            <div
+                              ref={dropDropdownRef}
+                              className="relative"
+                            >
                               <button
                                 type="button"
                                 onClick={() => {

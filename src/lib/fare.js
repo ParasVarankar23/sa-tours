@@ -57,7 +57,7 @@ export const COMMON_VILLAGE_STOPS = [
     "Saklap",
     "Mhasla",
     "Mhasla Stand",
-    "Pabra Fata",
+    "Pabra Phata",
     "Dorje",
     "Chandore",
     "Sai",
@@ -84,14 +84,14 @@ export const BORLI_VILLAGE_STOPS = [
     "Khalcha Velas",
     "Velas",
     "Vadavli",
-    "Vadavli Fata",
+    "Vadavli Phata",
     "Borli",
     "Pohamil",
-    "ST Stand",
+    "Borli ST Stand",
     "Ganesh Chowk",
     "Shivaji Chowk",
     "Samtanagar",
-    "Bhava Fata",
+    "Bhava Phata",
     "Kapoli",
     "Shiste",
     ...COMMON_VILLAGE_STOPS,
@@ -108,14 +108,14 @@ export const DIGHI_VILLAGE_STOPS = [
     "Khalcha Velas",
     "Velas",
     "Vadavli",
-    "Vadavli Fata",
+    "Vadavli Phata",
     "Borli",
     "Pohamil",
-    "ST Stand",
+    "Borli ST Stand",
     "Ganesh Chowk",
     "Shivaji Chowk",
     "Samtanagar",
-    "Bhava Fata",
+    "Bhava Phata",
     "Kapoli",
     "Shiste",
     ...COMMON_VILLAGE_STOPS,
@@ -159,14 +159,14 @@ export const BORLI_FARE_GROUPS = [
         fare: 450,
         stops: [
             "Vadavli",
-            "Vadavli Fata",
+            "Vadavli Phata",
             "Borli",
             "Pohamil",
-            "ST Stand",
+            "Borli ST Stand",
             "Ganesh Chowk",
             "Shivaji Chowk",
             "Samtanagar",
-            "Bhava Fata",
+            "Bhava Phata",
             "Kapoli",
             "Shiste",
             "Gondghar",
@@ -186,7 +186,7 @@ export const BORLI_FARE_GROUPS = [
             "Saklap",
             "Mhasla",
             "Mhasla Stand",
-            "Pabra Fata",
+            "Pabra Phata",
             "Dorje",
             "Chandore",
             "Sai",
@@ -223,16 +223,16 @@ export const DIGHI_FARE_GROUPS = [
         fare: 450,
         stops: [
             "Vadavli",
-            "Vadavli Fata",
+            "Vadavli Phata",
             "Shiste",
             "Kapoli",
             "Borli",
             "Ganesh Chowk",
             "Shivaji Chowk",
             "Samtanagar",
-            "Bhava Fata",
+            "Bhava Phata",
             "Pohamil",
-            "ST Stand",
+            "Borli ST Stand",
             "Gondghar",
             "Mendadi",
             "Mendadi Grampanchayat",
@@ -250,7 +250,7 @@ export const DIGHI_FARE_GROUPS = [
             "Saklap",
             "Mhasla",
             "Mhasla Stand",
-            "Pabra Fata",
+            "Pabra Phata",
             "Dorje",
             "Chandore",
             "Sai",
@@ -321,15 +321,15 @@ export const STOP_NAMES_MARATHI = {
     Velas: "वेळास",
 
     Vadavli: "वडवली",
-    "Vadavli Fata": "वडवली फाटा",
+    "Vadavli Phata": "वडवली फाटा",
 
     Borli: "बोर्ली",
     Pohamil: "पोहामिल",
-    "ST Stand": "एसटी स्टँड",
+    "Borli ST Stand": "बोर्ली एसटी स्टँड",
     "Ganesh Chowk": "गणेश चौक",
     "Shivaji Chowk": "शिवाजी चौक",
     Samtanagar: "समतानगर",
-    "Bhava Fata": "भावा फाटा",
+    "Bhava Phata": "भावा फाटा",
     Kapoli: "कापोली",
     Shiste: "शिस्ते",
 
@@ -348,7 +348,7 @@ export const STOP_NAMES_MARATHI = {
     Mhasla: "म्हसळा",
     "Mhasla Stand": "म्हसळा स्टँड",
 
-    "Pabra Fata": "पाब्रा फाटा",
+    "Pabra Phata": "पाब्रा फाटा",
     Dorje: "दोरजे",
     Chandore: "चांदोरे",
     Sai: "साई",
@@ -444,11 +444,14 @@ const STOP_ALIASES = {
 
     vadavli: "Vadavli",
     vadvali: "Vadavli",
-    "vadavli fata": "Vadavli Fata",
-    vadavlifata: "Vadavli Fata",
-    "vadvali fata": "Vadavli Fata",
-    "vadvali phata": "Vadavli Fata",
-    vadvaliphata: "Vadavli Fata",
+    "vadavli phata": "Vadavli Phata",
+    vadavliphata: "Vadavli Phata",
+    "vadavli fata": "Vadavli Phata",
+    vadavlifata: "Vadavli Phata",
+    "vadvali phata": "Vadavli Phata",
+    "vadvali fata": "Vadavli Phata",
+    vadvaliphata: "Vadavli Phata",
+    vadvalifata: "Vadavli Phata",
 
     borli: "Borli",
     kapoli: "Kapoli",
@@ -456,8 +459,10 @@ const STOP_ALIASES = {
     shishti: "Shiste",
 
     pohamil: "Pohamil",
-    "st stand": "ST Stand",
-    ststand: "ST Stand",
+    "st stand": "Borli ST Stand",
+    ststand: "Borli ST Stand",
+    "borli st stand": "Borli ST Stand",
+    borliststand: "Borli ST Stand",
 
     "ganesh chowk": "Ganesh Chowk",
     ganeshchowk: "Ganesh Chowk",
@@ -467,8 +472,10 @@ const STOP_ALIASES = {
 
     samtanagar: "Samtanagar",
 
-    "bhava fata": "Bhava Fata",
-    bhavafata: "Bhava Fata",
+    "bhava phata": "Bhava Phata",
+    bhavaphata: "Bhava Phata",
+    "bhava fata": "Bhava Phata",
+    bhavafata: "Bhava Phata",
 
     gondghar: "Gondghar",
 
@@ -499,8 +506,10 @@ const STOP_ALIASES = {
     "mhasla stand": "Mhasla Stand",
     mhaslastand: "Mhasla Stand",
 
-    "pabra fata": "Pabra Fata",
-    pabrafata: "Pabra Fata",
+    "pabra phata": "Pabra Phata",
+    pabraphata: "Pabra Phata",
+    "pabra fata": "Pabra Phata",
+    pabrafata: "Pabra Phata",
 
     dorje: "Dorje",
     chandore: "Chandore",
@@ -525,7 +534,6 @@ function sanitizeStopKey(value) {
         .trim()
         .toLowerCase()
         .replace(/\s+/g, " ")
-        // allow Unicode letters (including Devanagari)
         .replace(/[^\p{L}\p{M}\s]/gu, "")
         .replace(/\s+/g, " ")
         .trim();
@@ -836,7 +844,6 @@ export function getFare({
         };
     }
 
-    // FORWARD ROUTE (Village -> City)
     if (isForwardRoute(route)) {
         const validVillageStops = getVillageStopsByRoute(route);
 
@@ -879,7 +886,6 @@ export function getFare({
         };
     }
 
-    // RETURN ROUTE (City -> Village)
     if (isReturnRoute(route)) {
         const validVillageStops = getVillageStopsByRoute(route);
 

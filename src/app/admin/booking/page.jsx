@@ -26,7 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /* =========================
   Helpers
@@ -146,6 +146,46 @@ function getStopTime(bus, stopName) {
 
   if (!found) return "";
   return typeof found === "string" ? "" : normalizeText(found.time);
+}
+
+// Helper: convert a time string like "4:15 PM" or "22:30" to minutes since midnight
+// for stable chronological sorting. If the time cannot be parsed, place it at the end.
+function getTimeSortValueFromString(t) {
+  const normalized = normalizeTimeForInput(t);
+  if (!normalized) return Number.MAX_SAFE_INTEGER;
+  const [hhStr, mmStr] = normalized.split(":");
+  const hh = Number(hhStr);
+  const mm = Number(mmStr);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return Number.MAX_SAFE_INTEGER;
+  return hh * 60 + mm;
+}
+
+// Helper: given a bus and stop name, return a numeric value used for sorting
+// stops by their scheduled time.
+function getStopTimeSortValue(bus, stopName) {
+  if (!bus || !stopName) return Number.MAX_SAFE_INTEGER;
+  const timeStr = getStopTime(bus, stopName);
+  if (!timeStr) return Number.MAX_SAFE_INTEGER;
+  return getTimeSortValueFromString(timeStr);
+}
+
+// Sort a list of stop names by their associated time for a specific bus.
+// Stops without a valid time are kept at the end, and ties are broken
+// alphabetically by stop name to keep the order stable.
+function sortStopsByTime(bus, stops) {
+  if (!Array.isArray(stops) || !stops.length) return Array.isArray(stops) ? stops : [];
+  if (!bus) return stops;
+
+  return [...stops].sort((a, b) => {
+    const va = getStopTimeSortValue(bus, a);
+    const vb = getStopTimeSortValue(bus, b);
+
+    if (va === vb) {
+      return normalizeKey(a).localeCompare(normalizeKey(b));
+    }
+
+    return va - vb;
+  });
 }
 
 function getPickupOptions(bus) {
@@ -488,6 +528,10 @@ export default function BookingPage() {
   const [pickupOpen, setPickupOpen] = useState(false);
   const [dropOpen, setDropOpen] = useState(false);
 
+  // Refs used to detect clicks outside of the custom dropdowns
+  const pickupDropdownRef = useRef(null);
+  const dropDropdownRef = useRef(null);
+
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [blockDetails, setBlockDetails] = useState({
     name: "",
@@ -508,6 +552,32 @@ export default function BookingPage() {
   const { user } = useAuth();
   const router = useRouter();
   const { triggerRefresh, subscribeRefresh } = useAutoRefresh();
+
+  // Close pickup/drop dropdowns when clicking anywhere outside them
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!pickupOpen && !dropOpen) return;
+
+      const pickupEl = pickupDropdownRef.current;
+      const dropEl = dropDropdownRef.current;
+
+      const isInsidePickup = pickupEl && pickupEl.contains(event.target);
+      const isInsideDrop = dropEl && dropEl.contains(event.target);
+
+      if (!isInsidePickup && !isInsideDrop) {
+        setPickupOpen(false);
+        setDropOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [pickupOpen, dropOpen]);
 
   // Refresh buses, schedules and booked counts for overview cards
   const refreshOverview = useCallback(async () => {
@@ -791,19 +861,31 @@ export default function BookingPage() {
     [selectedBus, bookingForm.pickup]
   );
 
+  // For the UI dropdowns, show pickup and drop stops in proper
+  // chronological order based on their times.
+  const sortedPickupOptions = useMemo(
+    () => sortStopsByTime(selectedBus, pickupOptions),
+    [selectedBus, pickupOptions]
+  );
+
+  const sortedDropOptions = useMemo(
+    () => sortStopsByTime(selectedBus, dropOptions),
+    [selectedBus, dropOptions]
+  );
+
   const filteredPickupOptions = useMemo(() => {
-    if (!pickupOptions || !pickupOptions.length) return [];
+    if (!sortedPickupOptions || !sortedPickupOptions.length) return [];
     const q = String(pickupFilter || "").trim().toLowerCase();
-    if (!q) return pickupOptions;
-    return pickupOptions.filter((s) => getStopDisplayName(s).toLowerCase().includes(q));
-  }, [pickupOptions, pickupFilter]);
+    if (!q) return sortedPickupOptions;
+    return sortedPickupOptions.filter((s) => getStopDisplayName(s).toLowerCase().includes(q));
+  }, [sortedPickupOptions, pickupFilter]);
 
   const filteredDropOptions = useMemo(() => {
-    if (!dropOptions || !dropOptions.length) return [];
+    if (!sortedDropOptions || !sortedDropOptions.length) return [];
     const q = String(dropFilter || "").trim().toLowerCase();
-    if (!q) return dropOptions;
-    return dropOptions.filter((s) => getStopDisplayName(s).toLowerCase().includes(q));
-  }, [dropOptions, dropFilter]);
+    if (!q) return sortedDropOptions;
+    return sortedDropOptions.filter((s) => getStopDisplayName(s).toLowerCase().includes(q));
+  }, [sortedDropOptions, dropFilter]);
 
   const resetBookingForm = () => {
     setSelectedSeats([]);
@@ -1916,6 +1998,38 @@ export default function BookingPage() {
       padding: 0;
     }
 
+    /* Bus side-image shown above the first left-column seat (before seat 3) */
+    .bus-diagram {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1mm 0;
+    }
+
+    .bus-diagram img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Bus side-image shown above the first left-column seat (before seat 3) */
+    .bus-diagram {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1mm 0;
+    }
+
+    .bus-diagram img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
     /* =========================
        BACK ROW
     ========================= */
@@ -2225,7 +2339,12 @@ export default function BookingPage() {
     const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
 
     const leftColumnHtml = `
-    ${Array.from({ length: topOffsetRows })
+    <div class="left-seat-wrap left-empty">
+      <div class="bus-diagram">
+        <img src="/sa3.jpeg" alt="Bus layout" />
+      </div>
+    </div>
+    ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
         .map(() => `<div class="left-seat-wrap left-empty"></div>`)
         .join("")}
     ${leftSeats
@@ -2815,7 +2934,12 @@ export default function BookingPage() {
     const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
 
     const leftColumnHtml = `
-    ${Array.from({ length: topOffsetRows })
+    <div class="left-seat-wrap left-empty">
+      <div class="bus-diagram">
+        <img src="/bus2.jpeg" alt="Bus layout" />
+      </div>
+    </div>
+    ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
         .map(() => `<div class="left-seat-wrap left-empty"></div>`)
         .join("")}
     ${leftSeats
@@ -3096,6 +3220,22 @@ export default function BookingPage() {
       align-items: stretch;
       margin: 0;
       padding: 0;
+    }
+
+    /* Bus side-image shown above the first left-column seat (before seat 3) */
+    .bus-diagram {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1mm 0;
+    }
+
+    .bus-diagram img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
     }
 
     /* =========================
@@ -3442,7 +3582,12 @@ export default function BookingPage() {
     const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
 
     const leftColumnHtml = `
-    ${Array.from({ length: topOffsetRows })
+    <div class="left-seat-wrap left-empty">
+      <div class="bus-diagram">
+        <img src="/bus3.jpeg" alt="Bus layout" />
+      </div>
+    </div>
+    ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
         .map(() => `<div class="left-seat-wrap left-empty"></div>`)
         .join("")}
     ${leftSeats
@@ -4209,7 +4354,10 @@ export default function BookingPage() {
                           {/* Pickup / Drop Dropdowns */}
                           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             {/* Pickup Dropdown */}
-                            <div className="relative stop-dropdown-wrapper">
+                            <div
+                              ref={pickupDropdownRef}
+                              className="relative stop-dropdown-wrapper"
+                            >
                               <button
                                 type="button"
                                 onClick={() => {
@@ -4285,7 +4433,10 @@ export default function BookingPage() {
                             </div>
 
                             {/* Drop Dropdown */}
-                            <div className="relative stop-dropdown-wrapper">
+                            <div
+                              ref={dropDropdownRef}
+                              className="relative stop-dropdown-wrapper"
+                            >
                               <button
                                 type="button"
                                 onClick={() => {
