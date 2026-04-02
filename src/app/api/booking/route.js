@@ -687,6 +687,11 @@ export async function POST(req) {
         const startPointData = getStartPoint(busData);
         const endPointData = getEndPoint(busData);
 
+        const busRouteName = typeof busData.routeName === "string" ? busData.routeName : "";
+        const startPointNameForBooking =
+            (startPointData && startPointData.name) ||
+            normalizeText(busData.startPointName || busData.startStop || busData.from);
+
         const seatRef = db.ref(`bookings/${date}/${busId}/${seatNo}`);
         const existing = await seatRef.once("value");
 
@@ -782,6 +787,8 @@ export async function POST(req) {
             fare: finalFare,
 
             busNumber: busNumber || normalizeText(busData.busNumber) || null,
+            routeName: busRouteName || null,
+            startPoint: startPointNameForBooking || null,
             startTime:
                 startTime ||
                 startPointData.time ||
@@ -904,6 +911,7 @@ export async function POST(req) {
         if (email) {
             try {
                 sendBookingConfirmation(email, name || "Passenger", {
+                    busId,
                     seatNo,
                     date,
                     ...payload,
@@ -1117,7 +1125,7 @@ export async function PUT(req) {
             const nameToUse = updates.name || existingVal.name || "Passenger";
 
             if (emailToUse) {
-                const mergedBooking = { seatNo, date, ...existingVal, ...updates };
+                const mergedBooking = { busId, seatNo, date, ...existingVal, ...updates };
                 sendBookingConfirmation(emailToUse, nameToUse, mergedBooking).catch((e) =>
                     console.error("sendBookingConfirmation (update) error:", e)
                 );
@@ -1328,7 +1336,7 @@ export async function DELETE(req) {
             emailResult.attempted = true;
             try {
                 // include refund/voucher info into booking passed to email generator
-                const bookingForEmail = { seatNo, date, ...existingVal, refund: refundResult };
+                const bookingForEmail = { busId, seatNo, date, ...existingVal, refund: refundResult };
                 if (voucherIssued) bookingForEmail.voucherCode = voucherIssued;
                 await sendBookingCancellation(emailTo, nameTo, bookingForEmail);
                 emailResult.sent = true;

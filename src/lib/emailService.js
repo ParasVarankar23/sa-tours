@@ -196,19 +196,47 @@ function formatTime12Hour(time = "") {
 }
 
 /* =========================================================
-   BUS CONTACT BY START TIME ONLY
-   2:00 PM + 4:00 AM => 9209471309
-   4:00 PM + 3:00 AM => 9273635316
+   BUS CONTACT BY ROUTE + START TIME
+   - Borli / Velas side buses => 9209471309 (bus 09)
+   - Dighi side buses        => 9273635316 (bus 16)
+   - Fallback: keep old time-only logic
 ========================================================= */
-function getBusContactNumber(startTime = "") {
-    const time12 = formatTime12Hour(startTime).toLowerCase();
+function getBusContactNumber(booking = {}) {
+    const route = String(booking.routeName || "").toLowerCase();
 
-    // 2:00 PM and 4:00 AM => 9209471309
-    if (["2:00 pm", "4:00 am"].includes(time12)) {
+    let startPointName = "";
+    if (typeof booking.startPoint === "string") {
+        startPointName = booking.startPoint;
+    } else if (booking.startPoint && booking.startPoint.name) {
+        startPointName = booking.startPoint.name;
+    }
+    const from = String(startPointName || "").toLowerCase();
+
+    const borliSide =
+        route.includes("borli") ||
+        route.includes("velas") ||
+        from.includes("borli") ||
+        from.includes("velas");
+
+    const dighiSide =
+        route.includes("dighi") ||
+        from.includes("dighi");
+
+    if (borliSide) {
+        return "9209471309"; // Velas / Borli bus contact
+    }
+
+    if (dighiSide) {
+        return "9273635316"; // Dighi bus contact
+    }
+
+    const time12 = formatTime12Hour(booking.startTime || "").toLowerCase();
+
+    // Legacy time-based mapping as fallback
+    if (["2:00 pm", "3:00 am"].includes(time12)) {
         return "9209471309";
     }
 
-    // 4:00 PM and 3:00 AM => 9273635316
     if (["4:00 pm", "3:00 am"].includes(time12)) {
         return "9273635316";
     }
@@ -659,7 +687,7 @@ export async function sendBookingConfirmation(email, name, booking = {}) {
 
     const helpline = FIXED_HELPLINE;
     const bookingContact = FIXED_BUS_BOOKING;
-    const busContact = getBusContactNumber(booking.startTime || "");
+    const busContact = getBusContactNumber(booking);
     const paymentMethod = getPaymentMethod(booking);
 
     const bookingCard = createInfoCard(
@@ -947,7 +975,7 @@ export async function sendBookingCancellation(email, name, booking = {}) {
 
     const helpline = FIXED_HELPLINE;
     const bookingContact = FIXED_BUS_BOOKING;
-    const busContact = getBusContactNumber(booking.startTime || "");
+    const busContact = getBusContactNumber(booking);
     const paymentMethod = getPaymentMethod(booking);
 
     let paymentRows = "";
