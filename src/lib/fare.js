@@ -16,7 +16,10 @@ export const AC_SURCHARGE = 0;
    CITY SIDE STOPS (FORWARD ORDER: VILLAGE -> DONGRI)
 ------------------------------------------------------- */
 export const CITY_STOPS = [
-    "Panvel",
+    "Panvel ST Stand",
+    "Uran Phata",
+    "Garden Hotel",
+    "Palspa Phata",
     "Kalamboli",
     "Khanda Colony",
     "Kamothe",
@@ -26,13 +29,14 @@ export const CITY_STOPS = [
     "Nerul",
     "Juinagar",
     "Sanpada",
-    "Vashi",
+    "Vashi Stand",
     "Mankhurd",
     "Govandi",
     "Chembur",
     "Sion",
     "Kurla",
     "Dadar",
+    "Wadala IMAX",
     "Byculla",
     "Masjid Bandar",
     "Dongri",
@@ -277,7 +281,10 @@ export const DIGHI_FARE_GROUPS = [
 ------------------------------------------------------- */
 export const STOP_NAMES_MARATHI = {
     // CITY SIDE STOPS
-    Panvel: "पनवेल",
+    "Panvel ST Stand": "पनवेल एसटी स्टँड",
+    "Uran Phata": "उरण फाटा",
+    "Garden Hotel": "गार्डन हॉटेल",
+    "Palspa Phata": "पळस्पे फाटा",
     Kalamboli: "कळंबोली",
     "Khanda Colony": "खंडा कॉलनी",
     Kamothe: "कामोठे",
@@ -287,13 +294,14 @@ export const STOP_NAMES_MARATHI = {
     Nerul: "नेरुळ",
     Juinagar: "जुईनगर",
     Sanpada: "सानपाडा",
-    Vashi: "वाशी",
+    "Vashi Stand": "वाशी स्टँड",
     Mankhurd: "मानखुर्द",
     Govandi: "गोवंडी",
     Chembur: "चेंबूर",
     Sion: "सायन",
     Kurla: "कुर्ला",
     Dadar: "दादर",
+    "Wadala IMAX": "वडाळा आयमॅक्स",
     Byculla: "भायखळा",
     "Masjid Bandar": "मस्जिद बंदर",
     Dongri: "डोंगरी",
@@ -335,7 +343,7 @@ export const STOP_NAMES_MARATHI = {
     Varvatna: "वरवटणे",
     Banoti: "बनोटी",
     Tondsure: "तोंडसुरे",
-    Saklap: "साकळप",
+    Saklap: "सकळप",
 
     Mhasla: "म्हसळा",
     "Mhasla Stand": "म्हसळा स्टँड",
@@ -357,7 +365,28 @@ export const STOP_NAMES_MARATHI = {
 ------------------------------------------------------- */
 const STOP_ALIASES = {
     // City side
-    panvel: "Panvel",
+    panvel: "Panvel ST Stand",
+    "panvel st stand": "Panvel ST Stand",
+    panvelststand: "Panvel ST Stand",
+    "panvel st": "Panvel ST Stand",
+    panvelst: "Panvel ST Stand",
+
+    "uran phata": "Uran Phata",
+    uranphata: "Uran Phata",
+    "uran fata": "Uran Phata",
+    uranfata: "Uran Phata",
+
+    "garden hotel": "Garden Hotel",
+    gardenhotel: "Garden Hotel",
+    garden: "Garden Hotel",
+
+    "palspa phata": "Palspa Phata",
+    palspaphata: "Palspa Phata",
+    "palspa fata": "Palspa Phata",
+    palspafata: "Palspa Phata",
+    "palspe phata": "Palspa Phata",
+    "palspe fata": "Palspa Phata",
+
     kalamboli: "Kalamboli",
     "khanda colony": "Khanda Colony",
     khandacolony: "Khanda Colony",
@@ -371,13 +400,24 @@ const STOP_ALIASES = {
     nerul: "Nerul",
     juinagar: "Juinagar",
     sanpada: "Sanpada",
-    vashi: "Vashi",
+
+    vashi: "Vashi Stand",
+    "vashi stand": "Vashi Stand",
+    vashistand: "Vashi Stand",
+
     mankhurd: "Mankhurd",
     govandi: "Govandi",
     chembur: "Chembur",
     sion: "Sion",
     kurla: "Kurla",
     dadar: "Dadar",
+
+    "wadala imax": "Wadala IMAX",
+    wadalaimax: "Wadala IMAX",
+    "wadala max": "Wadala IMAX",
+    "wadvala imax": "Wadala IMAX",
+    wadvalaimax: "Wadala IMAX",
+
     byculla: "Byculla",
     masjidbandar: "Masjid Bandar",
     "masjid bandar": "Masjid Bandar",
