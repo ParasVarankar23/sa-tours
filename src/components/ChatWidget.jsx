@@ -369,9 +369,13 @@ export default function ChatWidget() {
                                                     : "rounded-bl-md border border-slate-200 bg-white text-slate-800"
                                                     }`}
                                             >
-                                                <p className="whitespace-pre-wrap break-words">
-                                                    {message.content}
-                                                </p>
+                                                {message.role === "assistant" ? (
+                                                    renderMessageContent(message.content)
+                                                ) : (
+                                                    <p className="whitespace-pre-wrap break-words">
+                                                        {message.content}
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
