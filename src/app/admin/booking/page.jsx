@@ -1709,7 +1709,8 @@ export default function BookingPage() {
       padding: 0;
       background: #fff;
       color: #111;
-      font-family: "Times New Roman", serif;
+      /* Prefer fonts that render Devanagari (Marathi) clearly */
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       overflow: hidden;
@@ -1932,7 +1933,8 @@ export default function BookingPage() {
       border: 1px solid #444;
       padding: 0.8mm 1mm 0.5mm;
       background: #fff;
-      overflow: hidden;
+      /* Allow Devanagari matras to render fully */
+      overflow: visible;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
@@ -1944,7 +1946,7 @@ export default function BookingPage() {
       border: 1px solid #444;
       padding: 0.8mm 1mm 0.6mm;
       margin: 0;
-      overflow: hidden;
+      overflow: visible;
     }
 
     .seat-box.blocked {
@@ -2020,18 +2022,19 @@ export default function BookingPage() {
     ========================= */
     .line-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 3mm;
       margin: 0.14mm 0;
-      min-height: 2.4mm;
-      overflow: hidden;
+      min-height: 2.6mm;
+      /* Let tall glyphs and matras show fully */
+      overflow: visible;
     }
 
     .label {
       flex: 0 0 auto;
       font-size: 18px;
       font-weight: 700;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
     }
 
@@ -2039,14 +2042,22 @@ export default function BookingPage() {
       flex: 1 1 auto;
       min-width: 0;
       display: inline-block;
-      min-height: 2.2mm;
+      min-height: 2.4mm;
       padding: 0 0 0.06mm 0;
       font-size: 18px;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border-bottom: 1px solid #555;
+      overflow: visible;
+      text-overflow: clip;
+    }
+
+    /* Ensure all key text uses a Devanagari-capable font stack */
+    .label,
+    .value,
+    .seat-title,
+    .ticket-tag,
+    .blocked-tag {
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
     }
 
     .back-row .label {
@@ -2293,7 +2304,7 @@ export default function BookingPage() {
       padding: 0;
       background: #fff;
       color: #111;
-      font-family: "Times New Roman", serif;
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       overflow: hidden;
@@ -2516,7 +2527,7 @@ export default function BookingPage() {
       border: 1px solid #444;
       padding: 0.8mm 1mm 0.5mm;
       background: #fff;
-      overflow: hidden;
+      overflow: visible;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
@@ -2528,7 +2539,7 @@ export default function BookingPage() {
       border: 1px solid #444;
       padding: 0.9mm 1mm 0.6mm;
       margin: 0;
-      overflow: hidden;
+      overflow: visible;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
@@ -2605,11 +2616,11 @@ export default function BookingPage() {
     ========================= */
     .line-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 1.2mm;
       margin: 0.14mm 0;
-      min-height: 2.4mm;
-      overflow: hidden;
+      min-height: 2.6mm;
+      overflow: visible;
     }
 
     .label {
@@ -2617,7 +2628,7 @@ export default function BookingPage() {
       width: 14mm;
       font-size: 18px;
       font-weight: 700;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
     }
 
@@ -2625,14 +2636,21 @@ export default function BookingPage() {
       flex: 1 1 auto;
       min-width: 0;
       display: inline-block;
-      min-height: 2.2mm;
+      min-height: 2.4mm;
       padding: 0 0 0.06mm 0.35mm;
       font-size: 18px;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border-bottom: 1px solid #555;
+      overflow: visible;
+      text-overflow: clip;
+    }
+
+    .label,
+    .value,
+    .seat-title,
+    .ticket-tag,
+    .blocked-tag {
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
     }
 
     @media print {
@@ -2874,7 +2892,7 @@ export default function BookingPage() {
       padding: 0;
       background: #fff;
       color: #111;
-      font-family: "Times New Roman", serif;
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       overflow: hidden;
@@ -3065,29 +3083,30 @@ export default function BookingPage() {
        BACK ROW - CONNECTED
     ========================= */
     .back-row {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0;
-  margin-top: -1.2px;
-  padding-top: 0;
-  height: 34mm;
-  max-height: 34mm;
-  overflow: visible;
-  page-break-inside: avoid;
-  break-inside: avoid;
-  align-items: stretch;
-  justify-items: stretch;
-  border-top: none;
-}
-  .back-row .seat-box {
-  height: 34mm;
-  min-height: 34mm;
-  border: 1.2px solid #222;
-  padding: 0.8mm 1mm 0.55mm;
-  margin: 0;
-  overflow: visible;
-}
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+      margin-top: -1.2px;
+      padding-top: 0;
+      height: 34mm;
+      max-height: 34mm;
+      overflow: visible;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      align-items: stretch;
+      justify-items: stretch;
+      border-top: none;
+    }
+
+    .back-row .seat-box {
+      height: 34mm;
+      min-height: 34mm;
+      border: 1.2px solid #222;
+      padding: 0.8mm 1mm 0.55mm;
+      margin: 0;
+      overflow: visible;
+    }
 
     .back-seat-wrap {
       width: 100%;
@@ -3108,7 +3127,7 @@ export default function BookingPage() {
       border: 1.2px solid #222;
       padding: 0.8mm 1mm 0.55mm;
       background: #fff;
-      overflow: hidden;
+      overflow: visible;
       page-break-inside: avoid;
       break-inside: avoid;
       display: flex;
@@ -3122,6 +3141,7 @@ export default function BookingPage() {
       padding: 0.8mm 1mm 0.55mm;
       border: 1.2px solid #222;
       margin: 0;
+      overflow: visible;
     }
 
     .seat-box.blocked {
@@ -3200,15 +3220,15 @@ export default function BookingPage() {
     ========================= */
     .line-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 0.8mm;
       margin: 0.12mm 0;
-      min-height: 2.2mm;
-      overflow: hidden;
+      min-height: 2.4mm;
+      overflow: visible;
     }
 
     .back-row .line-row {
-      min-height: 2.35mm;
+      min-height: 2.5mm;
       margin: 0.12mm 0;
     }
 
@@ -3216,7 +3236,7 @@ export default function BookingPage() {
       flex: 0 0 auto;
       font-size: 17px;
       font-weight: 700;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
     }
 
@@ -3224,14 +3244,13 @@ export default function BookingPage() {
       flex: 1 1 auto;
       min-width: 0;
       display: inline-block;
-      min-height: 2.1mm;
+      min-height: 2.3mm;
       padding: 0 0 0.06mm 0;
       font-size: 17px;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border-bottom: 1px solid #333;
+      overflow: visible;
+      text-overflow: clip;
     }
 
     .back-row .label {
@@ -3240,8 +3259,15 @@ export default function BookingPage() {
 
     .back-row .value {
       font-size: 17px;
-      min-height: 2.15mm;
-      border-bottom: 1px solid #333;
+      min-height: 2.35mm;
+    }
+
+    .label,
+    .value,
+    .seat-title,
+    .ticket-tag,
+    .blocked-tag {
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
     }
 
     @media print {
@@ -4220,8 +4246,8 @@ export default function BookingPage() {
                                               setDropFilter("");
                                             }}
                                             className={`mb-1 flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm transition ${bookingForm.pickup === stop
-                                                ? "bg-orange-50 text-orange-600"
-                                                : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                                              ? "bg-orange-50 text-orange-600"
+                                              : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
                                               }`}
                                           >
                                             <span className="font-medium">{getStopDisplayName(stop)}</span>
@@ -4302,8 +4328,8 @@ export default function BookingPage() {
                                               setDropOpen(false);
                                             }}
                                             className={`mb-1 flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm transition ${bookingForm.drop === stop
-                                                ? "bg-orange-50 text-orange-600"
-                                                : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                                              ? "bg-orange-50 text-orange-600"
+                                              : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
                                               }`}
                                           >
                                             <span className="font-medium">{getStopDisplayName(stop)}</span>
