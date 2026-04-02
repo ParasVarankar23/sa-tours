@@ -73,6 +73,7 @@ export const BORLI_VILLAGE_STOPS = [
     "Aravi",
     "Kondvili",
     "Dighi",
+    "Karlas",
     "Kudgaon",
     "Adgaon",
     "Khalcha Velas",
@@ -96,6 +97,7 @@ export const BORLI_VILLAGE_STOPS = [
 ------------------------------------------------------- */
 export const DIGHI_VILLAGE_STOPS = [
     "Dighi",
+    "Karlas",
     "Kudgaon",
     "Adgaon",
     "Khalcha Velas",
@@ -132,7 +134,10 @@ export const BORLI_FARE_GROUPS = [
     {
         zone: "BORLI_GROUP_1A",
         fare: 500,
-        stops: ["Dighi"],
+        stops: [
+            "Dighi",
+            "Karlas",
+        ],
     },
     {
         zone: "BORLI_GROUP_1B",
@@ -197,6 +202,7 @@ export const DIGHI_FARE_GROUPS = [
         fare: 500,
         stops: [
             "Dighi",
+            "Karlas",
             "Kudgaon",
         ],
     },
@@ -298,6 +304,7 @@ export const STOP_NAMES_MARATHI = {
     Kondvili: "कोंडविली",
 
     Dighi: "दिघी",
+    Karlas: "करलास",
     Kudgaon: "कुडगाव",
     Adgaon: "आडगाव",
     "Khalcha Velas": "खालचा वेळास",
@@ -382,6 +389,10 @@ const STOP_ALIASES = {
     kondvili: "Kondvili",
 
     dighi: "Dighi",
+    karlas: "Karlas",
+    karlasgaon: "Karlas",
+    "karlas gaon": "Karlas",
+    करलास: "Karlas",
     kudgaon: "Kudgaon",
     adgaon: "Adgaon",
     "khalcha velas": "Khalcha Velas",

@@ -6,6 +6,7 @@ import { showAppToast } from "@/lib/client/toast";
 import {
     BUS_TYPES,
     getFare,
+    getStopDisplayName,
     isBorliVillageStop,
     isCityStop,
     isDighiVillageStop,
@@ -15,15 +16,18 @@ import {
 import {
     BusFront,
     CalendarDays,
+    Check,
+    ChevronDown,
     Clock3,
     Eye,
     MapPin,
     Route,
+    Search,
     ShieldCheck,
     Ticket,
     X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../../hooks/useAuth";
 
 function normalizeText(v) {
@@ -273,12 +277,34 @@ export default function BookingPage() {
 
     const sanitizeNameInput = (v) => {
         if (typeof v !== "string") return "";
-        return v.replace(/\d+/g, "").replace(/[^A-Za-z\s'\-]/g, "").slice(0, 100);
+
+        return v
+            .replace(/[0-9०-९]/g, "")
+            .replace(/[^\p{L}\p{M}\s'.-]/gu, "")
+            .replace(/\s{2,}/g, " ")
+            .trimStart()
+            .slice(0, 100);
     };
 
     const sanitizePhoneInput = (v) => {
         if (typeof v !== "string") return "";
-        return v.replace(/\D+/g, "").slice(0, 10);
+
+        const devanagariToEnglish = {
+            "०": "0",
+            "१": "1",
+            "२": "2",
+            "३": "3",
+            "४": "4",
+            "५": "5",
+            "६": "6",
+            "७": "7",
+            "८": "8",
+            "९": "9",
+        };
+
+        const converted = v.replace(/[०-९]/g, (d) => devanagariToEnglish[d] || d);
+
+        return converted.replace(/\D+/g, "").slice(0, 10);
     };
 
     const sanitizeEmailInput = (v) => {
@@ -286,7 +312,11 @@ export default function BookingPage() {
         return v.trim().slice(0, 254).toLowerCase();
     };
 
-    const isValidName = (v) => /^[A-Za-z\s'\-]{2,}$/.test(String(v || "").trim());
+    const isValidName = (v) => {
+        const value = String(v || "").trim();
+        return /^[\p{L}\p{M}\s'.-]{2,}$/u.test(value);
+    };
+
     const isValidPhone = (v) => /^\d{10}$/.test(String(v || "").trim());
     const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
 
@@ -397,7 +427,6 @@ export default function BookingPage() {
                 ch.close();
             } catch (e) { }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedBus, date]);
 
     const fetchBookings = async () => {
@@ -413,7 +442,6 @@ export default function BookingPage() {
 
             const raw = data.bookings || {};
 
-            // ✅ supports numeric seats + cabin seats like CB1, CB2
             const entries = Object.entries(raw).filter(([k]) =>
                 /^[0-9]+$|^CB[0-9]+$/i.test(String(k))
             );
@@ -431,7 +459,6 @@ export default function BookingPage() {
 
     useEffect(() => {
         fetchBookings();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedBus, date]);
 
     useEffect(() => {
@@ -479,7 +506,7 @@ export default function BookingPage() {
     const availableBuses = useMemo(() => {
         if (!date) return [];
 
-        const todayIso = new Date().toISOString().split("T")[0];
+        const todayIsoLocal = new Date().toISOString().split("T")[0];
         const now = new Date();
 
         return buses.filter((bus) => {
@@ -488,7 +515,7 @@ export default function BookingPage() {
 
             if (sched && sched.available) return true;
 
-            if (date === todayIso && sched && sched.startTime) {
+            if (date === todayIsoLocal && sched && sched.startTime) {
                 try {
                     const parseTimeToDate = (dateIso, timeStr) => {
                         if (!timeStr) return null;
@@ -518,7 +545,7 @@ export default function BookingPage() {
                         return d;
                     };
 
-                    const startDt = parseTimeToDate(todayIso, sched.startTime);
+                    const startDt = parseTimeToDate(todayIsoLocal, sched.startTime);
                     if (!startDt) return false;
 
                     const cutoffMinutes = Number.isFinite(Number(sched.bookingCutoffMinutes))
@@ -536,7 +563,6 @@ export default function BookingPage() {
         });
     }, [date, buses, schedules]);
 
-    // ✅ create safe booked map so other users' details are hidden
     const safeBookedMap = useMemo(() => {
         return Object.fromEntries(
             Object.entries(bookings || {}).map(([seatNo, booking]) => {
@@ -559,7 +585,7 @@ export default function BookingPage() {
     }, [bookings, user]);
 
     return (
-        <div className="min-h-screen w-full bg-[#f8fafc] p-4 md:p-6 lg:p-8">
+        <div className="min-h-screen w-full bg-gradient-to-br from-orange-50 via-white to-slate-50 p-4 md:p-6 lg:p-8">
             {/* Header */}
             <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
@@ -686,7 +712,9 @@ export default function BookingPage() {
                                                     label="Path"
                                                     value={(() => {
                                                         const p = getStartEnd(bus);
-                                                        return `${p.start || "--"} → ${p.end || "--"}`;
+                                                        const startLabel = p.start ? getStopDisplayName(p.start) : "--";
+                                                        const endLabel = p.end ? getStopDisplayName(p.end) : "--";
+                                                        return `${startLabel} → ${endLabel}`;
                                                     })()}
                                                 />
                                                 <InfoCard
@@ -730,8 +758,7 @@ export default function BookingPage() {
                                 <p className="mt-1 text-sm text-slate-500">
                                     {(() => {
                                         const p = getStartEnd(selectedBus);
-                                        return `${p.start || "--"} → ${p.end || "--"} • ${selectedBus?.startTime || "--:--"
-                                            } → ${selectedBus?.endTime || "--:--"}`;
+                                        return `${p.start || "--"} → ${p.end || "--"} • ${selectedBus?.startTime || "--:--"} → ${selectedBus?.endTime || "--:--"}`;
                                     })()}
                                 </p>
                             </div>
@@ -837,7 +864,6 @@ export default function BookingPage() {
                                                     return prev.filter((x) => x !== id);
                                                 }
 
-                                                // prevent selecting booked seat
                                                 if (bookings[id]) {
                                                     return prev;
                                                 }
@@ -859,7 +885,6 @@ export default function BookingPage() {
                                                 return;
                                             }
 
-                                            // build a masked booking for non-owners to preserve privacy
                                             const isOwner = canCancelBookingForUser(realBooking, user);
 
                                             const bookingForView = isOwner
@@ -950,7 +975,9 @@ export default function BookingPage() {
                                                                     [seat]: { ...form, name: sanitizeNameInput(e.target.value) },
                                                                 }))
                                                             }
-                                                            className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
+                                                            lang="mr"
+                                                            autoComplete="name"
+                                                            className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
                                                         />
 
                                                         <input
@@ -965,7 +992,8 @@ export default function BookingPage() {
                                                             inputMode="numeric"
                                                             pattern="[0-9]*"
                                                             maxLength={10}
-                                                            className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
+                                                            autoComplete="tel"
+                                                            className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
                                                         />
 
                                                         <input
@@ -978,7 +1006,7 @@ export default function BookingPage() {
                                                                 }))
                                                             }
                                                             type="email"
-                                                            className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
+                                                            className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
                                                         />
                                                     </div>
 
@@ -987,10 +1015,12 @@ export default function BookingPage() {
                                                             <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                                 Pickup Point
                                                             </label>
-                                                            <select
+
+                                                            <SearchableDropdown
                                                                 value={form.pickup || ""}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value;
+                                                                options={getPickupOptions(selectedBus)}
+                                                                placeholder="Select pickup"
+                                                                onChange={(val) => {
                                                                     const time = getStopTime(selectedBus, val) || "";
                                                                     setBookingForms((bf) => ({
                                                                         ...bf,
@@ -1003,40 +1033,27 @@ export default function BookingPage() {
                                                                         },
                                                                     }));
                                                                 }}
-                                                                className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
-                                                            >
-                                                                <option value="">Select pickup</option>
-                                                                {getPickupOptions(selectedBus).map((s, i) => (
-                                                                    <option key={i} value={s}>
-                                                                        {s}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
+                                                            />
                                                         </div>
 
                                                         <div className="space-y-2">
                                                             <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
                                                                 Drop Point
                                                             </label>
-                                                            <select
+
+                                                            <SearchableDropdown
                                                                 value={form.drop || ""}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value;
+                                                                options={getDropOptions(selectedBus, form.pickup)}
+                                                                placeholder="Select drop"
+                                                                disabled={!form.pickup}
+                                                                onChange={(val) => {
                                                                     const time = getStopTime(selectedBus, val) || "";
                                                                     setBookingForms((bf) => ({
                                                                         ...bf,
                                                                         [seat]: { ...form, drop: val, dropTime: time },
                                                                     }));
                                                                 }}
-                                                                className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#f97316] focus:ring-4 focus:ring-orange-100"
-                                                            >
-                                                                <option value="">Select drop</option>
-                                                                {getDropOptions(selectedBus, form.pickup).map((s, i) => (
-                                                                    <option key={i} value={s}>
-                                                                        {s}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
+                                                            />
                                                         </div>
                                                     </div>
 
@@ -1046,7 +1063,7 @@ export default function BookingPage() {
                                                                 Pickup Time
                                                             </p>
                                                             <p className="mt-1 text-sm font-semibold text-slate-800">
-                                                                {form.pickupTime || "—"}
+                                                                {form.pickupTime || "00:00"}
                                                             </p>
                                                         </div>
 
@@ -1055,7 +1072,7 @@ export default function BookingPage() {
                                                                 Drop Time
                                                             </p>
                                                             <p className="mt-1 text-sm font-semibold text-slate-800">
-                                                                {form.dropTime || "—"}
+                                                                {form.dropTime || "00:00"}
                                                             </p>
                                                         </div>
                                                     </div>
@@ -1328,7 +1345,9 @@ export default function BookingPage() {
                                         </h3>
 
                                         {viewBooking.booking?._masked && (
-                                            <p className="mt-2 text-sm text-slate-500">This booking belongs to another user — sensitive details are hidden.</p>
+                                            <p className="mt-2 text-sm text-slate-500">
+                                                This booking belongs to another user — sensitive details are hidden.
+                                            </p>
                                         )}
 
                                         <p className="mt-3 text-sm text-slate-700">
@@ -1436,10 +1455,8 @@ export default function BookingPage() {
                                                                                 const data = await res.json();
                                                                                 if (!res.ok) throw new Error(data.error || "Cancel failed");
 
-                                                                                // show cancellation message
                                                                                 showAppToast("success", data.message || "Booking cancelled");
 
-                                                                                // show refund info if provided by API
                                                                                 try {
                                                                                     const refund = data && data.refund ? data.refund : null;
                                                                                     if (refund && refund.amount && Number(refund.amount) > 0) {
@@ -1450,9 +1467,7 @@ export default function BookingPage() {
                                                                                             showAppToast("info", `Refund attempted: ₹${amt} — ${refund.error || "failed"}`);
                                                                                         }
                                                                                     }
-                                                                                } catch (e) {
-                                                                                    // ignore UI errors
-                                                                                }
+                                                                                } catch (e) { }
 
                                                                                 setViewBooking(null);
                                                                                 await fetchBookings();
@@ -1497,10 +1512,8 @@ export default function BookingPage() {
                                                                             const data = await res.json();
                                                                             if (!res.ok) throw new Error(data.error || "Cancel failed");
 
-                                                                            // show cancellation message
                                                                             showAppToast("success", data.message || "Booking cancelled");
 
-                                                                            // show refund info if provided by API
                                                                             try {
                                                                                 const refund = data && data.refund ? data.refund : null;
                                                                                 if (refund && refund.amount && Number(refund.amount) > 0) {
@@ -1511,9 +1524,7 @@ export default function BookingPage() {
                                                                                         showAppToast("info", `Refund attempted: ₹${amt} — ${refund.error || "failed"}`);
                                                                                     }
                                                                                 }
-                                                                            } catch (e) {
-                                                                                // ignore UI errors
-                                                                            }
+                                                                            } catch (e) { }
 
                                                                             setViewBooking(null);
                                                                             await fetchBookings();
@@ -1618,7 +1629,7 @@ export default function BookingPage() {
 ========================= */
 function SummaryCard({ title, value, icon }) {
     return (
-        <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
+        <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm transition hover:shadow-md">
             <div className="flex items-center gap-4">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50">
                     {icon}
@@ -1634,12 +1645,142 @@ function SummaryCard({ title, value, icon }) {
 
 function InfoCard({ icon, label, value }) {
     return (
-        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 transition hover:border-orange-100 hover:bg-orange-50/30">
             <div className="mb-2 flex items-center gap-2">
                 {icon}
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
             </div>
             <p className="text-sm font-medium text-slate-800">{value}</p>
+        </div>
+    );
+}
+
+/* =========================
+   Searchable Dropdown Component
+========================= */
+function SearchableDropdown({
+    value,
+    options = [],
+    onChange,
+    placeholder = "Select option",
+    disabled = false,
+}) {
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState("");
+    const wrapperRef = useRef(null);
+    const inputRef = useRef(null);
+
+    // Map raw stop keys to display labels (English + Marathi) using fare helpers
+    const labeledOptions = useMemo(
+        () =>
+            options.map((opt) => ({
+                value: opt,
+                label: getStopDisplayName(opt),
+            })),
+        [options]
+    );
+
+    const filteredOptions = useMemo(() => {
+        const q = normalizeKey(search);
+        if (!q) return labeledOptions;
+        return labeledOptions.filter((opt) => normalizeKey(opt.label).includes(q));
+    }, [labeledOptions, search]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                setOpen(false);
+                setSearch("");
+            }
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        if (open) {
+            const timer = setTimeout(() => {
+                inputRef.current?.focus();
+            }, 80);
+            return () => clearTimeout(timer);
+        }
+    }, [open]);
+
+    return (
+        <div ref={wrapperRef} className="relative">
+            <button
+                type="button"
+                disabled={disabled}
+                onClick={() => {
+                    if (disabled) return;
+                    setOpen((prev) => !prev);
+                }}
+                className={`group flex h-14 w-full items-center justify-between rounded-2xl border px-4 text-left text-sm font-medium transition-all duration-200 ${disabled
+                    ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                    : open
+                        ? "border-orange-400 bg-white text-slate-900 shadow-lg shadow-orange-100 ring-4 ring-orange-100"
+                        : "border-slate-300 bg-white text-slate-900 hover:border-orange-300 hover:shadow-md"
+                    }`}
+            >
+                <span className={`${value ? "text-slate-900" : "text-slate-400"} truncate pr-3`}>
+                    {value
+                        ? (labeledOptions.find((o) => normalizeKey(o.value) === normalizeKey(value))?.label || value)
+                        : placeholder}
+                </span>
+                <ChevronDown
+                    className={`h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200 ${open ? "rotate-180 text-[#f97316]" : ""
+                        }`}
+                />
+            </button>
+
+            {open && !disabled && (
+                <div className="absolute z-[999] mt-2 w-full overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-2xl shadow-slate-200">
+                    <div className="border-b border-slate-100 p-3">
+                        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 focus-within:border-orange-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-orange-100">
+                            <Search className="h-4 w-4 text-slate-400" />
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search stop..."
+                                className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto p-2">
+                        {filteredOptions.length === 0 ? (
+                            <div className="rounded-xl px-3 py-4 text-center text-sm text-slate-500">
+                                No stop found
+                            </div>
+                        ) : (
+                            filteredOptions.map((option, idx) => {
+                                const selected = normalizeKey(option.value) === normalizeKey(value);
+                                return (
+                                    <button
+                                        key={`${option.value}-${idx}`}
+                                        type="button"
+                                        onClick={() => {
+                                            onChange?.(option.value);
+                                            setOpen(false);
+                                            setSearch("");
+                                        }}
+                                        className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm transition-all ${selected
+                                            ? "bg-orange-50 font-semibold text-[#f97316]"
+                                            : "text-slate-700 hover:bg-slate-50"
+                                            }`}
+                                    >
+                                        <span className="truncate pr-3">{option.label}</span>
+                                        {selected ? <Check className="h-4 w-4 text-[#f97316]" /> : null}
+                                    </button>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
