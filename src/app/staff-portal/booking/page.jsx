@@ -6,6 +6,7 @@ import { showAppToast } from "@/lib/client/toast";
 import {
   BUS_TYPES,
   getFare,
+  getStopDisplayName,
   isBorliVillageStop,
   isCityStop,
   isDighiVillageStop,
@@ -409,6 +410,11 @@ export default function StaffBookingPage() {
     note: "",
   });
 
+  const [pickupSearch, setPickupSearch] = useState("");
+  const [dropSearch, setDropSearch] = useState("");
+  const [pickupDropdownOpen, setPickupDropdownOpen] = useState(false);
+  const [dropDropdownOpen, setDropDropdownOpen] = useState(false);
+
   const visibleBookings = useMemo(() => {
     return Object.entries(bookings || {}).filter(([, b]) => !!b);
   }, [bookings]);
@@ -585,9 +591,31 @@ export default function StaffBookingPage() {
     [selectedBus, bookingForm.pickup]
   );
 
+  const filteredPickupOptions = useMemo(() => {
+    if (!pickupSearch) return pickupOptions;
+
+    const q = pickupSearch.toLowerCase();
+    return pickupOptions.filter((stop) =>
+      getStopDisplayName(stop).toLowerCase().includes(q)
+    );
+  }, [pickupOptions, pickupSearch]);
+
+  const filteredDropOptions = useMemo(() => {
+    if (!dropSearch) return dropOptions;
+
+    const q = dropSearch.toLowerCase();
+    return dropOptions.filter((stop) =>
+      getStopDisplayName(stop).toLowerCase().includes(q)
+    );
+  }, [dropOptions, dropSearch]);
+
   const resetBookingForm = () => {
     setSelectedSeats([]);
     setEditingSeat(null);
+    setPickupSearch("");
+    setDropSearch("");
+    setPickupDropdownOpen(false);
+    setDropDropdownOpen(false);
     setBookingForm({
       name: "",
       phone: "",
@@ -1701,6 +1729,8 @@ export default function StaffBookingPage() {
     isWindowSeat = false,
   }) => {
     const data = seatMap[String(seatNo)] || {};
+    const pickupDisplay = data.pickup ? getStopDisplayName(data.pickup) : "";
+    const dropDisplay = data.drop ? getStopDisplayName(data.drop) : "";
     const isBlocked = data?.status === "blocked";
     const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
 
@@ -1723,12 +1753,12 @@ export default function StaffBookingPage() {
 
       <div class="line-row">
         <span class="label">Pickup :</span>
-        <span class="value">${safeHtml(data.pickup || "")}</span>
+        <span class="value">${safeHtml(pickupDisplay)}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(data.drop || "")}</span>
+        <span class="value">${safeHtml(dropDisplay)}</span>
       </div>
     </div>
   `;
@@ -2279,6 +2309,8 @@ export default function StaffBookingPage() {
     isWindowSeat = false,
   }) => {
     const data = seatMap[String(seatNo)] || {};
+    const pickupDisplay = data.pickup ? getStopDisplayName(data.pickup) : "";
+    const dropDisplay = data.drop ? getStopDisplayName(data.drop) : "";
     const isBlocked = data?.status === "blocked";
     const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
 
@@ -2305,12 +2337,12 @@ export default function StaffBookingPage() {
       <div class="line-row">
         <span class="label">Pickup</span>
         <span class="colon">:</span>
-        <span class="value">${safeHtml(data.pickup || "")}</span>
+        <span class="value">${safeHtml(pickupDisplay)}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(data.drop || "")}</span>
+        <span class="value">${safeHtml(dropDisplay)}</span>
       </div>
     </div>
   `;
@@ -2895,6 +2927,8 @@ export default function StaffBookingPage() {
     isWindowSeat = false,
   }) => {
     const data = seatMap[String(seatNo)] || {};
+    const pickupDisplay = data.pickup ? getStopDisplayName(data.pickup) : "";
+    const dropDisplay = data.drop ? getStopDisplayName(data.drop) : "";
     const isBlocked = data?.status === "blocked";
     const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
 
@@ -2923,12 +2957,12 @@ export default function StaffBookingPage() {
 
       <div class="line-row">
         <span class="label">Pickup :</span>
-        <span class="value">${safeHtml(data.pickup || "")}</span>
+        <span class="value">${safeHtml(pickupDisplay)}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value">${safeHtml(data.drop || "")}</span>
+        <span class="value">${safeHtml(dropDisplay)}</span>
       </div>
     </div>
   `;
@@ -3479,31 +3513,89 @@ export default function StaffBookingPage() {
 
                       <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                         {/* Pickup */}
-                        <div>
-                          <select
-                            value={bookingForm.pickup ?? ""}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              const time = getStopTime(selectedBus, val);
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            Pickup Stop
+                          </label>
 
-                              setBookingForm((p) => ({
-                                ...p,
-                                pickup: val,
-                                pickupTime: time,
-                                drop: "",
-                                dropTime: "",
-                              }));
-                            }}
-                            className="w-full rounded-lg border px-3 py-2"
-                            disabled={!editingSeat && selectedSeats.length === 0}
-                          >
-                            <option value="">Select pickup</option>
-                            {pickupOptions.map((stop, i) => (
-                              <option key={i} value={stop}>
-                                {stop}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="space-y-2">
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!editingSeat && selectedSeats.length === 0) return;
+                                  setPickupDropdownOpen((open) => !open);
+                                }}
+                                className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-900 hover:border-orange-200 disabled:cursor-not-allowed disabled:bg-slate-50"
+                                disabled={!editingSeat && selectedSeats.length === 0}
+                              >
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <MapPin className="h-4 w-4 text-[#f97316] shrink-0" />
+                                  <span className="truncate">
+                                    {bookingForm.pickup
+                                      ? getStopDisplayName(bookingForm.pickup)
+                                      : "Select pickup"}
+                                  </span>
+                                </span>
+                                <span className="ml-2 text-xs text-slate-400">▼</span>
+                              </button>
+
+                              {pickupDropdownOpen && !(!editingSeat && selectedSeats.length === 0) && (
+                                <div className="absolute z-20 mt-2 w-full rounded-2xl border border-slate-200 bg-white shadow-xl">
+                                  <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
+                                    <MapPin className="h-4 w-4 text-[#f97316]" />
+                                    <input
+                                      type="text"
+                                      placeholder="Search pickup (English/Marathi)"
+                                      value={pickupSearch}
+                                      onChange={(e) => setPickupSearch(e.target.value)}
+                                      className="w-full bg-transparent text-xs sm:text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                                      autoFocus
+                                    />
+                                  </div>
+
+                                  <div className="max-h-56 overflow-y-auto py-1">
+                                    {filteredPickupOptions.length === 0 ? (
+                                      <div className="px-3 py-2 text-xs text-slate-400">
+                                        No stops found
+                                      </div>
+                                    ) : (
+                                      filteredPickupOptions.map((stop, i) => {
+                                        const label = getStopDisplayName(stop);
+                                        return (
+                                          <button
+                                            key={i}
+                                            type="button"
+                                            onClick={() => {
+                                              const time = getStopTime(selectedBus, stop);
+
+                                              setBookingForm((p) => ({
+                                                ...p,
+                                                pickup: stop,
+                                                pickupTime: time,
+                                                drop: "",
+                                                dropTime: "",
+                                              }));
+
+                                              setPickupDropdownOpen(false);
+                                              setPickupSearch("");
+                                              setDropSearch("");
+                                            }}
+                                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs sm:text-sm text-slate-800 hover:bg-orange-50"
+                                          >
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-50 text-[10px] font-semibold text-[#f97316]">
+                                              {i + 1}
+                                            </span>
+                                            <span className="truncate">{label}</span>
+                                          </button>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
                           <input
                             type="time"
@@ -3514,39 +3606,98 @@ export default function StaffBookingPage() {
                                 pickupTime: e.target.value,
                               }))
                             }
-                            className="mt-2 w-full rounded-lg border px-3 py-2"
+                            className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                             disabled={!editingSeat && selectedSeats.length === 0}
                           />
                         </div>
 
                         {/* Drop */}
-                        <div>
-                          <select
-                            value={bookingForm.drop ?? ""}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              const time = getStopTime(selectedBus, val);
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            Drop Stop
+                          </label>
 
-                              setBookingForm((p) => ({
-                                ...p,
-                                drop: val,
-                                dropTime: time,
-                              }));
-                            }}
-                            className="w-full rounded-lg border px-3 py-2"
-                            disabled={(!editingSeat && selectedSeats.length === 0) || !bookingForm.pickup}
-                          >
-                            <option value="">Select drop</option>
-                            {dropOptions.map((stop, i) => {
-                              const fare = calculateFare(selectedBus, bookingForm.pickup, stop, date);
+                          <div className="space-y-2">
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if ((!editingSeat && selectedSeats.length === 0) || !bookingForm.pickup) return;
+                                  setDropDropdownOpen((open) => !open);
+                                }}
+                                className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-900 hover:border-orange-200 disabled:cursor-not-allowed disabled:bg-slate-50"
+                                disabled={(!editingSeat && selectedSeats.length === 0) || !bookingForm.pickup}
+                              >
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <MapPin className="h-4 w-4 text-[#f97316] shrink-0" />
+                                  <span className="truncate">
+                                    {bookingForm.drop
+                                      ? getStopDisplayName(bookingForm.drop)
+                                      : "Select drop"}
+                                  </span>
+                                </span>
+                                <span className="ml-2 text-xs text-slate-400">▼</span>
+                              </button>
 
-                              return (
-                                <option key={i} value={stop}>
-                                  {fare !== null ? `${stop} — ₹${fare}` : `${stop} — Fare N/A`}
-                                </option>
-                              );
-                            })}
-                          </select>
+                              {dropDropdownOpen && !((!editingSeat && selectedSeats.length === 0) || !bookingForm.pickup) && (
+                                <div className="absolute z-20 mt-2 w-full rounded-2xl border border-slate-200 bg-white shadow-xl">
+                                  <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
+                                    <MapPin className="h-4 w-4 text-[#f97316]" />
+                                    <input
+                                      type="text"
+                                      placeholder="Search drop (English/Marathi)"
+                                      value={dropSearch}
+                                      onChange={(e) => setDropSearch(e.target.value)}
+                                      className="w-full bg-transparent text-xs sm:text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                                      autoFocus
+                                    />
+                                  </div>
+
+                                  <div className="max-h-56 overflow-y-auto py-1">
+                                    {filteredDropOptions.length === 0 ? (
+                                      <div className="px-3 py-2 text-xs text-slate-400">
+                                        No stops found
+                                      </div>
+                                    ) : (
+                                      filteredDropOptions.map((stop, i) => {
+                                        const label = getStopDisplayName(stop);
+                                        const fare = calculateFare(selectedBus, bookingForm.pickup, stop, date);
+
+                                        return (
+                                          <button
+                                            key={i}
+                                            type="button"
+                                            onClick={() => {
+                                              const time = getStopTime(selectedBus, stop);
+
+                                              setBookingForm((p) => ({
+                                                ...p,
+                                                drop: stop,
+                                                dropTime: time,
+                                              }));
+
+                                              setDropDropdownOpen(false);
+                                            }}
+                                            className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs sm:text-sm text-slate-800 hover:bg-orange-50"
+                                          >
+                                            <span className="flex items-center gap-2 min-w-0">
+                                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-50 text-[10px] font-semibold text-[#f97316]">
+                                                {i + 1}
+                                              </span>
+                                              <span className="truncate">{label}</span>
+                                            </span>
+                                            <span className="shrink-0 text-[11px] font-medium text-slate-500">
+                                              {fare !== null ? `₹${fare}` : "Fare N/A"}
+                                            </span>
+                                          </button>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
                           <input
                             type="time"
@@ -3557,7 +3708,7 @@ export default function StaffBookingPage() {
                                 dropTime: e.target.value,
                               }))
                             }
-                            className="mt-2 w-full rounded-lg border px-3 py-2"
+                            className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                             disabled={!editingSeat && selectedSeats.length === 0}
                           />
                         </div>
@@ -3719,8 +3870,8 @@ export default function StaffBookingPage() {
                                 ) : null}
 
                                 <div className="mt-2 text-sm text-slate-400">
-                                  {b.pickup || "-"}
-                                  {b.pickupTime ? ` (${b.pickupTime})` : ""} → {b.drop || "-"}
+                                  {b.pickup ? getStopDisplayName(b.pickup) : "-"}
+                                  {b.pickupTime ? ` (${b.pickupTime})` : ""} → {b.drop ? getStopDisplayName(b.drop) : "-"}
                                   {b.dropTime ? ` (${b.dropTime})` : ""}
                                 </div>
 
@@ -3941,9 +4092,13 @@ export default function StaffBookingPage() {
                   )}
 
                   <div className="mt-3 text-sm text-slate-400">
-                    {viewBooking.booking?.pickup || "-"}
+                    {viewBooking.booking?.pickup
+                      ? getStopDisplayName(viewBooking.booking?.pickup)
+                      : "-"}
                     {viewBooking.booking?.pickupTime ? ` (${viewBooking.booking?.pickupTime})` : ""} →{" "}
-                    {viewBooking.booking?.drop || "-"}
+                    {viewBooking.booking?.drop
+                      ? getStopDisplayName(viewBooking.booking?.drop)
+                      : "-"}
                     {viewBooking.booking?.dropTime ? ` (${viewBooking.booking?.dropTime})` : ""}
                   </div>
 
