@@ -2025,9 +2025,8 @@ export default function BookingPage() {
     }
 
     .bus-diagram img {
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
+      width: 100%;
+      height: 100%;
     }
 
     /* =========================
@@ -2218,11 +2217,12 @@ export default function BookingPage() {
       }
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
   <div class="toolbar">
     <button onclick="window.print()">Print / Save as PDF</button>
-    <button class="primary" onclick="downloadHtmlFile()">Download HTML</button>
+    <button class="primary" onclick="downloadHtmlFile()">Download PDF</button>
   </div>
 
   <div class="sheet">
@@ -2253,16 +2253,33 @@ export default function BookingPage() {
 
   <script>
     function downloadHtmlFile() {
-      const html = document.documentElement.outerHTML;
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.html";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      try {
+        var sheet = document.querySelector(".sheet");
+        if (!sheet) {
+          window.print();
+          return;
+        }
+
+        if (typeof html2pdf === "undefined") {
+          window.print();
+          return;
+        }
+
+        var opt = {
+          margin: [0, 0, 0, 0],
+          filename: "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.pdf",
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        };
+
+        html2pdf().set(opt).from(sheet).save();
+      } catch (e) {
+        try {
+          console.error(e);
+        } catch (_) {}
+        window.print();
+      }
     }
   </script>
 </body>
@@ -2808,11 +2825,12 @@ export default function BookingPage() {
       }
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
   <div class="toolbar">
     <button onclick="window.print()">Print / Save as PDF</button>
-    <button class="primary" onclick="downloadHtmlFile()">Download HTML</button>
+    <button class="primary" onclick="downloadHtmlFile()">Download PDF</button>
   </div>
 
   <div class="sheet">
@@ -2843,16 +2861,33 @@ export default function BookingPage() {
 
   <script>
     function downloadHtmlFile() {
-      const html = document.documentElement.outerHTML;
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.html";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      try {
+        var sheet = document.querySelector(".sheet");
+        if (!sheet) {
+          window.print();
+          return;
+        }
+
+        if (typeof html2pdf === "undefined") {
+          window.print();
+          return;
+        }
+
+        var opt = {
+          margin: [0, 0, 0, 0],
+          filename: "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.pdf",
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        };
+
+        html2pdf().set(opt).from(sheet).save();
+      } catch (e) {
+        try {
+          console.error(e);
+        } catch (_) {}
+        window.print();
+      }
     }
   </script>
 </body>
@@ -3233,9 +3268,9 @@ export default function BookingPage() {
     }
 
     .bus-diagram img {
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
+      width: 110%;
+      height: 125%;
+      object-fit: cover;
     }
 
     /* =========================
@@ -3446,11 +3481,12 @@ export default function BookingPage() {
       }
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
   <div class="toolbar">
     <button onclick="window.print()">Print / Save as PDF</button>
-    <button class="primary" onclick="downloadHtmlFile()">Download HTML</button>
+    <button class="primary" onclick="downloadHtmlFile()">Download PDF</button>
   </div>
 
   <div class="sheet">
@@ -3487,16 +3523,33 @@ export default function BookingPage() {
 
   <script>
     function downloadHtmlFile() {
-      const html = document.documentElement.outerHTML;
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.html";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      try {
+        var sheet = document.querySelector(".sheet");
+        if (!sheet) {
+          window.print();
+          return;
+        }
+
+        if (typeof html2pdf === "undefined") {
+          window.print();
+          return;
+        }
+
+        var opt = {
+          margin: [0, 0, 0, 0],
+          filename: "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.pdf",
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        };
+
+        html2pdf().set(opt).from(sheet).save();
+      } catch (e) {
+        try {
+          console.error(e);
+        } catch (_) {}
+        window.print();
+      }
     }
   </script>
 </body>
