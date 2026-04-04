@@ -127,7 +127,7 @@ export default function AboutPreview() {
                             >
                                 <div className="relative h-[220px] sm:h-[300px] lg:h-[340px] overflow-hidden rounded-[22px]">
                                     <Image
-                                        src="/bus1.jpeg"
+                                        src="/bus1.png"
                                         alt="SA Tours Main Bus"
                                         fill
                                         className="object-cover transition duration-500 hover:scale-105"
@@ -158,7 +158,7 @@ export default function AboutPreview() {
                                 >
                                     <div className="relative h-[160px] sm:h-[145px] lg:h-[140px] overflow-hidden rounded-[18px]">
                                         <Image
-                                            src="/sa3.jpeg"
+                                            src="/sa3.png"
                                             alt="SA Tours Bus Side View"
                                             fill
                                             className="object-cover object-center lg:object-top transition duration-500 hover:scale-105"
@@ -173,7 +173,7 @@ export default function AboutPreview() {
                                 >
                                     <div className="relative h-[160px] sm:h-[135px] lg:h-[170px] overflow-hidden rounded-[18px]">
                                         <Image
-                                            src="/bus3.jpeg"
+                                            src="/bus3.png"
                                             alt="SA Tours Travel Vehicle"
                                             fill
                                             className="object-cover object-center lg:object-top transition duration-500 hover:scale-105"

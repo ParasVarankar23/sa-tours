@@ -2341,7 +2341,7 @@ export default function BookingPage() {
     const leftColumnHtml = `
     <div class="left-seat-wrap left-empty">
       <div class="bus-diagram">
-        <img src="/sa3.jpeg" alt="Bus layout" />
+        <img src="/sa3.png" alt="Bus layout" />
       </div>
     </div>
     ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
@@ -2936,7 +2936,7 @@ export default function BookingPage() {
     const leftColumnHtml = `
     <div class="left-seat-wrap left-empty">
       <div class="bus-diagram">
-        <img src="/bus2.jpeg" alt="Bus layout" />
+        <img src="/bus2.png" alt="Bus layout" />
       </div>
     </div>
     ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
@@ -3584,7 +3584,7 @@ export default function BookingPage() {
     const leftColumnHtml = `
     <div class="left-seat-wrap left-empty">
       <div class="bus-diagram">
-        <img src="/bus3.jpeg" alt="Bus layout" />
+        <img src="/bus3.png" alt="Bus layout" />
       </div>
     </div>
     ${Array.from({ length: Math.max(0, topOffsetRows - 1) })

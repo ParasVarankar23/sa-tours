@@ -193,7 +193,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-40 overflow-hidden rounded-[18px] lg:h-44">
                                         <Image
-                                            src="/bus1.jpeg"
+                                            src="/bus2.png"
                                             alt="SA Tours Route 1"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -217,7 +217,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-28 overflow-hidden rounded-[18px] lg:h-32">
                                         <Image
-                                            src="/bus3.jpeg"
+                                            src="/bus3.png"
                                             alt="SA Tours Route 2"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -234,7 +234,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-28 overflow-hidden rounded-[18px] lg:h-32">
                                         <Image
-                                            src="/sa3.jpeg"
+                                            src="/sa3.png"
                                             alt="SA Tours Route 3"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -249,7 +249,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-40 overflow-hidden rounded-[18px] lg:h-44">
                                         <Image
-                                            src="/bus2.jpeg"
+                                            src="/bus4.png"
                                             alt="SA Tours Route 4"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
