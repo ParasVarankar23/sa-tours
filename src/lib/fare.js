@@ -47,6 +47,8 @@ export const CITY_STOPS = [
 ------------------------------------------------------- */
 export const COMMON_VILLAGE_STOPS = [
     "Gondghar",
+    "Borli Petrol Pump",
+    "Khalosh",
     "Mendadi",
     "Mendadi Grampanchayat",
     "Kharsai Dam",
@@ -55,6 +57,7 @@ export const COMMON_VILLAGE_STOPS = [
     "Banoti",
     "Tondsure",
     "Saklap",
+    "Mhasla Dighi Road",
     "Mhasla",
     "Mhasla Stand",
     "Pabra Phata",
@@ -77,6 +80,7 @@ export const BORLI_VILLAGE_STOPS = [
     "Bharadkhol",
     "Aravi",
     "Kondvili",
+    "Divegar",
     "Dighi",
     "Karlas",
     "Kudgaon",
@@ -87,6 +91,7 @@ export const BORLI_VILLAGE_STOPS = [
     "Vadavli Phata",
     "Borli",
     "Pohamil",
+    "Vanjale Road",
     "Borli ST Stand",
     "Ganesh Chowk",
     "Shivaji Chowk",
@@ -111,6 +116,7 @@ export const DIGHI_VILLAGE_STOPS = [
     "Vadavli Phata",
     "Borli",
     "Pohamil",
+    "Vanjale Road",
     "Borli ST Stand",
     "Ganesh Chowk",
     "Shivaji Chowk",
@@ -134,6 +140,7 @@ export const BORLI_FARE_GROUPS = [
             "Bharadkhol",
             "Aravi",
             "Kondvili",
+            "Divegar",
         ],
     },
     {
@@ -162,6 +169,7 @@ export const BORLI_FARE_GROUPS = [
             "Vadavli Phata",
             "Borli",
             "Pohamil",
+            "Vanjale Road",
             "Borli ST Stand",
             "Ganesh Chowk",
             "Shivaji Chowk",
@@ -170,6 +178,8 @@ export const BORLI_FARE_GROUPS = [
             "Kapoli",
             "Shiste",
             "Gondghar",
+            "Borli Petrol Pump",
+            "Khalosh",
             "Mendadi",
             "Mendadi Grampanchayat",
         ],
@@ -184,6 +194,7 @@ export const BORLI_FARE_GROUPS = [
             "Banoti",
             "Tondsure",
             "Saklap",
+            "Mhasla Dighi Road",
             "Mhasla",
             "Mhasla Stand",
             "Pabra Phata",
@@ -232,8 +243,11 @@ export const DIGHI_FARE_GROUPS = [
             "Samtanagar",
             "Bhava Phata",
             "Pohamil",
+            "Vanjale Road",
             "Borli ST Stand",
             "Gondghar",
+            "Borli Petrol Pump",
+            "Khalosh",
             "Mendadi",
             "Mendadi Grampanchayat",
         ],
@@ -248,6 +262,7 @@ export const DIGHI_FARE_GROUPS = [
             "Banoti",
             "Tondsure",
             "Saklap",
+            "Mhasla Dighi Road",
             "Mhasla",
             "Mhasla Stand",
             "Pabra Phata",
@@ -272,6 +287,7 @@ export const DIGHI_FARE_GROUPS = [
             "Bharadkhol",
             "Aravi",
             "Kondvili",
+            "Divegar",
         ],
     },
 ];
@@ -324,7 +340,9 @@ export const STOP_NAMES_MARATHI = {
     "Vadavli Phata": "वडवली फाटा",
 
     Borli: "बोर्ली",
+    "Borli Petrol Pump": "बोर्ली पेट्रोल पंप",
     Pohamil: "पोहामिल",
+    "Vanjale Road": "वांजळे रोड",
     "Borli ST Stand": "बोर्ली एसटी स्टँड",
     "Ganesh Chowk": "गणेश चौक",
     "Shivaji Chowk": "शिवाजी चौक",
@@ -332,6 +350,8 @@ export const STOP_NAMES_MARATHI = {
     "Bhava Phata": "भावा फाटा",
     Kapoli: "कापोली",
     Shiste: "शिस्ते",
+
+    Khalosh: "खलोश",
 
     Gondghar: "गोंडघर",
     Mendadi: "मेंडडी",
@@ -346,6 +366,7 @@ export const STOP_NAMES_MARATHI = {
     Saklap: "सकळप",
 
     Mhasla: "म्हसळा",
+    "Mhasla Dighi Road": "म्हसळा-दिघी रोड",
     "Mhasla Stand": "म्हसळा स्टँड",
 
     "Pabra Phata": "पाब्रा फाटा",
@@ -358,6 +379,8 @@ export const STOP_NAMES_MARATHI = {
     Mangaon: "माणगाव",
     Indapur: "इंदापूर",
     Kolad: "कोलाड",
+
+    Divegar: "दिवेआगर",
 };
 
 /* -------------------------------------------------------
@@ -454,11 +477,15 @@ const STOP_ALIASES = {
     vadvalifata: "Vadavli Phata",
 
     borli: "Borli",
+    "borli petrol pump": "Borli Petrol Pump",
+    borlipetrolpump: "Borli Petrol Pump",
     kapoli: "Kapoli",
     shiste: "Shiste",
     shishti: "Shiste",
 
     pohamil: "Pohamil",
+    khalosh: "Khalosh",
+
     "st stand": "Borli ST Stand",
     ststand: "Borli ST Stand",
     "borli st stand": "Borli ST Stand",
@@ -503,6 +530,9 @@ const STOP_ALIASES = {
     saklap: "Saklap",
 
     mhasla: "Mhasla",
+    "mhasla dighi road": "Mhasla Dighi Road",
+    mhasladighiroad: "Mhasla Dighi Road",
+    "mhasla dighi": "Mhasla Dighi Road",
     "mhasla stand": "Mhasla Stand",
     mhaslastand: "Mhasla Stand",
 
@@ -524,6 +554,13 @@ const STOP_ALIASES = {
 
     indapur: "Indapur",
     kolad: "Kolad",
+
+    vanjale: "Vanjale Road",
+    "vanjale road": "Vanjale Road",
+    vanjaleroad: "Vanjale Road",
+
+    divegar: "Divegar",
+    diveagar: "Divegar",
 };
 
 /* -------------------------------------------------------
