@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 const fadeUp = {
     hidden: { opacity: 0, y: 28 },
@@ -31,7 +32,37 @@ const stagger = {
     },
 };
 
+const rotatingBusImages = [
+    "/bus1.png",
+    "/bus2.png",
+    "/bus3.png",
+    "/bus4.png",
+    "/bus5.jpeg",
+    "/bus6.jpeg",
+    "/bus7.jpeg",
+    "/sa3.png",
+];
+
 export default function HomeHeroSection() {
+    const [heroImageIndex, setHeroImageIndex] = useState(0);
+    const totalHeroImages = rotatingBusImages.length;
+
+    useEffect(() => {
+        if (totalHeroImages <= 1) return;
+
+        const id = setInterval(() => {
+            setHeroImageIndex((prev) => (prev + 1) % totalHeroImages);
+        }, 4000);
+
+        return () => clearInterval(id);
+    }, [totalHeroImages]);
+
+    const getRotatingImage = (offset = 0) => {
+        if (!totalHeroImages) return "/bus1.png";
+        const idx = (heroImageIndex + offset + totalHeroImages) % totalHeroImages;
+        return rotatingBusImages[idx];
+    };
+
     return (
         <section className="relative overflow-hidden bg-[#f8fafc] pt-5 pb-8 lg:pt-6 lg:pb-8">
             <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -193,10 +224,10 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-40 overflow-hidden rounded-[18px] lg:h-44">
                                         <Image
-                                            src="/bus2.png"
-                                            alt="SA Tours Route 1"
+                                            src={getRotatingImage(0)}
+                                            alt="SA Tours bus"
                                             fill
-                                            className="object-cover transition duration-500 hover:scale-105"
+                                            className="object-cover transition duration-700 ease-out hover:scale-105"
                                         />
                                     </div>
 
@@ -217,7 +248,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-28 overflow-hidden rounded-[18px] lg:h-32">
                                         <Image
-                                            src="/bus3.png"
+                                            src={getRotatingImage(1)}
                                             alt="SA Tours Route 2"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -234,7 +265,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-28 overflow-hidden rounded-[18px] lg:h-32">
                                         <Image
-                                            src="/sa3.png"
+                                            src={getRotatingImage(2)}
                                             alt="SA Tours Route 3"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -249,7 +280,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-40 overflow-hidden rounded-[18px] lg:h-44">
                                         <Image
-                                            src="/bus4.png"
+                                            src={getRotatingImage(3)}
                                             alt="SA Tours Route 4"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
