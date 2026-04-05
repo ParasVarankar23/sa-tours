@@ -62,7 +62,11 @@ export const COMMON_VILLAGE_STOPS = [
     "Kalchi Banoti",
     "Banoti",
     "Varchi Banoti",
+    "Dhanghar Male Phata",
+    "Salvinde Phata",
     "Tondsure",
+    "Tondsure Phata",
+    "Jangam Wadi Phata",
     "Saklap",
     "Mhasla Dighi Road",
     "Mhasla",
@@ -91,7 +95,19 @@ export const BORLI_VILLAGE_STOPS = [
     "Dighi",
     "Karlas",
     "Kudgaon",
+    "Khujare",
+    "Vave",
+    "Asup",
+    "Karle",
+    "Dandguri",
     "Adgaon",
+    "Shrivane",
+    "Shrivardhan",
+    "Shrivardhan Chiklap",
+    "Hunarveli",
+    "Vakhalghar",
+    "Devkhol",
+    "Nagloli ",
     "Khalcha Velas",
     "Velas",
     "Varcha Velas",
@@ -117,7 +133,19 @@ export const DIGHI_VILLAGE_STOPS = [
     "Dighi",
     "Karlas",
     "Kudgaon",
+    "Khujare",
+    "Vave",
+    "Asup",
+    "Karle",
+    "Dandguri",
     "Adgaon",
+    "Shrivane",
+    "Shrivardhan",
+    "Shrivardhan Chiklap",
+    "Hunarveli",
+    "Vakhalghar",
+    "Devkhol",
+    "Nagloli ",
     "Khalcha Velas",
     "Velas",
     "Varcha Velas",
@@ -148,6 +176,14 @@ export const BORLI_FARE_GROUPS = [
             "Valvati",
             "Aravi",
             "Kondvili",
+            "Adgaon",
+            "Shrivane",
+            "Shrivardhan",
+            "Shrivardhan Chiklap",
+            "Hunarveli",
+            "Vakhalghar",
+            "Devkhol",
+            "Nagloli ",
         ],
     },
     {
@@ -159,16 +195,14 @@ export const BORLI_FARE_GROUPS = [
             "Kudgaon",
             "Divegar",
             "Bharadkhol",
+            "Khujare",
+            "Vave",
+            "Asup",
+            "Karle",
+            "Dandguri",
             "Khalcha Velas",
             "Velas",
             "Varcha Velas",
-        ],
-    },
-    {
-        zone: "BORLI_GROUP_1B",
-        fare: 550,
-        stops: [
-            "Adgaon",
         ],
     },
     {
@@ -209,7 +243,11 @@ export const BORLI_FARE_GROUPS = [
             "Kalchi Banoti",
             "Banoti",
             "Varchi Banoti",
+            "Dhanghar Male Phata",
+            "Salvinde Phata",
             "Tondsure",
+            "Tondsure Phata",
+            "Jangam Wadi Phata",
             "Saklap",
             "Mhasla Dighi Road",
             "Mhasla",
@@ -239,6 +277,11 @@ export const DIGHI_FARE_GROUPS = [
             "Kudgaon",
             "Bharadkhol",
             "Divegar",
+            "Khujare",
+            "Vave",
+            "Asup",
+            "Karle",
+            "Dandguri",
             "Khalcha Velas",
             "Velas",
             "Varcha Velas",
@@ -247,7 +290,20 @@ export const DIGHI_FARE_GROUPS = [
     {
         zone: "DIGHI_GROUP_2",
         fare: 550,
-        stops: ["Adgaon"],
+        stops: [
+            "Adgaon",
+            "Shekhadi",
+            "Valvati",
+            "Aravi",
+            "Kondvili",
+            "Shrivane",
+            "Shrivardhan",
+            "Shrivardhan Chiklap",
+            "Hunarveli",
+            "Vakhalghar",
+            "Devkhol",
+            "Nagloli ",
+        ],
     },
     {
         zone: "DIGHI_GROUP_3",
@@ -287,7 +343,11 @@ export const DIGHI_FARE_GROUPS = [
             "Kalchi Banoti",
             "Banoti",
             "Varchi Banoti",
+            "Dhanghar Male Phata",
+            "Salvinde Phata",
             "Tondsure",
+            "Tondsure Phata",
+            "Jangam Wadi Phata",
             "Saklap",
             "Mhasla Dighi Road",
             "Mhasla",
@@ -304,16 +364,6 @@ export const DIGHI_FARE_GROUPS = [
         zone: "DIGHI_GROUP_5",
         fare: 350,
         stops: ["Mangaon", "Indapur", "Kolad"],
-    },
-    {
-        zone: "DIGHI_GROUP_6",
-        fare: 550,
-        stops: [
-            "Shekhadi",
-            "Valvati",
-            "Aravi",
-            "Kondvili",
-        ],
     },
 ];
 
@@ -347,7 +397,7 @@ export const STOP_NAMES_MARATHI = {
     "Masjid Bandar": "मस्जिद बंदर",
     Dongri: "डोंगरी",
 
-    // BORLI / DIGHI SIDE VILLAGE STOPS
+    // Village side
     Shekhadi: "शेखाडी",
     Valvati: "वाळवटी",
     Bharadkhol: "भरडखोल",
@@ -357,7 +407,21 @@ export const STOP_NAMES_MARATHI = {
     Dighi: "दिघी",
     Karlas: "करलास",
     Kudgaon: "कुडगाव",
+    Khujare: "खुजारे",
+    Vave: "वावे",
+    Asup: "आसुप",
+    Karle: "कारले",
+    Dandguri: "दांडगुरी",
     Adgaon: "आडगाव",
+
+    Shrivane: "शिरवणे ",
+    Shrivardhan: "श्रीवर्धन",
+    "Shrivardhan Chiklap": "श्रीवर्धन चिकलप",
+    Hunarveli: "हुनरवेली",
+    Vakhalghar: "वाखळघर",
+    Devkhol: "देवखोल",
+    Nagloli : "नागळोली",
+
     "Khalcha Velas": "खालचा वेळास",
     Velas: "वेळास",
     "Varcha Velas": "वरचा वेळास",
@@ -379,9 +443,8 @@ export const STOP_NAMES_MARATHI = {
     Kapoli: "कापोली",
     Shiste: "शिस्ते",
 
-    Khanlosh: "खानलोश",
-
     Gondghar: "गोंडघर",
+    Khanlosh: "खानलोश",
     Mendadi: "मेंडडी",
     "Mendadi Grampanchayat": "मेंडडी ग्रामपंचायत",
     "Mendadi Kondh": "मेंडडी कोंढ",
@@ -389,19 +452,21 @@ export const STOP_NAMES_MARATHI = {
 
     "Kharsai Dam": "खारसई धरण",
     "Kharsai School": "खारसई शाळा",
-
     Varvatna: "वरवटणे",
     Agarwada: "आगरवाडा",
     "Kalchi Banoti": "खालची बनोटी",
     Banoti: "बनोटी",
     "Varchi Banoti": "वरची बनोटी",
+    "Dhanghar Male Phata": "धनगर मळे फाटा",
+    "Salvinde Phata": "सालविंदे फाटा",
     Tondsure: "तोंडसुरे",
+    "Tondsure Phata": "तोंडसुरे फाटा",
+    "Jangam Wadi Phata": "जंगमवाडी फाटा",
     Saklap: "सकळप",
 
-    Mhasla: "म्हसळा",
     "Mhasla Dighi Road": "म्हसळा-दिघी रोड",
+    Mhasla: "म्हसळा",
     "Mhasla Stand": "म्हसळा स्टँड",
-
     "Pabra Phata": "पाब्रा फाटा",
     Dorje: "दोरजे",
     Chandore: "चांदोरे",
@@ -493,11 +558,25 @@ const STOP_ALIASES = {
     "karlas gaon": "Karlas",
     करलास: "Karlas",
     kudgaon: "Kudgaon",
+    khujare: "Khujare",
+    vave: "Vave",
+    asup: "Asup",
+    karle: "Karle",
+    dandguri: "Dandguri",
     adgaon: "Adgaon",
+
+    shrivane: "Shrivane",
+    shrivardhan: "Shrivardhan",
+    "shrivardhan chiklap": "Shrivardhan Chiklap",
+    shrivardhanchiklap: "Shrivardhan Chiklap",
+    hunarveli: "Hunarveli",
+    vakhalghar: "Vakhalghar",
+    devkhol: "Devkhol",
+    Nagloli : "Nagloli ",
 
     "khalcha velas": "Khalcha Velas",
     khalchavelas: "Khalcha Velas",
-    "velas": "Velas",
+    velas: "Velas",
     "varcha velas": "Varcha Velas",
     varchavelas: "Varcha Velas",
 
@@ -561,16 +640,12 @@ const STOP_ALIASES = {
 
     "kharsai dam": "Kharsai Dam",
     kharsaidam: "Kharsai Dam",
-
     "kharsai school": "Kharsai School",
     kharsaischool: "Kharsai School",
-
-    // old typo compatibility
     kharasai: "Kharsai Dam",
 
     varvatna: "Varvatna",
     varvatane: "Varvatna",
-
     agarwada: "Agarwada",
     agrawada: "Agarwada",
 
@@ -580,9 +655,17 @@ const STOP_ALIASES = {
     "varchi banoti": "Varchi Banoti",
     varchibanoti: "Varchi Banoti",
 
+    "dhanghar male phata": "Dhanghar Male Phata",
+    dhangharmalephata: "Dhanghar Male Phata",
+    "salvinde phata": "Salvinde Phata",
+    salvindephata: "Salvinde Phata",
     tondsure: "Tondsure",
-    saklap: "Saklap",
+    "tondsure phata": "Tondsure Phata",
+    tondsurephata: "Tondsure Phata",
+    "jangam wadi phata": "Jangam Wadi Phata",
+    jangamwadiphata: "Jangam Wadi Phata",
 
+    saklap: "Saklap",
     mhasla: "Mhasla",
     "mhasla dighi road": "Mhasla Dighi Road",
     mhasladighiroad: "Mhasla Dighi Road",
@@ -597,7 +680,6 @@ const STOP_ALIASES = {
 
     dorje: "Dorje",
     chandore: "Chandore",
-
     sai: "Sai",
     morba: "Morba",
     surle: "Surle",
@@ -605,7 +687,6 @@ const STOP_ALIASES = {
 
     mangaon: "Mangaon",
     mangoan: "Mangaon",
-
     indapur: "Indapur",
     kolad: "Kolad",
 
@@ -832,9 +913,6 @@ export function getFullReturnRouteStops(route) {
     }
 }
 
-/* -------------------------------------------------------
-   PICKUP / DROP HELPERS
-------------------------------------------------------- */
 export function getAvailablePickupStops(route) {
     switch (route) {
         case ROUTES.BORLI_TO_DONGRI:
@@ -877,9 +955,6 @@ export function getAvailableDropStopsWithMarathi(route) {
     return getStopsWithMarathi(getAvailableDropStops(route));
 }
 
-/* -------------------------------------------------------
-   MAIN FARE FUNCTION
-------------------------------------------------------- */
 export function getFare({
     route,
     pickup,
@@ -1025,9 +1100,6 @@ export function getFare({
     };
 }
 
-/* -------------------------------------------------------
-   FARE PREVIEW HELPER
-------------------------------------------------------- */
 export function getFarePreviewByRoute(route, busType = BUS_TYPES.NON_AC) {
     const groups = getFareGroupsByRoute(route);
     const surcharge = busType === BUS_TYPES.AC ? AC_SURCHARGE : 0;
