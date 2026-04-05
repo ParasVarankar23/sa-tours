@@ -1385,6 +1385,586 @@ export default function StaffBookingPage() {
     return seatMap;
   };
 
+  {/* =========================================================
+   15 SEAT - FINAL UPDATED
+   BIGGER SEAT WIDTH + RIGHT END ALIGN + JOINED ROWS
+========================================================= */}
+
+  const buildTemplateShell15 = ({
+    selectedBus,
+    date,
+    topRowHtml,
+    leftColumnHtml,
+    rightColumnHtml,
+    backRowHtml,
+  }) => {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Seat Template - ${safeHtml(selectedBus?.busNumber || "Bus")}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 4mm;
+    }
+
+    html, body {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #111;
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      overflow: hidden;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-size: 12px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 8px;
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 8px;
+    }
+
+    .toolbar button {
+      border: 1px solid #ddd;
+      background: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .toolbar .primary {
+      background: #f97316;
+      color: #fff;
+      border-color: #f97316;
+    }
+
+    .sheet {
+      width: 202mm;
+      min-height: 289mm;
+      margin: 0 auto;
+      border: 1.2px solid #444;
+      padding: 3.5mm;
+      background: #fff;
+      overflow: hidden;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .top-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      margin-bottom: 4px;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .top-line .left { text-align: left; }
+    .top-line .center { text-align: center; }
+    .top-line .right { text-align: right; }
+
+    .title-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .bus-number {
+      font-size: 15px;
+      font-weight: 700;
+      text-align: left;
+      line-height: 1.1;
+    }
+
+    .company {
+      font-size: 20px;
+      font-weight: 800;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1;
+    }
+
+    .route {
+      font-size: 15px;
+      font-weight: 700;
+      text-align: right;
+      line-height: 1.1;
+    }
+
+    .divider {
+      border-top: 1px solid #666;
+      margin: 3px 0 6px;
+    }
+
+    /* =====================================================
+       WIDTH SYSTEM (BIGGER SEAT BOX)
+       Top Row    = 48 + 48 + 90 = 186mm
+       Middle     = 48 + 42 + 96 = 186mm
+       Back Row   = 48 * 4 = 192mm
+    ===================================================== */
+
+    /* =========================
+       TOP ROW (14W, 15, BUS IMAGE RIGHT)
+    ========================= */
+    .top-row {
+      width: 186mm;
+      display: grid;
+      grid-template-columns: 48mm 48mm 90mm;
+      gap: 0;
+      align-items: stretch;
+      margin-bottom: 4mm;
+    }
+
+    .top-seat-wrap {
+      width: 56mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    .top-bus {
+      width: 90mm;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 2mm;
+    }
+
+    .top-bus img {
+      width: 44mm;
+      height: auto;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* =========================
+       MIDDLE LAYOUT
+       LEFT | GAP | RIGHT
+    ========================= */
+    .main-layout {
+  width: 192mm;
+  display: grid;
+  grid-template-columns: 48mm 1fr 96mm;
+  gap: 0;
+  align-items: start;
+  margin-bottom: 0;
+}
+
+    .left-column {
+      width: 48mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      align-items: stretch;
+    }
+
+    .left-seat-wrap {
+      width: 48mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    .middle-gap {
+      min-height: 132mm;
+    }
+
+    .right-column {
+  width: 96mm;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+  justify-self: end;
+}
+
+    .right-row {
+      width: 96mm;
+      display: grid;
+      grid-template-columns: 48mm 48mm;
+      gap: 0;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    .right-seat-wrap {
+      width: 48mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       BACK ROW (FULL JOINED)
+    ========================= */
+    .back-row {
+      width: 192mm;
+      display: grid;
+      grid-template-columns: repeat(4, 48mm);
+      gap: 0;
+      align-items: stretch;
+      justify-items: stretch;
+      margin-top: 0;
+      transform: translateY(-1px);
+    }
+
+    .back-seat-wrap {
+      width: 48mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       SEAT BOX
+    ========================= */
+    .seat-box {
+      width: 100%;
+      height: 43mm;
+      min-height: 43mm;
+      border: 1px solid #444;
+      padding: 1.2mm 1.4mm 1mm;
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .seat-box.blocked {
+      background: #fff7ed;
+      border-color: #ea580c;
+    }
+
+    /* =========================
+       SEAT TITLE
+    ========================= */
+    .seat-title {
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 1.1mm;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1mm;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .seat-no {
+      display: inline-block;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .seat-title-right {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.6mm;
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .blocked-tag {
+      font-size: 18px;
+      font-weight: 700;
+      color: #ea580c;
+      background: transparent;
+      border: none;
+      padding: 0;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    /* =========================
+       LABEL / VALUE
+       Name : Paras
+    ========================= */
+    .line-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8mm;
+      margin: 0.45mm 0;
+      min-height: 6mm;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .label {
+      flex: 0 0 auto;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .colon {
+      flex: 0 0 auto;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .value {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: inline-block;
+      min-height: 4.8mm;
+      padding: 0 0 0.2mm 0.5mm;
+      font-size: 16px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-bottom: 1px solid #444;
+    }
+
+    .label,
+    .value,
+    .seat-title,
+    .blocked-tag {
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
+    }
+
+    @media print {
+      html, body {
+        width: auto;
+        min-height: auto;
+        overflow: hidden;
+      }
+
+      .toolbar {
+        display: none !important;
+      }
+
+      .sheet {
+        border: none;
+        margin: 0 auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="primary" onclick="window.close()">Close</button>
+  </div>
+
+  <div class="sheet">
+    <div class="top-line">
+      <div class="left">Date:- ${safeHtml(formatDisplayDate(date) || "")}</div>
+      <div class="center">||श्री||</div>
+      <div class="right">Time:- ${safeHtml(formatTime(selectedBus?.startTime || "03:00"))}</div>
+    </div>
+
+    <div class="title-line">
+      <div class="bus-number">${safeHtml(selectedBus?.busNumber || "MH06CP1664")}</div>
+      <div class="company">SAI TRAVEL'S</div>
+      <div class="route">Route:- ${safeHtml(selectedBus?.routeName || "")}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- TOP ROW -->
+    <div class="top-row">
+      ${topRowHtml}
+      <div class="top-bus">
+        <img src="/bus4.png" alt="Bus" />
+      </div>
+    </div>
+
+    <!-- MIDDLE -->
+    <div class="main-layout">
+      <div class="left-column">${leftColumnHtml}</div>
+      <div class="middle-gap"></div>
+      <div class="right-column">${rightColumnHtml}</div>
+    </div>
+
+    <!-- BACK ROW -->
+    <div class="back-row">
+      ${backRowHtml}
+    </div>
+  </div>
+</body>
+</html>
+  `;
+  };
+
+  const renderSeatCardTemplate15 = ({
+    seatNo,
+    seatMap,
+    isWindowSeat = false,
+  }) => {
+    const data = seatMap[String(seatNo)] || {};
+    const isBlocked = data?.status === "blocked";
+    const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
+
+    return `
+    <div class="seat-box ${isBlocked ? "blocked" : ""}">
+      <div class="seat-title">
+        <span class="seat-no">${safeHtml(title)}</span>
+        <span class="seat-title-right">
+          ${isBlocked ? `<span class="blocked-tag">BLOCKED</span>` : ""}
+        </span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Name</span>
+        <span class="colon">:</span>
+        <span class="value">${safeHtml(data.name || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Phone</span>
+        <span class="colon">:</span>
+        <span class="value">${safeHtml(data.phone || data.mobile || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Pickup</span>
+        <span class="colon">:</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.pickup) || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Drop</span>
+        <span class="colon">:</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.drop) || "")}</span>
+      </div>
+    </div>
+  `;
+  };
+
+  const buildSeatTemplateHtml15 = () => {
+    if (!selectedBus) {
+      showAppToast("error", "Please open a bus first");
+      return "";
+    }
+
+    const seatMap = getSeatMapForTemplate();
+
+    // EXACT 15 SEAT ARRANGEMENT
+    const topRow = [14, 15];
+    const leftSeats = [3, 6, 9];
+    const rightRows = [
+      [1, 2],
+      [4, 5],
+      [7, 8],
+    ];
+    const backRow = [10, 11, 12, 13];
+
+    const windowSeatSet = new Set([2, 3, 5, 6, 8, 9, 10, 13, 14]);
+
+    const topRowHtml = topRow
+      .map(
+        (seat) => `
+      <div class="top-seat-wrap">
+        ${renderSeatCardTemplate15({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
+
+    const leftColumnHtml = leftSeats
+      .map(
+        (seat) => `
+      <div class="left-seat-wrap">
+        ${renderSeatCardTemplate15({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
+
+    const rightColumnHtml = rightRows
+      .map(
+        (row) => `
+      <div class="right-row">
+        ${row
+            .map(
+              (seat) => `
+            <div class="right-seat-wrap">
+              ${renderSeatCardTemplate15({
+                seatNo: seat,
+                seatMap,
+                isWindowSeat: windowSeatSet.has(seat),
+              })}
+            </div>
+          `
+            )
+            .join("")}
+      </div>
+    `
+      )
+      .join("");
+
+    const backRowHtml = backRow
+      .map(
+        (seat) => `
+      <div class="back-seat-wrap">
+        ${renderSeatCardTemplate15({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
+
+    return buildTemplateShell15({
+      selectedBus,
+      date,
+      topRowHtml,
+      leftColumnHtml,
+      rightColumnHtml,
+      backRowHtml,
+    });
+  };
+
   /* =========================================================
      23 SEAT
   ========================================================= */
@@ -1415,7 +1995,8 @@ export default function StaffBookingPage() {
       padding: 0;
       background: #fff;
       color: #111;
-      font-family: "Times New Roman", serif;
+      /* Prefer fonts that render Devanagari (Marathi) clearly */
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       overflow: hidden;
@@ -1602,6 +2183,37 @@ export default function StaffBookingPage() {
       padding: 0;
     }
 
+    /* Bus side-image shown above the first left-column seat (before seat 3) */
+    .bus-diagram {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1mm 0;
+    }
+
+    .bus-diagram img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Bus side-image shown above the first left-column seat (before seat 3) */
+    .bus-diagram {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1mm 0;
+    }
+
+    .bus-diagram img {
+      width: 100%;
+      height: 100%;
+    }
+
     /* =========================
        BACK ROW
     ========================= */
@@ -1638,7 +2250,8 @@ export default function StaffBookingPage() {
       border: 1px solid #444;
       padding: 0.8mm 1mm 0.5mm;
       background: #fff;
-      overflow: hidden;
+      /* Allow Devanagari matras to render fully */
+      overflow: visible;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
@@ -1650,7 +2263,7 @@ export default function StaffBookingPage() {
       border: 1px solid #444;
       padding: 0.8mm 1mm 0.6mm;
       margin: 0;
-      overflow: hidden;
+      overflow: visible;
     }
 
     .seat-box.blocked {
@@ -1692,33 +2305,50 @@ export default function StaffBookingPage() {
     }
 
     .blocked-tag {
-      font-size: 16px;
-      border: 1px solid #ea580c;
+      font-size: 20px;
+      font-weight: 700;
       color: #ea580c;
-      padding: 0 3px;
+      background: transparent;
+      border: none;
+      padding: 0 6px;
       border-radius: 0;
       line-height: 1;
       flex-shrink: 0;
     }
 
     .ticket-tag {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      display: inline-block;
       font-size: 17px;
       font-weight: 700;
-      border: none;
       color: #0f172a;
       background: transparent;
-      padding: 0.2mm 0.8mm;
+      border: none;
+      padding: 0;
       border-radius: 0;
       line-height: 1;
-      height: 3.2mm;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      height: auto;
+      max-width: none;
+      overflow: visible;
       white-space: nowrap;
-      flex-shrink: 1;
+      flex-shrink: 0;
+    }
+
+    
+    .ticket-tag {
+      display: inline-block;
+      font-size: 17px;
+      font-weight: 700;
+      color: #0f172a;
+      background: transparent;
+      border: none;
+      padding: 0;
+      border-radius: 0;
+      line-height: 1;
+      height: auto;
+      max-width: none;
+      overflow: visible;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     /* =========================
@@ -1727,18 +2357,19 @@ export default function StaffBookingPage() {
     ========================= */
     .line-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 3mm;
       margin: 0.14mm 0;
-      min-height: 2.4mm;
-      overflow: hidden;
+      min-height: 2.6mm;
+      /* Let tall glyphs and matras show fully */
+      overflow: visible;
     }
 
     .label {
       flex: 0 0 auto;
       font-size: 18px;
       font-weight: 700;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
     }
 
@@ -1746,22 +2377,22 @@ export default function StaffBookingPage() {
       flex: 1 1 auto;
       min-width: 0;
       display: inline-block;
-      min-height: 2.2mm;
+      min-height: 2.4mm;
       padding: 0 0 0.06mm 0;
       font-size: 18px;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border-bottom: none;
+      overflow: visible;
+      text-overflow: clip;
     }
 
-    .value-no-border {
-      border-bottom: none;
-    }
-
-    .marathi-text {
-      font-family: "Noto Sans Devanagari", "Noto Serif Devanagari", "Mangal", "Nirmala UI", "Kohinoor Devanagari", system-ui, sans-serif;
+    /* Ensure all key text uses a Devanagari-capable font stack */
+    .label,
+    .value,
+    .seat-title,
+    .ticket-tag,
+    .blocked-tag {
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
     }
 
     .back-row .label {
@@ -1770,7 +2401,6 @@ export default function StaffBookingPage() {
 
     .back-row .value {
       font-size: 17px;
-      border-bottom: none;
     }
 
     @media print {
@@ -1790,11 +2420,12 @@ export default function StaffBookingPage() {
       }
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
   <div class="toolbar">
     <button onclick="window.print()">Print / Save as PDF</button>
-    <button class="primary" onclick="downloadHtmlFile()">Download HTML</button>
+    <button class="primary" onclick="downloadHtmlFile()">Download PDF</button>
   </div>
 
   <div class="sheet">
@@ -1825,16 +2456,33 @@ export default function StaffBookingPage() {
 
   <script>
     function downloadHtmlFile() {
-      const html = document.documentElement.outerHTML;
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.html";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      try {
+        var sheet = document.querySelector(".sheet");
+        if (!sheet) {
+          window.print();
+          return;
+        }
+
+        if (typeof html2pdf === "undefined") {
+          window.print();
+          return;
+        }
+
+        var opt = {
+          margin: [0, 0, 0, 0],
+          filename: "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.pdf",
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        };
+
+        html2pdf().set(opt).from(sheet).save();
+      } catch (e) {
+        try {
+          console.error(e);
+        } catch (_) {}
+        window.print();
+      }
     }
   </script>
 </body>
@@ -1849,8 +2497,6 @@ export default function StaffBookingPage() {
     isWindowSeat = false,
   }) => {
     const data = seatMap[String(seatNo)] || {};
-    const pickupDisplay = data.pickup ? getStopNameMarathi(data.pickup) : "";
-    const dropDisplay = data.drop ? getStopNameMarathi(data.drop) : "";
     const isBlocked = data?.status === "blocked";
     const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
 
@@ -1873,12 +2519,12 @@ export default function StaffBookingPage() {
 
       <div class="line-row">
         <span class="label">Pickup :</span>
-        <span class="value value-no-border marathi-text">${safeHtml(pickupDisplay)}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.pickup) || "")}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value value-no-border marathi-text">${safeHtml(dropDisplay)}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.drop) || "")}</span>
       </div>
     </div>
   `;
@@ -1913,7 +2559,12 @@ export default function StaffBookingPage() {
     const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
 
     const leftColumnHtml = `
-    ${Array.from({ length: topOffsetRows })
+    <div class="left-seat-wrap left-empty">
+      <div class="bus-diagram">
+        <img src="/sa3.png" alt="Bus layout" />
+      </div>
+    </div>
+    ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
         .map(() => `<div class="left-seat-wrap left-empty"></div>`)
         .join("")}
     ${leftSeats
@@ -1982,104 +2633,6 @@ export default function StaffBookingPage() {
 
 
   /* =========================================================
-   15 SEAT TEMPLATE (uses same shell as 23-seat)
-========================================================= */
-
-  const buildSeatTemplateHtml15 = () => {
-    if (!selectedBus) {
-      showAppToast("error", "Please open a bus first");
-      return "";
-    }
-
-    const seatMap = getSeatMapForTemplate();
-
-    const leftSeats = [3, 6, 9, 12];
-    const rightRows = [
-      [1, 2],
-      [4, 5],
-      [7, 8],
-      [10, 11],
-    ];
-    const backRow = [13, 14, 15];
-    const topOffsetRows = 1;
-
-    const windowSeatSet = new Set([
-      2, 3, 5, 6, 8, 9, 11, 12, 13, 15,
-    ]);
-
-    const leftVisibleCount = topOffsetRows + leftSeats.length;
-    const rightVisibleCount = rightRows.length;
-    const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
-
-    const leftColumnHtml = `
-    ${Array.from({ length: topOffsetRows })
-        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
-        .join("")}
-    ${leftSeats
-        .map(
-          (seat) => `
-        <div class="left-seat-wrap">
-          ${renderSeatCardTemplate23({
-            seatNo: seat,
-            seatMap,
-            isWindowSeat: windowSeatSet.has(seat),
-          })}
-        </div>
-      `
-        )
-        .join("")}
-    ${Array.from({ length: leftBottomSpacerCount })
-        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
-        .join("")}
-  `;
-
-    const rightColumnHtml = rightRows
-      .map(
-        (row) => `
-      <div class="right-row right-count-${row.length}">
-        ${row
-            .map(
-              (seat) => `
-          <div class="right-seat-wrap">
-            ${renderSeatCardTemplate23({
-                seatNo: seat,
-                seatMap,
-                isWindowSeat: windowSeatSet.has(seat),
-              })}
-          </div>
-        `
-            )
-            .join("")}
-      </div>
-    `
-      )
-      .join("");
-
-    const backRowHtml = backRow
-      .map(
-        (seat) => `
-      <div class="back-seat-wrap">
-        ${renderSeatCardTemplate23({
-          seatNo: seat,
-          seatMap,
-          isWindowSeat: windowSeatSet.has(seat),
-        })}
-      </div>
-    `
-      )
-      .join("");
-
-    return buildTemplateShell23({
-      selectedBus,
-      date,
-      leftColumnHtml,
-      rightColumnHtml,
-      backRowHtml,
-    });
-  };
-
-
-  /* =========================================================
    27 SEAT - FINAL FIXED
 ========================================================= */
 
@@ -2109,7 +2662,7 @@ export default function StaffBookingPage() {
       padding: 0;
       background: #fff;
       color: #111;
-      font-family: "Times New Roman", serif;
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       overflow: hidden;
@@ -2332,7 +2885,7 @@ export default function StaffBookingPage() {
       border: 1px solid #444;
       padding: 0.8mm 1mm 0.5mm;
       background: #fff;
-      overflow: hidden;
+      overflow: visible;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
@@ -2344,7 +2897,7 @@ export default function StaffBookingPage() {
       border: 1px solid #444;
       padding: 0.9mm 1mm 0.6mm;
       margin: 0;
-      overflow: hidden;
+      overflow: visible;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
@@ -2388,33 +2941,32 @@ export default function StaffBookingPage() {
     }
 
     .blocked-tag {
-      font-size: 7px;
-      border: 1px solid #ea580c;
+      font-size: 18px;
+      font-weight: 700;
       color: #ea580c;
-      padding: 0 3px;
+      background: transparent;
+      border: none;
+      padding: 0 6px;
       border-radius: 0;
       line-height: 1;
       flex-shrink: 0;
     }
 
     .ticket-tag {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      display: inline-block;
       font-size: 16px;
       font-weight: 700;
-      border: none;
       color: #0f172a;
       background: transparent;
-      padding: 0.2mm 0.8mm;
+      border: none;
+      padding: 0;
       border-radius: 0;
       line-height: 1;
-      height: 5mm;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      height: auto;
+      max-width: none;
+      overflow: visible;
       white-space: nowrap;
-      flex-shrink: 1;
+      flex-shrink: 0;
     }
 
     /* =========================
@@ -2422,11 +2974,11 @@ export default function StaffBookingPage() {
     ========================= */
     .line-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 1.2mm;
       margin: 0.14mm 0;
-      min-height: 2.4mm;
-      overflow: hidden;
+      min-height: 2.6mm;
+      overflow: visible;
     }
 
     .label {
@@ -2434,7 +2986,7 @@ export default function StaffBookingPage() {
       width: 14mm;
       font-size: 18px;
       font-weight: 700;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
     }
 
@@ -2442,22 +2994,21 @@ export default function StaffBookingPage() {
       flex: 1 1 auto;
       min-width: 0;
       display: inline-block;
-      min-height: 2.2mm;
+      min-height: 2.4mm;
       padding: 0 0 0.06mm 0.35mm;
       font-size: 18px;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border-bottom: none;
+      overflow: visible;
+      text-overflow: clip;
     }
 
-    .value-no-border {
-      border-bottom: none;
-    }
-
-    .marathi-text {
-      font-family: "Noto Sans Devanagari", "Noto Serif Devanagari", "Mangal", "Nirmala UI", "Kohinoor Devanagari", system-ui, sans-serif;
+    .label,
+    .value,
+    .seat-title,
+    .ticket-tag,
+    .blocked-tag {
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
     }
 
     @media print {
@@ -2477,11 +3028,12 @@ export default function StaffBookingPage() {
       }
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
   <div class="toolbar">
     <button onclick="window.print()">Print / Save as PDF</button>
-    <button class="primary" onclick="downloadHtmlFile()">Download HTML</button>
+    <button class="primary" onclick="downloadHtmlFile()">Download PDF</button>
   </div>
 
   <div class="sheet">
@@ -2512,16 +3064,33 @@ export default function StaffBookingPage() {
 
   <script>
     function downloadHtmlFile() {
-      const html = document.documentElement.outerHTML;
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.html";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      try {
+        var sheet = document.querySelector(".sheet");
+        if (!sheet) {
+          window.print();
+          return;
+        }
+
+        if (typeof html2pdf === "undefined") {
+          window.print();
+          return;
+        }
+
+        var opt = {
+          margin: [0, 0, 0, 0],
+          filename: "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.pdf",
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        };
+
+        html2pdf().set(opt).from(sheet).save();
+      } catch (e) {
+        try {
+          console.error(e);
+        } catch (_) {}
+        window.print();
+      }
     }
   </script>
 </body>
@@ -2535,8 +3104,6 @@ export default function StaffBookingPage() {
     isWindowSeat = false,
   }) => {
     const data = seatMap[String(seatNo)] || {};
-    const pickupDisplay = data.pickup ? getStopNameMarathi(data.pickup) : "";
-    const dropDisplay = data.drop ? getStopNameMarathi(data.drop) : "";
     const isBlocked = data?.status === "blocked";
     const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
 
@@ -2563,12 +3130,12 @@ export default function StaffBookingPage() {
       <div class="line-row">
         <span class="label">Pickup</span>
         <span class="colon">:</span>
-        <span class="value value-no-border marathi-text">${safeHtml(pickupDisplay)}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.pickup) || "")}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value value-no-border marathi-text">${safeHtml(dropDisplay)}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.drop) || "")}</span>
       </div>
     </div>
   `;
@@ -2605,7 +3172,12 @@ export default function StaffBookingPage() {
     const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
 
     const leftColumnHtml = `
-    ${Array.from({ length: topOffsetRows })
+    <div class="left-seat-wrap left-empty">
+      <div class="bus-diagram">
+        <img src="/bus2.png" alt="Bus layout" />
+      </div>
+    </div>
+    ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
         .map(() => `<div class="left-seat-wrap left-empty"></div>`)
         .join("")}
     ${leftSeats
@@ -2701,7 +3273,7 @@ export default function StaffBookingPage() {
       padding: 0;
       background: #fff;
       color: #111;
-      font-family: "Times New Roman", serif;
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       overflow: hidden;
@@ -2888,33 +3460,50 @@ export default function StaffBookingPage() {
       padding: 0;
     }
 
+    /* Bus side-image shown above the first left-column seat (before seat 3) */
+    .bus-diagram {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1mm 0;
+    }
+
+    .bus-diagram img {
+      width: 110%;
+      height: 125%;
+      object-fit: cover;
+    }
+
     /* =========================
        BACK ROW - CONNECTED
     ========================= */
     .back-row {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0;
-  margin-top: -1.2px;
-  padding-top: 0;
-  height: 34mm;
-  max-height: 34mm;
-  overflow: visible;
-  page-break-inside: avoid;
-  break-inside: avoid;
-  align-items: stretch;
-  justify-items: stretch;
-  border-top: none;
-}
-  .back-row .seat-box {
-  height: 34mm;
-  min-height: 34mm;
-  border: 1.2px solid #222;
-  padding: 0.8mm 1mm 0.55mm;
-  margin: 0;
-  overflow: visible;
-}
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+      margin-top: -1.2px;
+      padding-top: 0;
+      height: 34mm;
+      max-height: 34mm;
+      overflow: visible;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      align-items: stretch;
+      justify-items: stretch;
+      border-top: none;
+    }
+
+    .back-row .seat-box {
+      height: 34mm;
+      min-height: 34mm;
+      border: 1.2px solid #222;
+      padding: 0.8mm 1mm 0.55mm;
+      margin: 0;
+      overflow: visible;
+    }
 
     .back-seat-wrap {
       width: 100%;
@@ -2930,12 +3519,12 @@ export default function StaffBookingPage() {
     ========================= */
     .seat-box {
       width: 100%;
-      height: 26.5mm;
-      min-height: 26.5mm;
+      height: 26.3mm;
+      min-height: 26.3mm;
       border: 1.2px solid #222;
       padding: 0.8mm 1mm 0.55mm;
       background: #fff;
-      overflow: hidden;
+      overflow: visible;
       page-break-inside: avoid;
       break-inside: avoid;
       display: flex;
@@ -2949,6 +3538,7 @@ export default function StaffBookingPage() {
       padding: 0.8mm 1mm 0.55mm;
       border: 1.2px solid #222;
       margin: 0;
+      overflow: visible;
     }
 
     .seat-box.blocked {
@@ -2993,33 +3583,32 @@ export default function StaffBookingPage() {
     }
 
     .blocked-tag {
-      font-size: 7px;
-      border: 1px solid #ea580c;
+      font-size: 18px;
+      font-weight: 700;
       color: #ea580c;
-      padding: 0 2px;
+      background: transparent;
+      border: none;
+      padding: 0 6px;
       border-radius: 0;
       line-height: 1;
       flex-shrink: 0;
     }
 
     .ticket-tag {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      display: inline-block;
       font-size: 16px;
       font-weight: 700;
-      border: none;
       color: #0f172a;
       background: transparent;
-      padding: 0.25mm 0.9mm;
+      border: none;
+      padding: 0;
       border-radius: 0;
       line-height: 1;
-      height: 3.4mm;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      height: auto;
+      max-width: none;
+      overflow: visible;
       white-space: nowrap;
-      flex-shrink: 1;
+      flex-shrink: 0;
     }
 
     /* =========================
@@ -3028,15 +3617,15 @@ export default function StaffBookingPage() {
     ========================= */
     .line-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 0.8mm;
       margin: 0.12mm 0;
-      min-height: 2.2mm;
-      overflow: hidden;
+      min-height: 2.4mm;
+      overflow: visible;
     }
 
     .back-row .line-row {
-      min-height: 2.35mm;
+      min-height: 2.5mm;
       margin: 0.12mm 0;
     }
 
@@ -3044,7 +3633,7 @@ export default function StaffBookingPage() {
       flex: 0 0 auto;
       font-size: 17px;
       font-weight: 700;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
     }
 
@@ -3052,14 +3641,13 @@ export default function StaffBookingPage() {
       flex: 1 1 auto;
       min-width: 0;
       display: inline-block;
-      min-height: 2.1mm;
+      min-height: 2.3mm;
       padding: 0 0 0.06mm 0;
       font-size: 17px;
-      line-height: 1;
+      line-height: 1.2;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border-bottom: none;
+      overflow: visible;
+      text-overflow: clip;
     }
 
     .back-row .label {
@@ -3068,16 +3656,15 @@ export default function StaffBookingPage() {
 
     .back-row .value {
       font-size: 17px;
-      min-height: 2.15mm;
-      border-bottom: none;
+      min-height: 2.35mm;
     }
 
-    .value-no-border {
-      border-bottom: none;
-    }
-
-    .marathi-text {
-      font-family: "Noto Sans Devanagari", "Noto Serif Devanagari", "Mangal", "Nirmala UI", "Kohinoor Devanagari", system-ui, sans-serif;
+    .label,
+    .value,
+    .seat-title,
+    .ticket-tag,
+    .blocked-tag {
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
     }
 
     @media print {
@@ -3097,11 +3684,12 @@ export default function StaffBookingPage() {
       }
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
   <div class="toolbar">
     <button onclick="window.print()">Print / Save as PDF</button>
-    <button class="primary" onclick="downloadHtmlFile()">Download HTML</button>
+    <button class="primary" onclick="downloadHtmlFile()">Download PDF</button>
   </div>
 
   <div class="sheet">
@@ -3138,16 +3726,33 @@ export default function StaffBookingPage() {
 
   <script>
     function downloadHtmlFile() {
-      const html = document.documentElement.outerHTML;
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.html";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      try {
+        var sheet = document.querySelector(".sheet");
+        if (!sheet) {
+          window.print();
+          return;
+        }
+
+        if (typeof html2pdf === "undefined") {
+          window.print();
+          return;
+        }
+
+        var opt = {
+          margin: [0, 0, 0, 0],
+          filename: "seat-template-${safeHtml(selectedBus?.busNumber || "bus")}-${safeHtml(date || "date")}.pdf",
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        };
+
+        html2pdf().set(opt).from(sheet).save();
+      } catch (e) {
+        try {
+          console.error(e);
+        } catch (_) {}
+        window.print();
+      }
     }
   </script>
 </body>
@@ -3161,8 +3766,6 @@ export default function StaffBookingPage() {
     isWindowSeat = false,
   }) => {
     const data = seatMap[String(seatNo)] || {};
-    const pickupDisplay = data.pickup ? getStopNameMarathi(data.pickup) : "";
-    const dropDisplay = data.drop ? getStopNameMarathi(data.drop) : "";
     const isBlocked = data?.status === "blocked";
     const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
 
@@ -3191,12 +3794,12 @@ export default function StaffBookingPage() {
 
       <div class="line-row">
         <span class="label">Pickup :</span>
-        <span class="value value-no-border marathi-text">${safeHtml(pickupDisplay)}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.pickup) || "")}</span>
       </div>
 
       <div class="line-row">
         <span class="label">Drop :</span>
-        <span class="value value-no-border marathi-text">${safeHtml(dropDisplay)}</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.drop) || "")}</span>
       </div>
     </div>
   `;
@@ -3235,7 +3838,12 @@ export default function StaffBookingPage() {
     const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
 
     const leftColumnHtml = `
-    ${Array.from({ length: topOffsetRows })
+    <div class="left-seat-wrap left-empty">
+      <div class="bus-diagram">
+        <img src="/bus3.png" alt="Bus layout" />
+      </div>
+    </div>
+    ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
         .map(() => `<div class="left-seat-wrap left-empty"></div>`)
         .join("")}
     ${leftSeats
@@ -3377,6 +3985,7 @@ export default function StaffBookingPage() {
     };
   };
 
+  
   return (
     <div className="min-h-screen w-full bg-[#f8fafc] p-4 md:p-6 lg:p-8">
       {/* Header */}
