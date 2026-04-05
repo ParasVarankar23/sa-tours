@@ -8,6 +8,14 @@ function toStr(s) {
 
 export function getSeatRows(total) {
     const seatMaps = {
+        15: [
+            { left: [14, 15], right: null },
+            { left: 3, right: [1, 2] },
+            { left: 6, right: [4, 5] },
+            { left: 9, right: [7, 8] },
+            { left: null, right: [10, 11, 12, 13], isBack: true },
+        ],
+
         23: [
             { left: null, right: [1, 2] },
             { left: 3, right: [4, 5] },
@@ -16,7 +24,7 @@ export function getSeatRows(total) {
             { left: 12, right: [13, 14] },
             { left: 15, right: [16, 17] },
             { left: 18, right: null },
-            { left: null, right:  [19, 20, 21, 22, 23], isBack: true }
+            { left: null, right: [19, 20, 21, 22, 23], isBack: true }
         ],
 
         27: [
@@ -157,6 +165,7 @@ export default function SeatLayout({
                             {rows.map((row, index) => {
                                 const rightSeats = row.right || [];
                                 const isBack = !!row.isBack;
+                                const hasLeftArray = Array.isArray(row.left);
 
                                 return (
                                     <div
@@ -165,9 +174,22 @@ export default function SeatLayout({
                                             }`}
                                     >
                                         {!isBack ? (
-                                            <div className="flex w-8 shrink-0 justify-center sm:w-12 md:w-14">
+                                            <div
+                                                className={clsx(
+                                                    "flex shrink-0 justify-center",
+                                                    hasLeftArray
+                                                        ? "w-16 sm:w-20 md:w-24"
+                                                        : "w-8 sm:w-12 md:w-14"
+                                                )}
+                                            >
                                                 {row.left ? (
-                                                    renderSeat(row.left)
+                                                    hasLeftArray ? (
+                                                        <div className="flex flex-row gap-1 sm:gap-1.5">
+                                                            {row.left.map((seat) => renderSeat(seat))}
+                                                        </div>
+                                                    ) : (
+                                                        renderSeat(row.left)
+                                                    )
                                                 ) : (
                                                     <div className="h-8 w-8 shrink-0 sm:h-9 sm:w-9 md:h-10 md:w-10" />
                                                 )}

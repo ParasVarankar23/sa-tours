@@ -24,7 +24,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-const seatLayoutOptions = ["31", "27", "23"];
+const seatLayoutOptions = ["31", "27", "23", "15"];
 const ITEMS_PER_PAGE = 10;
 
 const initialForm = {
@@ -299,6 +299,7 @@ export default function AdminBusPage() {
             seats31: busList.filter((b) => String(b.seatLayout) === "31").length,
             seats27: busList.filter((b) => String(b.seatLayout) === "27").length,
             seats23: busList.filter((b) => String(b.seatLayout) === "23").length,
+            seats15: busList.filter((b) => String(b.seatLayout) === "15").length,
         };
     }, [busList]);
 
@@ -1165,7 +1166,7 @@ export default function AdminBusPage() {
                 </button>
             </div>
 
-            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <SummaryCard
                     title="Total Buses"
                     value={busStats.total}
@@ -1184,6 +1185,11 @@ export default function AdminBusPage() {
                 <SummaryCard
                     title="23 Seat Layout"
                     value={busStats.seats23}
+                    icon={<Armchair className="h-6 w-6 text-[#f97316]" />}
+                />
+                <SummaryCard
+                    title="15 Seat Layout"
+                    value={busStats.seats15}
                     icon={<Armchair className="h-6 w-6 text-[#f97316]" />}
                 />
             </div>
@@ -1221,6 +1227,7 @@ export default function AdminBusPage() {
                                     <option value="31">31 Seats</option>
                                     <option value="27">27 Seats</option>
                                     <option value="23">23 Seats</option>
+                                    <option value="15">15 Seats</option>
                                 </select>
                             </div>
                         </div>
@@ -2059,6 +2066,7 @@ function BusFormModal({
                                                 <option value="31">31 Seats</option>
                                                 <option value="27">27 Seats</option>
                                                 <option value="23">23 Seats</option>
+                                                <option value="15">15 Seats</option>
                                             </select>
                                         </div>
                                     </div>
@@ -2754,6 +2762,35 @@ function SeatVisualizer({ seatLayout, busNumber, busName, routeName, startTime, 
             };
         }
 
+        if (seatLayout === "23") {
+            return {
+                pairRow: [1, 2],
+                mainRows: [
+                    [3, 4, 5],
+                    [6, 7, 8],
+                    [9, 10, 11],
+                    [12, 13, 14],
+                    [15, 16, 17],
+                ],
+                singleRow: [18],
+                lastRow: [19, 20, 21, 22, 23],
+            };
+        }
+
+        if (seatLayout === "15") {
+            return {
+                pairRow: [1, 2],
+                mainRows: [
+                    [3, 4, 5],
+                    [6, 7, 8],
+                    [9, 10, 11],
+                ],
+                singleRow: [],
+                lastRow: [13, 14, 15],
+            };
+        }
+
+        // Fallback: treat as 23-seat style
         return {
             pairRow: [1, 2],
             mainRows: [
@@ -2906,11 +2943,6 @@ function SeatTicketBox({ seatNo }) {
 
                 <div className="flex items-center gap-1">
                     <span>Mobile:</span>
-                    <span className="block h-[1px] flex-1 bg-slate-300" />
-                </div>
-
-                <div className="flex items-center gap-1">
-                    <span>Email:</span>
                     <span className="block h-[1px] flex-1 bg-slate-300" />
                 </div>
             </div>

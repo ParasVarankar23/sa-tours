@@ -1780,6 +1780,587 @@ export default function BookingPage() {
     return seatMap;
   };
 
+
+  {/* =========================================================
+   15 SEAT - FINAL UPDATED
+   BIGGER SEAT WIDTH + RIGHT END ALIGN + JOINED ROWS
+========================================================= */}
+
+  const buildTemplateShell15 = ({
+    selectedBus,
+    date,
+    topRowHtml,
+    leftColumnHtml,
+    rightColumnHtml,
+    backRowHtml,
+  }) => {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Seat Template - ${safeHtml(selectedBus?.busNumber || "Bus")}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 4mm;
+    }
+
+    html, body {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #111;
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      overflow: hidden;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-size: 12px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 8px;
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 8px;
+    }
+
+    .toolbar button {
+      border: 1px solid #ddd;
+      background: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .toolbar .primary {
+      background: #f97316;
+      color: #fff;
+      border-color: #f97316;
+    }
+
+    .sheet {
+      width: 202mm;
+      min-height: 289mm;
+      margin: 0 auto;
+      border: 1.2px solid #444;
+      padding: 3.5mm;
+      background: #fff;
+      overflow: hidden;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .top-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      margin-bottom: 4px;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .top-line .left { text-align: left; }
+    .top-line .center { text-align: center; }
+    .top-line .right { text-align: right; }
+
+    .title-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .bus-number {
+      font-size: 15px;
+      font-weight: 700;
+      text-align: left;
+      line-height: 1.1;
+    }
+
+    .company {
+      font-size: 20px;
+      font-weight: 800;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1;
+    }
+
+    .route {
+      font-size: 15px;
+      font-weight: 700;
+      text-align: right;
+      line-height: 1.1;
+    }
+
+    .divider {
+      border-top: 1px solid #666;
+      margin: 3px 0 6px;
+    }
+
+    /* =====================================================
+       WIDTH SYSTEM (BIGGER SEAT BOX)
+       Top Row    = 48 + 48 + 90 = 186mm
+       Middle     = 48 + 42 + 96 = 186mm
+       Back Row   = 48 * 4 = 192mm
+    ===================================================== */
+
+    /* =========================
+       TOP ROW (14W, 15, BUS IMAGE RIGHT)
+    ========================= */
+    .top-row {
+      width: 186mm;
+      display: grid;
+      grid-template-columns: 48mm 48mm 90mm;
+      gap: 0;
+      align-items: stretch;
+      margin-bottom: 4mm;
+    }
+
+    .top-seat-wrap {
+      width: 56mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    .top-bus {
+      width: 90mm;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 2mm;
+    }
+
+    .top-bus img {
+      width: 44mm;
+      height: auto;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* =========================
+       MIDDLE LAYOUT
+       LEFT | GAP | RIGHT
+    ========================= */
+    .main-layout {
+  width: 192mm;
+  display: grid;
+  grid-template-columns: 48mm 1fr 96mm;
+  gap: 0;
+  align-items: start;
+  margin-bottom: 0;
+}
+
+    .left-column {
+      width: 48mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      align-items: stretch;
+    }
+
+    .left-seat-wrap {
+      width: 48mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    .middle-gap {
+      min-height: 132mm;
+    }
+
+    .right-column {
+  width: 96mm;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+  justify-self: end;
+}
+
+    .right-row {
+      width: 96mm;
+      display: grid;
+      grid-template-columns: 48mm 48mm;
+      gap: 0;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    .right-seat-wrap {
+      width: 48mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       BACK ROW (FULL JOINED)
+    ========================= */
+    .back-row {
+      width: 192mm;
+      display: grid;
+      grid-template-columns: repeat(4, 48mm);
+      gap: 0;
+      align-items: stretch;
+      justify-items: stretch;
+      margin-top: 0;
+      transform: translateY(-1px);
+    }
+
+    .back-seat-wrap {
+      width: 48mm;
+      display: flex;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* =========================
+       SEAT BOX
+    ========================= */
+    .seat-box {
+      width: 100%;
+      height: 43mm;
+      min-height: 43mm;
+      border: 1px solid #444;
+      padding: 1.2mm 1.4mm 1mm;
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .seat-box.blocked {
+      background: #fff7ed;
+      border-color: #ea580c;
+    }
+
+    /* =========================
+       SEAT TITLE
+    ========================= */
+    .seat-title {
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 1.1mm;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1mm;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .seat-no {
+      display: inline-block;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .seat-title-right {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.6mm;
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .blocked-tag {
+      font-size: 18px;
+      font-weight: 700;
+      color: #ea580c;
+      background: transparent;
+      border: none;
+      padding: 0;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    /* =========================
+       LABEL / VALUE
+       Name : Paras
+    ========================= */
+    .line-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8mm;
+      margin: 0.45mm 0;
+      min-height: 6mm;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .label {
+      flex: 0 0 auto;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .colon {
+      flex: 0 0 auto;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .value {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: inline-block;
+      min-height: 4.8mm;
+      padding: 0 0 0.2mm 0.5mm;
+      font-size: 16px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-bottom: 1px solid #444;
+    }
+
+    .label,
+    .value,
+    .seat-title,
+    .blocked-tag {
+      font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Times New Roman", serif;
+    }
+
+    @media print {
+      html, body {
+        width: auto;
+        min-height: auto;
+        overflow: hidden;
+      }
+
+      .toolbar {
+        display: none !important;
+      }
+
+      .sheet {
+        border: none;
+        margin: 0 auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="primary" onclick="window.close()">Close</button>
+  </div>
+
+  <div class="sheet">
+    <div class="top-line">
+      <div class="left">Date:- ${safeHtml(formatDisplayDate(date) || "")}</div>
+      <div class="center">||श्री||</div>
+      <div class="right">Time:- ${safeHtml(formatTime(selectedBus?.startTime || "03:00"))}</div>
+    </div>
+
+    <div class="title-line">
+      <div class="bus-number">${safeHtml(selectedBus?.busNumber || "MH06CP1664")}</div>
+      <div class="company">SAI TRAVEL'S</div>
+      <div class="route">Route:- ${safeHtml(selectedBus?.routeName || "")}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- TOP ROW -->
+    <div class="top-row">
+      ${topRowHtml}
+      <div class="top-bus">
+        <img src="/bus4.png" alt="Bus" />
+      </div>
+    </div>
+
+    <!-- MIDDLE -->
+    <div class="main-layout">
+      <div class="left-column">${leftColumnHtml}</div>
+      <div class="middle-gap"></div>
+      <div class="right-column">${rightColumnHtml}</div>
+    </div>
+
+    <!-- BACK ROW -->
+    <div class="back-row">
+      ${backRowHtml}
+    </div>
+  </div>
+</body>
+</html>
+  `;
+  };
+
+  const renderSeatCardTemplate15 = ({
+    seatNo,
+    seatMap,
+    isWindowSeat = false,
+  }) => {
+    const data = seatMap[String(seatNo)] || {};
+    const isBlocked = data?.status === "blocked";
+    const title = `${seatNo}${isWindowSeat ? "W" : ""}`;
+
+    return `
+    <div class="seat-box ${isBlocked ? "blocked" : ""}">
+      <div class="seat-title">
+        <span class="seat-no">${safeHtml(title)}</span>
+        <span class="seat-title-right">
+          ${isBlocked ? `<span class="blocked-tag">BLOCKED</span>` : ""}
+        </span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Name</span>
+        <span class="colon">:</span>
+        <span class="value">${safeHtml(data.name || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Phone</span>
+        <span class="colon">:</span>
+        <span class="value">${safeHtml(data.phone || data.mobile || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Pickup</span>
+        <span class="colon">:</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.pickup) || "")}</span>
+      </div>
+
+      <div class="line-row">
+        <span class="label">Drop</span>
+        <span class="colon">:</span>
+        <span class="value">${safeHtml(getStopMarathiOnly(data.drop) || "")}</span>
+      </div>
+    </div>
+  `;
+  };
+
+  const buildSeatTemplateHtml15 = () => {
+    if (!selectedBus) {
+      showAppToast("error", "Please open a bus first");
+      return "";
+    }
+
+    const seatMap = getSeatMapForTemplate();
+
+    // EXACT 15 SEAT ARRANGEMENT
+    const topRow = [14, 15];
+    const leftSeats = [3, 6, 9];
+    const rightRows = [
+      [1, 2],
+      [4, 5],
+      [7, 8],
+    ];
+    const backRow = [10, 11, 12, 13];
+
+    const windowSeatSet = new Set([2, 3, 5, 6, 8, 9, 10, 13, 14]);
+
+    const topRowHtml = topRow
+      .map(
+        (seat) => `
+      <div class="top-seat-wrap">
+        ${renderSeatCardTemplate15({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
+
+    const leftColumnHtml = leftSeats
+      .map(
+        (seat) => `
+      <div class="left-seat-wrap">
+        ${renderSeatCardTemplate15({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
+
+    const rightColumnHtml = rightRows
+      .map(
+        (row) => `
+      <div class="right-row">
+        ${row
+            .map(
+              (seat) => `
+            <div class="right-seat-wrap">
+              ${renderSeatCardTemplate15({
+                seatNo: seat,
+                seatMap,
+                isWindowSeat: windowSeatSet.has(seat),
+              })}
+            </div>
+          `
+            )
+            .join("")}
+      </div>
+    `
+      )
+      .join("");
+
+    const backRowHtml = backRow
+      .map(
+        (seat) => `
+      <div class="back-seat-wrap">
+        ${renderSeatCardTemplate15({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
+
+    return buildTemplateShell15({
+      selectedBus,
+      date,
+      topRowHtml,
+      leftColumnHtml,
+      rightColumnHtml,
+      backRowHtml,
+    });
+  };
+
   /* =========================================================
      23 SEAT
   ========================================================= */
@@ -2131,6 +2712,24 @@ export default function BookingPage() {
       flex-shrink: 0;
     }
 
+    .ticket-tag {
+      display: inline-block;
+      font-size: 17px;
+      font-weight: 700;
+      color: #0f172a;
+      background: transparent;
+      border: none;
+      padding: 0;
+      border-radius: 0;
+      line-height: 1;
+      height: auto;
+      max-width: none;
+      overflow: visible;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    
     .ticket-tag {
       display: inline-block;
       font-size: 17px;
@@ -3720,6 +4319,7 @@ export default function BookingPage() {
       selectedBus?.seatLayout || selectedBus?.seatCount || 0
     );
 
+    if (totalSeats === 15) return buildSeatTemplateHtml15();
     if (totalSeats === 23) return buildSeatTemplateHtml23();
     if (totalSeats === 27) return buildSeatTemplateHtml27();
     if (totalSeats === 31) return buildSeatTemplateHtml31();

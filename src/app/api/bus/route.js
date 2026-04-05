@@ -3,7 +3,7 @@ import { getStopNameMarathi } from "../../../lib/fare";
 import { getAdminDb } from "../../../lib/firebaseAdmin";
 
 const COLLECTION_NAME = "buses";
-const seatLayoutOptions = ["31", "27", "23"];
+const seatLayoutOptions = ["31", "27", "23", "15"];
 
 /* =========================
    Helpers

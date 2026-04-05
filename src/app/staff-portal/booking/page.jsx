@@ -1982,6 +1982,104 @@ export default function StaffBookingPage() {
 
 
   /* =========================================================
+   15 SEAT TEMPLATE (uses same shell as 23-seat)
+========================================================= */
+
+  const buildSeatTemplateHtml15 = () => {
+    if (!selectedBus) {
+      showAppToast("error", "Please open a bus first");
+      return "";
+    }
+
+    const seatMap = getSeatMapForTemplate();
+
+    const leftSeats = [3, 6, 9, 12];
+    const rightRows = [
+      [1, 2],
+      [4, 5],
+      [7, 8],
+      [10, 11],
+    ];
+    const backRow = [13, 14, 15];
+    const topOffsetRows = 1;
+
+    const windowSeatSet = new Set([
+      2, 3, 5, 6, 8, 9, 11, 12, 13, 15,
+    ]);
+
+    const leftVisibleCount = topOffsetRows + leftSeats.length;
+    const rightVisibleCount = rightRows.length;
+    const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
+
+    const leftColumnHtml = `
+    ${Array.from({ length: topOffsetRows })
+        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
+        .join("")}
+    ${leftSeats
+        .map(
+          (seat) => `
+        <div class="left-seat-wrap">
+          ${renderSeatCardTemplate23({
+            seatNo: seat,
+            seatMap,
+            isWindowSeat: windowSeatSet.has(seat),
+          })}
+        </div>
+      `
+        )
+        .join("")}
+    ${Array.from({ length: leftBottomSpacerCount })
+        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
+        .join("")}
+  `;
+
+    const rightColumnHtml = rightRows
+      .map(
+        (row) => `
+      <div class="right-row right-count-${row.length}">
+        ${row
+            .map(
+              (seat) => `
+          <div class="right-seat-wrap">
+            ${renderSeatCardTemplate23({
+                seatNo: seat,
+                seatMap,
+                isWindowSeat: windowSeatSet.has(seat),
+              })}
+          </div>
+        `
+            )
+            .join("")}
+      </div>
+    `
+      )
+      .join("");
+
+    const backRowHtml = backRow
+      .map(
+        (seat) => `
+      <div class="back-seat-wrap">
+        ${renderSeatCardTemplate23({
+          seatNo: seat,
+          seatMap,
+          isWindowSeat: windowSeatSet.has(seat),
+        })}
+      </div>
+    `
+      )
+      .join("");
+
+    return buildTemplateShell23({
+      selectedBus,
+      date,
+      leftColumnHtml,
+      rightColumnHtml,
+      backRowHtml,
+    });
+  };
+
+
+  /* =========================================================
    27 SEAT - FINAL FIXED
 ========================================================= */
 
@@ -3217,6 +3315,7 @@ export default function StaffBookingPage() {
       selectedBus?.seatLayout || selectedBus?.seatCount || 0
     );
 
+    if (totalSeats === 15) return buildSeatTemplateHtml15();
     if (totalSeats === 23) return buildSeatTemplateHtml23();
     if (totalSeats === 27) return buildSeatTemplateHtml27();
     if (totalSeats === 31) return buildSeatTemplateHtml31();
