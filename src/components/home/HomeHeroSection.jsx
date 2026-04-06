@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 const fadeUp = {
     hidden: { opacity: 0, y: 28 },
@@ -32,37 +31,7 @@ const stagger = {
     },
 };
 
-const rotatingBusImages = [
-    "/bus1.png",
-    "/bus2.png",
-    "/bus3.png",
-    "/bus4.png",
-    "/bus5.jpeg",
-    "/bus6.jpeg",
-    "/bus7.jpeg",
-    "/sa3.png",
-];
-
 export default function HomeHeroSection() {
-    const [heroImageIndex, setHeroImageIndex] = useState(0);
-    const totalHeroImages = rotatingBusImages.length;
-
-    useEffect(() => {
-        if (totalHeroImages <= 1) return;
-
-        const id = setInterval(() => {
-            setHeroImageIndex((prev) => (prev + 1) % totalHeroImages);
-        }, 4000);
-
-        return () => clearInterval(id);
-    }, [totalHeroImages]);
-
-    const getRotatingImage = (offset = 0) => {
-        if (!totalHeroImages) return "/bus1.png";
-        const idx = (heroImageIndex + offset + totalHeroImages) % totalHeroImages;
-        return rotatingBusImages[idx];
-    };
-
     return (
         <section className="relative overflow-hidden bg-[#f8fafc] pt-5 pb-8 lg:pt-6 lg:pb-8">
             <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -72,6 +41,7 @@ export default function HomeHeroSection() {
 
             <div className="relative mx-auto max-w-[1450px] px-4 sm:px-6 lg:px-8">
                 <div className="grid items-start gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-6">
+                    {/* LEFT CONTENT */}
                     <motion.div
                         variants={stagger}
                         initial="hidden"
@@ -100,11 +70,12 @@ export default function HomeHeroSection() {
                             className="mt-4 max-w-[95%] text-[15px] leading-8 text-slate-600 sm:text-base"
                         >
                             SA Tours & Travels provides reliable daily bus service from Borli,
-                            Dighi, Mhasla, Mangoan and nearby areas to Panvel, Vashi and
+                            Dighi, Mhasla, Mangaon and nearby areas to Panvel, Vashi and
                             Mumbai. We also offer private bus booking for weddings, events,
                             group travel and special tours.
                         </motion.p>
 
+                        {/* ROUTE INFO CARD */}
                         <motion.div
                             variants={fadeUp}
                             whileHover={{ y: -2 }}
@@ -116,7 +87,9 @@ export default function HomeHeroSection() {
                                         <MapPin size={16} />
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-medium text-slate-500">Main Route</p>
+                                        <p className="text-[10px] font-medium text-slate-500">
+                                            Main Route
+                                        </p>
                                         <p className="text-sm font-semibold text-slate-900 leading-5">
                                             Borli to Mumbai
                                         </p>
@@ -128,7 +101,9 @@ export default function HomeHeroSection() {
                                         <Clock3 size={16} />
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-medium text-slate-500">Departure</p>
+                                        <p className="text-[10px] font-medium text-slate-500">
+                                            Departure
+                                        </p>
                                         <p className="text-sm font-semibold text-slate-900 leading-5">
                                             3:00 AM / 4:00 AM
                                         </p>
@@ -151,6 +126,7 @@ export default function HomeHeroSection() {
                             </div>
                         </motion.div>
 
+                        {/* ACTION BUTTONS */}
                         <motion.div
                             variants={fadeUp}
                             className="mt-4 flex flex-wrap gap-2.5"
@@ -158,14 +134,17 @@ export default function HomeHeroSection() {
                             <motion.a
                                 whileHover={{ y: -2, scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
-                                href="tel:+9209471601"
+                                href="tel:+919209471601"
                                 className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-500"
                             >
                                 <Phone size={15} />
                                 Call Now
                             </motion.a>
 
-                            <motion.div whileHover={{ y: -2, scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                            <motion.div
+                                whileHover={{ y: -2, scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                            >
                                 <Link
                                     href="/schedule"
                                     className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-500"
@@ -188,6 +167,7 @@ export default function HomeHeroSection() {
                             </motion.a>
                         </motion.div>
 
+                        {/* STATS */}
                         <motion.div
                             variants={fadeUp}
                             className="mt-5 grid gap-3 sm:grid-cols-3"
@@ -202,13 +182,16 @@ export default function HomeHeroSection() {
                                     whileHover={{ y: -4 }}
                                     className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition"
                                 >
-                                    <p className="text-xl font-bold text-slate-900">{item.title}</p>
+                                    <p className="text-xl font-bold text-slate-900">
+                                        {item.title}
+                                    </p>
                                     <p className="mt-1 text-sm text-slate-500">{item.sub}</p>
                                 </motion.div>
                             ))}
                         </motion.div>
                     </motion.div>
 
+                    {/* RIGHT IMAGE SECTION */}
                     <motion.div
                         variants={stagger}
                         initial="hidden"
@@ -217,6 +200,7 @@ export default function HomeHeroSection() {
                     >
                         <div className="grid grid-cols-2 gap-3.5">
                             <div className="space-y-3.5">
+                                {/* TOP LEFT IMAGE */}
                                 <motion.div
                                     variants={fadeUp}
                                     whileHover={{ y: -4 }}
@@ -224,23 +208,33 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-40 overflow-hidden rounded-[18px] lg:h-44">
                                         <Image
-                                            src={getRotatingImage(0)}
+                                            src="/bus2.png"
                                             alt="SA Tours bus"
                                             fill
+                                            priority
                                             className="object-cover transition duration-700 ease-out hover:scale-105"
                                         />
                                     </div>
 
                                     <motion.div
                                         animate={{ y: [0, -3, 0] }}
-                                        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                                        transition={{
+                                            duration: 3,
+                                            repeat: Infinity,
+                                            ease: "easeInOut",
+                                        }}
                                         className="absolute left-4 top-4 rounded-2xl bg-white/95 px-3 py-2 shadow-sm backdrop-blur"
                                     >
-                                        <p className="text-[10px] font-medium text-slate-500">Popular Route</p>
-                                        <p className="text-xs font-bold text-slate-900">Borli to Mumbai</p>
+                                        <p className="text-[10px] font-medium text-slate-500">
+                                            Popular Route
+                                        </p>
+                                        <p className="text-xs font-bold text-slate-900">
+                                            Borli to Mumbai
+                                        </p>
                                     </motion.div>
                                 </motion.div>
 
+                                {/* BOTTOM LEFT IMAGE */}
                                 <motion.div
                                     variants={fadeUp}
                                     whileHover={{ y: -4 }}
@@ -248,7 +242,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-28 overflow-hidden rounded-[18px] lg:h-32">
                                         <Image
-                                            src={getRotatingImage(1)}
+                                            src="/sa3.png"
                                             alt="SA Tours Route 2"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -258,6 +252,7 @@ export default function HomeHeroSection() {
                             </div>
 
                             <div className="space-y-3.5 pt-5">
+                                {/* TOP RIGHT IMAGE */}
                                 <motion.div
                                     variants={fadeUp}
                                     whileHover={{ y: -4 }}
@@ -265,7 +260,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-28 overflow-hidden rounded-[18px] lg:h-32">
                                         <Image
-                                            src={getRotatingImage(2)}
+                                            src="/bus3.png"
                                             alt="SA Tours Route 3"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -273,6 +268,7 @@ export default function HomeHeroSection() {
                                     </div>
                                 </motion.div>
 
+                                {/* BOTTOM RIGHT IMAGE */}
                                 <motion.div
                                     variants={fadeUp}
                                     whileHover={{ y: -4 }}
@@ -280,7 +276,7 @@ export default function HomeHeroSection() {
                                 >
                                     <div className="relative h-40 overflow-hidden rounded-[18px] lg:h-44">
                                         <Image
-                                            src={getRotatingImage(3)}
+                                            src="/bus4.png"
                                             alt="SA Tours Route 4"
                                             fill
                                             className="object-cover transition duration-500 hover:scale-105"
@@ -289,16 +285,25 @@ export default function HomeHeroSection() {
 
                                     <motion.div
                                         animate={{ y: [0, -3, 0] }}
-                                        transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                                        transition={{
+                                            duration: 3.2,
+                                            repeat: Infinity,
+                                            ease: "easeInOut",
+                                        }}
                                         className="absolute right-4 top-4 rounded-2xl bg-white px-3 py-2 shadow-md"
                                     >
-                                        <p className="text-[10px] font-medium text-slate-500">Daily Service</p>
-                                        <p className="text-xs font-bold text-orange-500">100% Reliable</p>
+                                        <p className="text-[10px] font-medium text-slate-500">
+                                            Daily Service
+                                        </p>
+                                        <p className="text-xs font-bold text-orange-500">
+                                            100% Reliable
+                                        </p>
                                     </motion.div>
                                 </motion.div>
                             </div>
                         </div>
 
+                        {/* BOTTOM CONTACT CARD */}
                         <motion.div
                             variants={fadeUp}
                             whileHover={{ y: -3 }}
@@ -332,7 +337,7 @@ export default function HomeHeroSection() {
                                 <motion.a
                                     whileHover={{ scale: 1.03 }}
                                     whileTap={{ scale: 0.98 }}
-                                    href="tel:+9209471601"
+                                    href="tel:+919209471601"
                                     className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
                                 >
                                     Contact Us

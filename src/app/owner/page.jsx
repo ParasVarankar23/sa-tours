@@ -262,7 +262,7 @@ export default function OwnerPage() {
                                 className="mt-6 flex flex-wrap gap-3"
                             >
                                 <a
-                                    href="tel:+9209471601"
+                                    href="tel:+919209471601"
                                     className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-500"
                                 >
                                     <Phone size={15} />

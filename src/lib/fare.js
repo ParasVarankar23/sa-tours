@@ -30,6 +30,7 @@ export const CITY_STOPS = [
     "Juinagar",
     "Sanpada",
     "Vashi Stand",
+    "Turbhe Bridge",
     "Mankhurd",
     "Govandi",
     "Chembur",
@@ -70,6 +71,8 @@ export const COMMON_VILLAGE_STOPS = [
     "Saklap",
     "Mhasla Dighi Road",
     "Mhasla",
+    "Mhasla HP Petrol Pump",
+    "Mhasla Bharat Petrol Pump",
     "Mhasla Stand",
     "Pabra Phata",
     "Dorje",
@@ -78,6 +81,7 @@ export const COMMON_VILLAGE_STOPS = [
     "Morba",
     "Surle",
     "Mangaon",
+    "Mangaon Railway Station",
     "Indapur",
     "Kolad",
 ];
@@ -251,6 +255,8 @@ export const BORLI_FARE_GROUPS = [
             "Saklap",
             "Mhasla Dighi Road",
             "Mhasla",
+            "Mhasla HP Petrol Pump",
+            "Mhasla Bharat Petrol Pump",
             "Mhasla Stand",
             "Pabra Phata",
             "Dorje",
@@ -263,7 +269,7 @@ export const BORLI_FARE_GROUPS = [
     {
         zone: "BORLI_GROUP_4",
         fare: 350,
-        stops: ["Mangaon", "Indapur", "Kolad"],
+        stops: ["Mangaon", "Mangaon Railway Station", "Indapur", "Kolad"],
     },
 ];
 
@@ -351,6 +357,8 @@ export const DIGHI_FARE_GROUPS = [
             "Saklap",
             "Mhasla Dighi Road",
             "Mhasla",
+            "Mhasla HP Petrol Pump",
+            "Mhasla Bharat Petrol Pump",
             "Mhasla Stand",
             "Pabra Phata",
             "Dorje",
@@ -363,7 +371,7 @@ export const DIGHI_FARE_GROUPS = [
     {
         zone: "DIGHI_GROUP_5",
         fare: 350,
-        stops: ["Mangaon", "Indapur", "Kolad"],
+        stops: ["Mangaon", "Mangaon Railway Station", "Indapur", "Kolad"],
     },
 ];
 
@@ -386,6 +394,7 @@ export const STOP_NAMES_MARATHI = {
     Juinagar: "जुईनगर",
     Sanpada: "सानपाडा",
     "Vashi Stand": "वाशी स्टँड",
+    "Turbhe Bridge": "तुर्भे ब्रिज",
     Mankhurd: "मानखुर्द",
     Govandi: "गोवंडी",
     Chembur: "चेंबूर",
@@ -420,7 +429,7 @@ export const STOP_NAMES_MARATHI = {
     Hunarveli: "हुनरवेली",
     Vakhalghar: "वाखळघर",
     Devkhol: "देवखोल",
-    Nagloli : "नागळोली",
+    "Nagloli ": "नागळोली",
 
     "Khalcha Velas": "खालचा वेळास",
     Velas: "वेळास",
@@ -466,6 +475,8 @@ export const STOP_NAMES_MARATHI = {
 
     "Mhasla Dighi Road": "म्हसळा-दिघी रोड",
     Mhasla: "म्हसळा",
+    "Mhasla HP Petrol Pump": "म्हसळा एचपी पेट्रोल पंप",
+    "Mhasla Bharat Petrol Pump": "म्हसळा भारत पेट्रोल पंप",
     "Mhasla Stand": "म्हसळा स्टँड",
     "Pabra Phata": "पाब्रा फाटा",
     Dorje: "दोरजे",
@@ -475,6 +486,7 @@ export const STOP_NAMES_MARATHI = {
     Surle: "सुरळे",
 
     Mangaon: "माणगाव",
+    "Mangaon Railway Station": "माणगाव रेल्वे स्टेशन",
     Indapur: "इंदापूर",
     Kolad: "कोलाड",
 
@@ -526,6 +538,10 @@ const STOP_ALIASES = {
     "vashi stand": "Vashi Stand",
     vashistand: "Vashi Stand",
 
+    turbhe: "Turbhe Bridge",
+    "turbhe bridge": "Turbhe Bridge",
+    turbhebridge: "Turbhe Bridge",
+
     mankhurd: "Mankhurd",
     govandi: "Govandi",
     chembur: "Chembur",
@@ -572,7 +588,8 @@ const STOP_ALIASES = {
     hunarveli: "Hunarveli",
     vakhalghar: "Vakhalghar",
     devkhol: "Devkhol",
-    Nagloli : "Nagloli ",
+    "nagloli": "Nagloli ",
+    "nagloli ": "Nagloli ",
 
     "khalcha velas": "Khalcha Velas",
     khalchavelas: "Khalcha Velas",
@@ -599,6 +616,21 @@ const STOP_ALIASES = {
     "nayar petrol pum": "Nayar Petrol Pump",
     "essar pump": "Essar Pump",
     essarpump: "Essar Pump",
+
+    "mhasla hp petrol pump": "Mhasla HP Petrol Pump",
+    mhaslahppetrolpump: "Mhasla HP Petrol Pump",
+    "mhasla hp pump": "Mhasla HP Petrol Pump",
+
+    "mhasla bharat petrol pump": "Mhasla Bharat Petrol Pump",
+    mhaslabharatpetrolpump: "Mhasla Bharat Petrol Pump",
+    "mhasla bharat pump": "Mhasla Bharat Petrol Pump",
+    "mhasla bp pump": "Mhasla Bharat Petrol Pump",
+
+    "mangaon railway station": "Mangaon Railway Station",
+    mangaonrailwaystation: "Mangaon Railway Station",
+    "mangaon station": "Mangaon Railway Station",
+    mangoanrailwaystation: "Mangaon Railway Station",
+    "mangoan railway station": "Mangaon Railway Station",
 
     kapoli: "Kapoli",
     shiste: "Shiste",
