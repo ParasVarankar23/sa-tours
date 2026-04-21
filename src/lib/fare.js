@@ -71,6 +71,7 @@ export const COMMON_VILLAGE_STOPS = [
     "Saklap",
     "Mhasla Dighi Road",
     "Mhasla",
+    "Devghar",
     "Mhasla HP Petrol Pump",
     "Mhasla Bharat Petrol Pump",
     "Mhasla Stand",
@@ -117,6 +118,7 @@ export const BORLI_VILLAGE_STOPS = [
     "Varcha Velas",
     "Vadavli",
     "Vadavli Phata",
+    "Bhava",
     "Borli",
     "Pohamil",
     "Vanjale Road",
@@ -155,6 +157,7 @@ export const DIGHI_VILLAGE_STOPS = [
     "Varcha Velas",
     "Vadavli",
     "Vadavli Phata",
+    "Bhava",
     "Borli",
     "Pohamil",
     "Vanjale Road",
@@ -215,6 +218,7 @@ export const BORLI_FARE_GROUPS = [
         stops: [
             "Vadavli",
             "Vadavli Phata",
+            "Bhava",
             "Borli",
             "HP Petrol Pump",
             "Nayar Petrol Pump",
@@ -255,6 +259,7 @@ export const BORLI_FARE_GROUPS = [
             "Saklap",
             "Mhasla Dighi Road",
             "Mhasla",
+            "Devghar",
             "Mhasla HP Petrol Pump",
             "Mhasla Bharat Petrol Pump",
             "Mhasla Stand",
@@ -317,6 +322,7 @@ export const DIGHI_FARE_GROUPS = [
         stops: [
             "Vadavli",
             "Vadavli Phata",
+            "Bhava",
             "Borli",
             "HP Petrol Pump",
             "Nayar Petrol Pump",
@@ -357,6 +363,7 @@ export const DIGHI_FARE_GROUPS = [
             "Saklap",
             "Mhasla Dighi Road",
             "Mhasla",
+            "Devghar",
             "Mhasla HP Petrol Pump",
             "Mhasla Bharat Petrol Pump",
             "Mhasla Stand",
@@ -437,6 +444,7 @@ export const STOP_NAMES_MARATHI = {
 
     Vadavli: "वडवली",
     "Vadavli Phata": "वडवली फाटा",
+    Bhava: "भावा",
 
     Borli: "बोर्ली",
     "HP Petrol Pump": "एचपी पेट्रोल पंप",
@@ -459,8 +467,8 @@ export const STOP_NAMES_MARATHI = {
     "Mendadi Kondh": "मेंडडी कोंढ",
     "Mendadi Karnti Nagar": "मेंडडी क्रांती नगर",
 
-    "Kharsai Dam": "खारसई धरण",
-    "Kharsai School": "खारसई शाळा",
+    "Kharsai Dam": "खरसई धरण",
+    "Kharsai School": "खरसई शाळा",
     Varvatna: "वरवटणे",
     Agarwada: "आगरवाडा",
     "Kalchi Banoti": "खालची बनोटी",
@@ -475,6 +483,7 @@ export const STOP_NAMES_MARATHI = {
 
     "Mhasla Dighi Road": "म्हसळा-दिघी रोड",
     Mhasla: "म्हसळा",
+    Devghar: "देवघर",
     "Mhasla HP Petrol Pump": "म्हसळा एचपी पेट्रोल पंप",
     "Mhasla Bharat Petrol Pump": "म्हसळा भारत पेट्रोल पंप",
     "Mhasla Stand": "म्हसळा स्टँड",
@@ -608,6 +617,9 @@ const STOP_ALIASES = {
     vadvaliphata: "Vadavli Phata",
     vadvalifata: "Vadavli Phata",
 
+    bhava: "Bhava",
+    भावा: "Bhava",
+
     borli: "Borli",
     "hp petrol pump": "HP Petrol Pump",
     hppetrolpump: "HP Petrol Pump",
@@ -704,6 +716,9 @@ const STOP_ALIASES = {
     "mhasla dighi": "Mhasla Dighi Road",
     "mhasla stand": "Mhasla Stand",
     mhaslastand: "Mhasla Stand",
+
+    devghar: "Devghar",
+    देवघर: "Devghar",
 
     "pabra phata": "Pabra Phata",
     pabraphata: "Pabra Phata",
