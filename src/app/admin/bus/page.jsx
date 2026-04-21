@@ -2080,17 +2080,19 @@ function BusFormModal({
                                         placeholder="Borli - Dongri"
                                     />
 
-                                    <InputField
-                                        label="Start Point"
-                                        name="startPoint"
-                                        value={data.startPoint}
-                                        onChange={handleInputChange}
-                                        icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
-                                        placeholder="Borli"
-                                    />
-                                    {data.startPoint ? (
-                                        <p className="mt-1 text-xs text-slate-500">{getStopNameMarathi(data.startPoint) || ""}</p>
-                                    ) : null}
+                                    <div>
+                                        <InputField
+                                            label="Start Point"
+                                            name="startPoint"
+                                            value={data.startPoint}
+                                            onChange={handleInputChange}
+                                            icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
+                                            placeholder="Borli"
+                                        />
+                                        {data.startPoint ? (
+                                            <p className="mt-1 text-xs text-slate-500">{getStopNameMarathi(data.startPoint) || ""}</p>
+                                        ) : null}
+                                    </div>
 
                                     <InputField
                                         label="Start Time"
@@ -2101,17 +2103,19 @@ function BusFormModal({
                                         icon={<Clock3 className="h-5 w-5 text-[#f97316]" />}
                                     />
 
-                                    <InputField
-                                        label="End Point"
-                                        name="endPoint"
-                                        value={data.endPoint}
-                                        onChange={handleInputChange}
-                                        icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
-                                        placeholder="Dongri"
-                                    />
-                                    {data.endPoint ? (
-                                        <p className="mt-1 text-xs text-slate-500">{getStopNameMarathi(data.endPoint) || ""}</p>
-                                    ) : null}
+                                    <div>
+                                        <InputField
+                                            label="End Point"
+                                            name="endPoint"
+                                            value={data.endPoint}
+                                            onChange={handleInputChange}
+                                            icon={<MapPin className="h-5 w-5 text-[#f97316]" />}
+                                            placeholder="Dongri"
+                                        />
+                                        {data.endPoint ? (
+                                            <p className="mt-1 text-xs text-slate-500">{getStopNameMarathi(data.endPoint) || ""}</p>
+                                        ) : null}
+                                    </div>
 
                                     <InputField
                                         label="End Time"

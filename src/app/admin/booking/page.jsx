@@ -1752,6 +1752,41 @@ export default function BookingPage() {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
 
+  const toAbsolutePublicAssetUrl = (assetPath) => {
+    const path = String(assetPath || "").trim();
+    if (!path) return "";
+    if (/^https?:\/\//i.test(path)) return path;
+
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    if (typeof window !== "undefined" && window.location?.origin) {
+      return `${window.location.origin}${normalizedPath}`;
+    }
+
+    return normalizedPath;
+  };
+
+  const getSeatLayoutCount = (bus) => {
+    const values = [bus?.seatLayout, bus?.seatCount, bus?.seats];
+
+    for (const raw of values) {
+      if (Number.isFinite(raw)) {
+        const n = Number(raw);
+        if (n > 0) return n;
+      }
+
+      const s = String(raw || "").trim();
+      if (!s) continue;
+
+      const match = s.match(/\d+/);
+      if (!match) continue;
+
+      const n = Number(match[0]);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+
+    return 0;
+  };
+
   // For printed tickets, show only the Marathi stop name when available.
   const getStopMarathiOnly = (stop) => {
     if (!stop) return "";
@@ -1794,6 +1829,8 @@ export default function BookingPage() {
     rightColumnHtml,
     backRowHtml,
   }) => {
+    const busImageSrc = toAbsolutePublicAssetUrl("/bus4.png");
+
     return `
 <!DOCTYPE html>
 <html>
@@ -2201,7 +2238,7 @@ export default function BookingPage() {
     <div class="top-row">
       ${topRowHtml}
       <div class="top-bus">
-        <img src="/bus4.png" alt="Bus" />
+        <img src="${safeHtml(busImageSrc)}" alt="Bus" />
       </div>
     </div>
 
@@ -2954,10 +2991,12 @@ export default function BookingPage() {
     const rightVisibleCount = rightRows.length;
     const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
 
+    const busImageSrc = toAbsolutePublicAssetUrl("/sa3.png");
+
     const leftColumnHtml = `
     <div class="left-seat-wrap left-empty">
       <div class="bus-diagram">
-        <img src="/sa3.png" alt="Bus layout" />
+        <img src="${safeHtml(busImageSrc)}" alt="Bus layout" />
       </div>
     </div>
     ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
@@ -3212,11 +3251,38 @@ export default function BookingPage() {
     }
 
     .left-seat-wrap.left-empty {
-      height: 28mm;
-      min-height: 28mm;
+      height: 34mm;
+      min-height: 34mm;
       border: none;
       background: transparent;
+      overflow: hidden;
     }
+
+    /* =========================
+       BUS IMAGE AREA
+    ========================= */
+    .bus-diagram {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: flex-start;   /* top aligned */
+      justify-content: center;
+      padding-top: 5mm;          /* proper top spacing */
+      padding-left: 0;
+      padding-right: 0;
+      padding-bottom: 0;
+      overflow: hidden;
+    }
+
+    .bus-diagram img {
+  width: 100%;
+  height: auto;
+  max-width: none;
+  max-height: 28mm;
+  object-fit: contain;
+  object-position: center top;
+  display: block;
+}
 
     .right-row {
       width: 110mm;
@@ -3567,10 +3633,12 @@ export default function BookingPage() {
     const rightVisibleCount = rightRows.length;
     const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
 
+    const busImageSrc = toAbsolutePublicAssetUrl("/bus2.png");
+
     const leftColumnHtml = `
     <div class="left-seat-wrap left-empty">
       <div class="bus-diagram">
-        <img src="/bus2.png" alt="Bus layout" />
+        <img src="${safeHtml(busImageSrc)}" alt="Bus layout" />
       </div>
     </div>
     ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
@@ -4233,10 +4301,12 @@ export default function BookingPage() {
     const rightVisibleCount = rightRows.length;
     const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
 
+    const busImageSrc = toAbsolutePublicAssetUrl("/bus3.png");
+
     const leftColumnHtml = `
     <div class="left-seat-wrap left-empty">
       <div class="bus-diagram">
-        <img src="/bus3.png" alt="Bus layout" />
+        <img src="${safeHtml(busImageSrc)}" alt="Bus layout" />
       </div>
     </div>
     ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
@@ -4315,9 +4385,7 @@ export default function BookingPage() {
       return "";
     }
 
-    const totalSeats = Number(
-      selectedBus?.seatLayout || selectedBus?.seatCount || 0
-    );
+    const totalSeats = getSeatLayoutCount(selectedBus);
 
     if (totalSeats === 15) return buildSeatTemplateHtml15();
     if (totalSeats === 23) return buildSeatTemplateHtml23();
