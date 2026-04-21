@@ -3791,7 +3791,7 @@ export default function BookingPage() {
     }
 
     .left-column {
-      width: 48mm;
+      width: 52mm;
       display: flex;
       flex-direction: column;
       gap: 0;
@@ -3815,7 +3815,7 @@ export default function BookingPage() {
     }
 
     .left-seat-wrap {
-      width: 48mm;
+      width: 52mm;
       margin: 0;
       padding: 0;
       display: flex;
