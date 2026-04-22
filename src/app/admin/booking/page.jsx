@@ -1752,6 +1752,19 @@ export default function BookingPage() {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
 
+  const toAbsolutePublicAssetUrl = (assetPath) => {
+    const path = String(assetPath || "").trim();
+    if (!path) return "";
+    if (/^https?:\/\//i.test(path)) return path;
+
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    if (typeof globalThis !== "undefined" && globalThis.location?.origin) {
+      return `${globalThis.location.origin}${normalizedPath}`;
+    }
+
+    return normalizedPath;
+  };
+
   // For printed tickets, show only the Marathi stop name when available.
   const getStopMarathiOnly = (stop) => {
     if (!stop) return "";
@@ -3218,6 +3231,26 @@ export default function BookingPage() {
       background: transparent;
     }
 
+    /* =========================
+       BUS IMAGE AREA
+    ========================= */
+    .bus-diagram {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .bus-diagram img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
     .right-row {
       width: 110mm;
       display: grid;
@@ -3566,11 +3599,13 @@ export default function BookingPage() {
     const leftVisibleCount = topOffsetRows + leftSeats.length;
     const rightVisibleCount = rightRows.length;
     const leftBottomSpacerCount = Math.max(0, rightVisibleCount - leftVisibleCount);
+    const busImageSrc = toAbsolutePublicAssetUrl("/bus2.png");
+    const busImageFallbackSrc = toAbsolutePublicAssetUrl("/bus1.png");
 
     const leftColumnHtml = `
     <div class="left-seat-wrap left-empty">
       <div class="bus-diagram">
-        <img src="/bus2.png" alt="Bus layout" />
+        <img src="${safeHtml(busImageSrc)}" alt="Bus layout" onerror="this.onerror=null;this.src='${safeHtml(busImageFallbackSrc)}';" />
       </div>
     </div>
     ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
