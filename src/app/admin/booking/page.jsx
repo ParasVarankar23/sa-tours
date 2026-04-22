@@ -3603,14 +3603,14 @@ export default function BookingPage() {
     const busImageFallbackSrc = toAbsolutePublicAssetUrl("/bus1.png");
 
     const leftColumnHtml = `
+    ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
+        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
+        .join("")}
     <div class="left-seat-wrap left-empty">
       <div class="bus-diagram">
         <img src="${safeHtml(busImageSrc)}" alt="Bus layout" onerror="this.onerror=null;this.src='${safeHtml(busImageFallbackSrc)}';" />
       </div>
     </div>
-    ${Array.from({ length: Math.max(0, topOffsetRows - 1) })
-        .map(() => `<div class="left-seat-wrap left-empty"></div>`)
-        .join("")}
     ${leftSeats
         .map(
           (seat) => `
